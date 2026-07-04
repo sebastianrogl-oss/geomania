@@ -1,0 +1,76 @@
+GeoMania – Backup-Übersicht
+============================
+Stand: 2026-06-17
+Flutter: 3.44.1 (stable) · Dart: 3.12.1
+
+============================================================
+GESICHERTE DATEIEN
+============================================================
+
+── lib/backups/karten_quiz/ ────────────────────────────────
+  map_quiz_screen_backup.dart
+    Interaktives Weltkarten-Quiz mit flutter_map.
+    Länder auf der Karte antippen. Punkt-in-Polygon-HitTest,
+    Mikrostaat-Punkte, Rot-Blinken bei Fehler, Kontinent-Modus.
+    Benötigt: flutter_map ^8.3.0, latlong2 ^0.9.1
+    Benötigt Asset: assets/geo/ne_50m_countries.geojson
+
+  assets/geo/ne_50m_countries.geojson (2.94 MB)
+    Natural Earth 1:50m – Weltkarte mit 242 Features.
+    Kopie liegt in backups/karten_quiz/assets/geo/
+
+── lib/backups/spiele/ ─────────────────────────────────────
+  finance_hub_screen_backup.dart
+    Container-Screen "Finanzen & Wirtschaft" mit Links zu
+    Higher or Lower, Kategorie-Match, Ranking-Quiz,
+    Währungs-Quiz, Wirtschaftsblöcke und Connections.
+    War eingebunden in: home_screen.dart (SPIELMODI-Karte)
+
+  finance_connections_screen_backup.dart
+    Connections-Puzzle (Finanz-Edition).
+    Täglich wechselndes Rätsel: 4 Gruppen à 4 Länder finden.
+    Max. 3 Fehlversuche. Benötigt: connections_puzzles.dart
+
+  economic_blocks_screen_backup.dart
+    Wirtschaftsblöcke-Quiz. 10 Multiple-Choice-Fragen:
+    Welchem Block gehört das Land? (EU, G7, G20, OPEC, BRICS, ASEAN)
+    Benötigt: economic_blocks.dart
+
+  currency_quiz_screen_backup.dart
+    Währungs-Quiz mit 10-Sekunden-Timer.
+    Welche Währung hat dieses Land?
+    Leicht-/Schwer-Modus. Benötigt: economic_blocks.dart
+
+  lernpfad_screen_backup.dart
+    Platzhalter-Screen "Kommt bald!".
+    War nirgendwo in der Navigation eingebunden (Orphan).
+
+============================================================
+AKTIVE SCREENS (Stand 2026-06-17)
+============================================================
+  home_screen.dart         – Startseite mit Daily Challenges
+  rangliste_screen.dart    – Rangliste / Highscores
+  lernen_screen.dart       – Lernübersicht
+  profil_screen.dart       – Nutzerprofil
+  flag_quiz_screen.dart    – Flaggen-Quiz
+  quiz_screen.dart         – Hauptstädte-Quiz
+  gdp_quiz_screen.dart     – BIP & Wirtschaft Quiz
+  outline_quiz_screen.dart – Umriss-Quiz
+  higher_lower_screen.dart – Higher or Lower
+  ranking_quiz_screen.dart – Ranking-Quiz
+  category_match_screen.dart – Kategorie-Match (intern, kein Menüpunkt)
+
+============================================================
+WIEDERHERSTELLEN – Einzelne Screens
+============================================================
+1. Backup-Datei nach lib/screens/<originalname>.dart kopieren
+2. Im Header oben stehen alle weiteren Schritte (Imports etc.)
+3. flutter pub get && flutter run -d chrome
+
+WIEDERHERSTELLEN – Finance Hub komplett:
+1. finance_hub_screen_backup.dart → lib/screens/finance_hub_screen.dart
+2. finance_connections_screen_backup.dart → lib/screens/finance_connections_screen.dart
+3. economic_blocks_screen_backup.dart → lib/screens/economic_blocks_screen.dart
+4. currency_quiz_screen_backup.dart → lib/screens/currency_quiz_screen.dart
+5. home_screen.dart: Import + Finance-Hub-Karte einkommentieren
+6. flutter pub get && flutter run -d chrome

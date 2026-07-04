@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Spieler-Profil: nur der Besitzer darf sein eigenes Dokument lesen/schreiben.
+    match /spieler/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Tages-Ranglisten: jeder angemeldete Nutzer darf die Rangliste lesen,
+    // aber nur seinen eigenen Eintrag schreiben.
+    match /ranglisten/{challengeId}/{tag}/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid;
+    }
+
+    // Portfolio Alltime-Rangliste: jeder angemeldete Nutzer darf lesen,
+    // aber nur seinen eigenen Eintrag schreiben.
+    match /portfolio_alltime/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid;
+    }
+  }
+}

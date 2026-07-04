@@ -1,0 +1,1955 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import '../data/lernpfad_data.dart';
+import '../services/daily_challenge.dart';
+import '../services/fortschritt_service.dart';
+import '../widgets/kontinent_hintergrund.dart';
+import '../widgets/pfad_deko_layer.dart';
+import '../widgets/pfad_maskottchen.dart';
+import 'higher_lower_screen.dart';
+import 'portfolio_screen.dart';
+import 'preis_schaetzen_screen.dart';
+import 'ranking_game_screen.dart';
+import 'station_quiz_screen.dart';
+
+IconData _modusIcon(LernModus m) => switch (m) {
+  LernModus.flaggenQuizBild      => Icons.flag_rounded,
+  LernModus.flaggenQuizMultiple  => Icons.flag_rounded,
+  LernModus.hauptstaedteMultiple => Icons.account_balance_rounded,
+  LernModus.hauptstaedteEingabe  => Icons.account_balance_rounded,
+  LernModus.waehrungsQuiz        => Icons.monetization_on_rounded,
+  LernModus.sortierSpiel         => Icons.sort_rounded,
+  LernModus.preisSchaetzen       => Icons.sell_rounded,
+  LernModus.wirtschaftssektoren  => Icons.factory_rounded,
+  LernModus.umrissBild           => Icons.map_rounded,
+  LernModus.umrissMultiple       => Icons.map_rounded,
+  LernModus.nachbarland          => Icons.explore_rounded,
+  LernModus.bipGesamt            => Icons.trending_up_rounded,
+  LernModus.flaeche              => Icons.crop_square_rounded,
+  LernModus.extremFrage          => Icons.emoji_events_rounded,
+  LernModus.waehrungZuLand       => Icons.monetization_on_rounded,
+  LernModus.hauptstadtZuLand     => Icons.account_balance_rounded,
+  LernModus.groessteStadt        => Icons.location_city_rounded,
+  LernModus.flaggenFarbe         => Icons.palette_rounded,
+  LernModus.extremFrageLeicht    => Icons.emoji_events_rounded,
+  LernModus.zufallsFakt          => Icons.lightbulb_rounded,
+  LernModus.bekanntesGebaeude    => Icons.temple_buddhist_rounded,
+};
+
+class _Anims {
+  final Animation<double> ringScale;
+  final Animation<double> ringOpacity;
+  final Animation<double> ring2Scale;
+  final Animation<double> ring2Opacity;
+  const _Anims({
+    required this.ringScale,
+    required this.ringOpacity,
+    required this.ring2Scale,
+    required this.ring2Opacity,
+  });
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  LernpfadSnapshot? _snap;
+  LernWelt _aktivWelt = lernwelten.first;
+  // Verhindert, dass jeder _load()-Aufruf (z.B. nach Rückkehr aus einem
+  // Quiz) die manuell gewählte/zuletzt aktive Welt überschreibt — sonst
+  // springt die Ansicht bei 100%-Fortschritt immer zur letzten Welt zurück.
+  bool _weltInitialisiert = false;
+  Set<String> _doneChallenges = {};
+  bool _panelOffen = false;
+  late final AnimationController _rippleCtrl;
+  late final AnimationController _panelCtrl;
+  late final Animation<Offset> _panelSlide;
+  late final _Anims _anims;
+
+  @override
+  void initState() {
+    super.initState();
+    _rippleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+    _panelCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _panelSlide = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _panelCtrl, curve: Curves.easeOut));
+    _anims = _Anims(
+      ringScale: Tween<double>(begin: 1.0, end: 1.2).animate(
+        CurvedAnimation(parent: _rippleCtrl, curve: Curves.easeOut),
+      ),
+      ringOpacity: Tween<double>(begin: 1.0, end: 0.0).animate(
+        CurvedAnimation(parent: _rippleCtrl, curve: Curves.easeOut),
+      ),
+      ring2Scale: Tween<double>(begin: 1.0, end: 1.2).animate(
+        CurvedAnimation(
+            parent: _rippleCtrl,
+            curve: const Interval(0.33, 1.0, curve: Curves.easeOut)),
+      ),
+      ring2Opacity: Tween<double>(begin: 1.0, end: 0.0).animate(
+        CurvedAnimation(
+            parent: _rippleCtrl,
+            curve: const Interval(0.33, 1.0, curve: Curves.easeOut)),
+      ),
+    );
+    _load();
+    FortschrittService.resetSignal.addListener(_onResetSignal);
+  }
+
+  // Reset/"Alles freischalten" ändert den Fortschritt grundlegend — dort
+  // soll die aktive Welt neu berechnet werden (anders als bei einem
+  // normalen _load() nach dem Spielen einer Station).
+  void _onResetSignal() {
+    _weltInitialisiert = false;
+    _load();
+  }
+
+  @override
+  void dispose() {
+    FortschrittService.resetSignal.removeListener(_onResetSignal);
+    _rippleCtrl.dispose();
+    _panelCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final results = await Future.wait([
+      FortschrittService.ladeSnapshot(),
+      DailyChallenge.completedToday(),
+    ]);
+    if (!mounted) return;
+    final snap = results[0] as LernpfadSnapshot;
+    final done = results[1] as Set<String>;
+
+    LernWelt aktiv = _aktivWelt;
+    if (!_weltInitialisiert) {
+      aktiv = lernwelten.first;
+      for (final w in lernwelten) {
+        if (snap.istWeltFrei(w.id)) {
+          aktiv = w;
+          if (snap.weltFortschritt(w.id) < 1.0) break;
+        }
+      }
+      _weltInitialisiert = true;
+    }
+    setState(() {
+      _snap = snap;
+      _aktivWelt = aktiv;
+      _doneChallenges = done;
+    });
+  }
+
+  void _togglePanel() {
+    if (_panelOffen) {
+      _closePanel();
+    } else {
+      setState(() => _panelOffen = true);
+      _panelCtrl.forward(from: 0);
+    }
+  }
+
+  Future<void> _closePanel() async {
+    await _panelCtrl.reverse();
+    if (mounted) setState(() => _panelOffen = false);
+  }
+
+  Future<void> _challengeStarten(String id) async {
+    await _closePanel();
+    await DailyChallenge.markDone(id);
+    if (!mounted) return;
+    final Widget screen;
+    switch (id) {
+      case 'preis':        screen = const PreisSchaetzenScreen(); break;
+      case 'higher_lower': screen = const HigherLowerScreen(); break;
+      case 'ranking_game': screen = const RankingGameScreen(); break;
+      case 'portfolio':    screen = const PortfolioScreen(); break;
+      default: return;
+    }
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    _load();
+  }
+
+  LernStation? get _aktuelleStation {
+    final snap = _snap;
+    if (snap == null) return null;
+    for (final a in _aktivWelt.abschnitte) {
+      for (final s in a.stationen) {
+        final d = snap.detailsFor(s.id);
+        if (d.istFreigeschaltet && !d.istAbgeschlossen) return s;
+      }
+    }
+    return null;
+  }
+
+  LernAbschnitt get _aktuellerAbschnitt {
+    final snap = _snap;
+    if (snap == null) return _aktivWelt.abschnitte.first;
+    for (final a in _aktivWelt.abschnitte) {
+      if (!snap.istAbschnittAbgeschlossen(a.id)) return a;
+    }
+    return _aktivWelt.abschnitte.last;
+  }
+
+  void _stationTippen(LernStation station) {
+    final details = _snap?.detailsFor(station.id);
+    if (details == null || !details.istFreigeschaltet) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _StationSheet(
+        station: station,
+        abgeschlossen: details.istAbgeschlossen,
+        onStart: () async {
+          Navigator.pop(context);
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => StationQuizScreen(station: station)),
+          );
+          _load();
+        },
+      ),
+    );
+  }
+
+  void _weltUebersicht() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _WeltUebersichtSheet(
+        snap: _snap,
+        aktivWelt: _aktivWelt,
+        onWelt: (w) {
+          Navigator.pop(context);
+          setState(() => _aktivWelt = w);
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final snap = _snap;
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          _GreenHeader(
+            weltEmoji: _aktivWelt.emoji,
+            streak: snap?.streak ?? 0,
+            punkte: snap?.gesamtRichtig ?? 0,
+          ),
+          _WeltBanner(
+            welt: _aktivWelt,
+            abschnitt: _aktuellerAbschnitt,
+            onUebersicht: _weltUebersicht,
+          ),
+          Expanded(
+            child: Stack(
+              children: [
+                // 0. Unsichtbarer Emoji-Preloader — lädt 🔥⭐🎁 Font-Glyphen synchron
+                Positioned(
+                  left: -9999,
+                  top: -9999,
+                  child: Wrap(
+                    children: ['🔥', '⭐', '🎁']
+                        .map((e) => Text(e, style: const TextStyle(fontSize: 1)))
+                        .toList(),
+                  ),
+                ),
+                // 1. Scrollbarer Lernpfad
+                snap == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : _Pfad(
+                        welt: _aktivWelt,
+                        snap: snap,
+                        aktuelleStationId: _aktuelleStation?.id,
+                        anims: _anims,
+                        onStationTap: _stationTippen,
+                      ),
+                // 2. Dunkler Overlay (schließt Panel beim Antippen)
+                if (_panelOffen)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: () => _closePanel(),
+                      child: ColoredBox(
+                        color: Colors.black.withValues(alpha: 0.54),
+                      ),
+                    ),
+                  ),
+                // 3. Challenge Panel (Modal von unten, 85% Höhe)
+                if (_panelOffen)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: SlideTransition(
+                      position: _panelSlide,
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.85,
+                        child: _ChallengePanel(
+                          done: _doneChallenges,
+                          onTap: _challengeStarten,
+                          onClose: () => _closePanel(),
+                        ),
+                      ),
+                    ),
+                  ),
+                // 4. Challenge Button (immer ganz oben)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: _ChallengeBtn(
+                    doneCount: _doneChallenges.length,
+                    onTap: _togglePanel,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Grüner Header ─────────────────────────────────────────────────────────────
+
+class _GreenHeader extends StatelessWidget {
+  final String weltEmoji;
+  final int streak;
+  final int punkte;
+  const _GreenHeader({required this.weltEmoji, required this.streak, required this.punkte});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      decoration: const BoxDecoration(
+        color: Color(0xFF4A9E4A),
+        boxShadow: [BoxShadow(color: Color(0x33000000), offset: Offset(0, 4), blurRadius: 8)],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Text(weltEmoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(width: 16),
+          const Text('🔥', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 4),
+          Text('$streak',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+          const SizedBox(width: 16),
+          const Text('⭐', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 4),
+          Text('$punkte',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+          const Spacer(),
+          Container(
+            width: 38, height: 38,
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+            child: const Icon(Icons.person_rounded, color: Color(0xFF4A9E4A), size: 22),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Welt-Banner ───────────────────────────────────────────────────────────────
+
+class _WeltBanner extends StatelessWidget {
+  final LernWelt welt;
+  final LernAbschnitt abschnitt;
+  final VoidCallback onUebersicht;
+  const _WeltBanner({required this.welt, required this.abschnitt, required this.onUebersicht});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF3D8B3D),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Welt ${welt.reihenfolge} — ${welt.name}',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 1),
+                Text('Abschnitt ${abschnitt.stufe} — ${abschnitt.titel}',
+                    style: const TextStyle(
+                        color: Color(0xFFA8D5A2), fontSize: 12, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: onUebersicht,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.map_outlined, color: Colors.white, size: 15),
+                  SizedBox(width: 4),
+                  Text('Welten',
+                      style: TextStyle(
+                          color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Pfad ──────────────────────────────────────────────────────────────────────
+
+class _Pfad extends StatelessWidget {
+  final LernWelt welt;
+  final LernpfadSnapshot snap;
+  final String? aktuelleStationId;
+  final _Anims anims;
+  final void Function(LernStation) onStationTap;
+
+  const _Pfad({
+    required this.welt,
+    required this.snap,
+    required this.aktuelleStationId,
+    required this.anims,
+    required this.onStationTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (_, constraints) => _buildStack(constraints.maxWidth));
+  }
+
+  Widget _buildStack(double w) {
+    // Mitte → HalbR(60%) → Rechts(65%) → HalbR → Mitte → HalbL(40%) → Links(35%) → HalbL
+    const xPat = [0.50, 0.60, 0.65, 0.60, 0.50, 0.40, 0.35, 0.40];
+    const vGap = 130.0;
+    const topPad = 120.0;
+    const bannerBeforeGap = 50.0;
+    const bannerH = 56.0;
+    const bannerAfterGap = 55.0; // > 41px Radius → keine Station auf dem Banner
+
+    final overlays = <Widget>[];
+    double y = topPad;
+
+    final List<Offset> alleStationPos = [];
+    final List<List<Offset>> stationenProAbschnitt = [];
+    final List<({Offset pos, int stufe})> checkpointPunkte = [];
+    int globalStationIdx = 0; // zählt alle Stationen quer über alle Abschnitte
+
+    for (int ai = 0; ai < welt.abschnitte.length; ai++) {
+      final a = welt.abschnitte[ai];
+      stationenProAbschnitt.add([]);
+      final aFrei = snap.istAbschnittFrei(a.id);
+      final aDone = snap.istAbschnittAbgeschlossen(a.id);
+
+      final doneInSection =
+          a.stationen.where((s) => snap.detailsFor(s.id).istAbgeschlossen).length;
+      final sectionProgress =
+          a.stationen.isNotEmpty ? doneInSection / a.stationen.length : 0.0;
+
+      if (ai > 0) {
+        final bY = y + bannerBeforeGap;
+        overlays.add(Positioned(
+          left: 16,
+          right: 16,
+          top: bY,
+          height: bannerH,
+          child: _AbschnittTrenner(abschnitt: a, istFrei: aFrei, istDone: aDone),
+        ));
+        y = bY + bannerH + bannerAfterGap;
+      }
+
+      final n = a.stationen.length;
+      // Gerade Abschnitte starten rechts, ungerade links — immer von Mitte aus
+      final localStart = (ai % 2 == 0) ? 0 : 4;
+      // Mindest-Füll-Stationen damit last position = Mitte (xPat[0] oder [4])
+      // Formel: kleinste k >= 0 sodass (n + k - 1) % 4 == 0
+      final filler = n == 0 ? 0 : ((1 - n) % 4 + 4) % 4;
+
+      int localIdx = localStart;
+
+      for (final s in a.stationen) {
+        final details = snap.detailsFor(s.id);
+        final istDone = details.istAbgeschlossen;
+        final istAktuell = s.id == aktuelleStationId;
+
+        final xFrac = xPat[localIdx % xPat.length];
+        final cx = xFrac * w;
+
+        alleStationPos.add(Offset(cx, y));
+        stationenProAbschnitt.last.add(Offset(cx, y));
+        if (istAktuell) {
+          // START-Blase nur auf der allerersten Station, solange sie nicht abgeschlossen
+          if (globalStationIdx == 0)
+            overlays.add(Positioned(
+              left: cx - 55,
+              top: y - 106,
+              width: 110,
+              child: _StartSprechblase(istGestartet: details.istGestartet),
+            ));
+          overlays.add(Positioned(
+            left: cx - 45,
+            top: y - 45,
+            child: _ActiveBtn(
+              modus: s.modus,
+              anims: anims,
+              onTap: () => onStationTap(s),
+              sectionProgress: sectionProgress,
+            ),
+          ));
+        } else if (istDone) {
+          overlays.add(Positioned(
+            left: cx - 41,
+            top: y - 41,
+            child: _DoneBtn(onTap: () => onStationTap(s)),
+          ));
+        } else if (details.istFreigeschaltet) {
+          overlays.add(Positioned(
+            left: cx - 41,
+            top: y - 41,
+            child: _FreiBtn(modus: s.modus, onTap: () => onStationTap(s)),
+          ));
+        } else {
+          overlays.add(Positioned(
+            left: cx - 41,
+            top: y - 41,
+            child: _LockedBtn(modus: s.modus),
+          ));
+        }
+
+        y += vGap;
+        localIdx++;
+        globalStationIdx++;
+      }
+
+      // Füll-Stationen: bringen den Pfad zurück zur Mitte vor dem Checkpoint
+      for (int fi = 0; fi < filler; fi++) {
+        final xFrac = xPat[localIdx % xPat.length];
+        final cx = xFrac * w;
+        overlays.add(Positioned(
+          left: cx - 41,
+          top: y - 41,
+          child: aDone ? _DoneBtn(onTap: () {}) : _LockedBtn(modus: LernModus.umrissBild),
+        ));
+        y += vGap;
+        localIdx++;
+      }
+
+      // Checkpoint immer in der Mitte
+      final mcx = 0.50 * w;
+      overlays.add(Positioned(
+        left: mcx - 41,
+        top: y - 41,
+        child: _MeilensteinBtn(abschnitt: a, istDone: aDone, istLetzter: ai == welt.abschnitte.length - 1),
+      ));
+      checkpointPunkte.add((pos: Offset(mcx, y), stufe: a.stufe));
+      y += vGap;
+    }
+
+    final s = stationenProAbschnitt;
+    final all = alleStationPos;
+
+    overlays.insertAll(0, pfadDekoOverlays(
+      kontinentId: welt.id,
+      allePositionen: all,
+      stationenProAbschnitt: s,
+      screenWidth: w,
+    ));
+
+    // Münzen: stufe 1 → Station 7, andere an spezifischen Positionen
+    final muenzPunkte = checkpointPunkte.map((cp) {
+      return switch (cp.stufe) {
+        1 => (pos: all.length >= 7  ? all[6]        : cp.pos, stufe: cp.stufe),
+        2 => (pos: s.length > 1 && s[1].length > 2  ? s[1][2]  : cp.pos, stufe: cp.stufe),
+        3 => (pos: s.length > 2 && s[2].length > 10 ? s[2][10] : cp.pos, stufe: cp.stufe),
+        4 => (pos: s.length > 3 && s[3].length > 22 ? s[3][22] : cp.pos, stufe: cp.stufe),
+        _ => cp,
+      };
+    }).toList();
+    overlays.addAll(pfadMaskottchenOverlays(
+      abschnitte: muenzPunkte,
+      screenWidth: w,
+    ));
+
+    // Globus: freie Positionen (kein Clash mit Coin/Deko)
+    final globusPunkte = [
+      if (welt.id != 'suedamerika')
+        (pos: s.isNotEmpty && s[0].length > 10 ? s[0][10] : all.first, stufe: 1),
+      (pos: s.length > 1 && s[1].length > 10 ? s[1][10] : checkpointPunkte[1].pos, stufe: 2),
+      (pos: s.length > 2 && s[2].length > 2  ? s[2][2]  : checkpointPunkte[2].pos, stufe: 3),
+      (pos: s.length > 3 && s[3].length > 14 ? s[3][14] : checkpointPunkte[3].pos, stufe: 4),
+    ];
+    overlays.addAll(pfadGlobusOverlays(
+      abschnitte: globusPunkte,
+      screenWidth: w,
+    ));
+
+    final totalH = y + 80;
+
+    return KontinentHintergrund(
+      kontinentId: welt.id,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 40),
+        child: SizedBox(
+          width: double.infinity,
+          height: totalH,
+          child: Stack(clipBehavior: Clip.none, children: overlays),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Meilenstein Button ────────────────────────────────────────────────────────
+
+class _MeilensteinBtn extends StatelessWidget {
+  final LernAbschnitt abschnitt;
+  final bool istDone;
+  final bool istLetzter;
+  const _MeilensteinBtn({required this.abschnitt, required this.istDone, required this.istLetzter});
+
+  @override
+  Widget build(BuildContext context) {
+    final hauptFarbe = istDone ? const Color(0xFFF9A825) : const Color(0xFFCECCCA);
+    final sockelFarbe = istDone ? const Color(0xFFC17F00) : const Color(0xFFADABA8);
+    const radius = BorderRadius.all(Radius.circular(16));
+
+    final String icon;
+    final String label;
+    if (istLetzter) {
+      icon = istDone ? '🏆' : '⭐';
+      label = istDone ? 'Abschluss ✅' : 'Abschluss';
+    } else {
+      icon = istDone ? '🎁' : '📖';
+      label = istDone ? 'Abschnitt ✅' : 'Checkpoint';
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 82,
+          height: 87,
+          child: Stack(
+            children: [
+              // Sockel
+              Positioned(
+                top: 5, left: 0,
+                child: Container(
+                  width: 82, height: 82,
+                  decoration: BoxDecoration(color: sockelFarbe, borderRadius: radius),
+                ),
+              ),
+              // Haupt-Kachel
+              Positioned(
+                top: 0, left: 0,
+                child: Container(
+                  width: 82, height: 82,
+                  decoration: BoxDecoration(color: hauptFarbe, borderRadius: radius),
+                  child: Center(
+                    child: Text(icon, style: const TextStyle(fontSize: 34)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: istDone ? const Color(0xFF4A9E4A) : const Color(0xFFAAAAAA),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── START Sprech-Blase ────────────────────────────────────────────────────────
+
+class _StartSprechblase extends StatelessWidget {
+  final bool istGestartet;
+  const _StartSprechblase({required this.istGestartet});
+
+  static const _top = Color(0xFF4CAF50);
+  static const _sockel = Color(0xFF388E3C);
+  static const _sockelH = 4.0;
+  static const _br = BorderRadius.all(Radius.circular(10));
+  static const _style = TextStyle(
+    color: Colors.white,
+    fontWeight: FontWeight.w800,
+    fontSize: 11,
+    letterSpacing: 0.8,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final label = istGestartet ? 'WEITER' : 'START';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.topCenter,
+          children: [
+            // Sockel (dunkleres Grün, 4px nach unten versetzt)
+            Transform.translate(
+              offset: const Offset(0, _sockelH),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: const BoxDecoration(color: _sockel, borderRadius: _br),
+                child: Text(label, style: _style.copyWith(color: _sockel)),
+              ),
+            ),
+            // Deckfläche (helles Grün)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: const BoxDecoration(color: _top, borderRadius: _br),
+              child: Text(label, style: _style),
+            ),
+          ],
+        ),
+        const SizedBox(height: _sockelH),
+        CustomPaint(
+          size: const Size(12, 6),
+          painter: _PfeilUntenMaler(color: _top),
+        ),
+      ],
+    );
+  }
+}
+
+class _PfeilUntenMaler extends CustomPainter {
+  final Color color;
+  const _PfeilUntenMaler({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(
+      Path()
+        ..moveTo(0, 0)
+        ..lineTo(size.width, 0)
+        ..lineTo(size.width / 2, size.height)
+        ..close(),
+      Paint()..color = color..style = PaintingStyle.fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PfeilUntenMaler o) => o.color != color;
+}
+
+// ── 3D Drückbarer Button ──────────────────────────────────────────────────────
+
+class _Druckbar3DBtn extends StatefulWidget {
+  final double kreisGroesse;
+  final double sockelHoehe;
+  final Color sockelFarbe;
+  final Widget inhalt;
+  final VoidCallback? onTap;
+
+  const _Druckbar3DBtn({
+    required this.kreisGroesse,
+    required this.sockelHoehe,
+    required this.sockelFarbe,
+    required this.inhalt,
+    this.onTap,
+  });
+
+  @override
+  State<_Druckbar3DBtn> createState() => _Druckbar3DBtnState();
+}
+
+class _Druckbar3DBtnState extends State<_Druckbar3DBtn> {
+  bool _gedrueckt = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final g = widget.kreisGroesse;
+    final s = widget.sockelHoehe;
+
+    return GestureDetector(
+      onTapDown: widget.onTap != null ? (_) => setState(() => _gedrueckt = true) : null,
+      onTapUp: widget.onTap != null
+          ? (_) {
+              setState(() => _gedrueckt = false);
+              widget.onTap!();
+            }
+          : null,
+      onTapCancel: () => setState(() => _gedrueckt = false),
+      child: SizedBox(
+        width: g,
+        height: g + s,
+        child: Stack(
+          children: [
+            // Sockel
+            Positioned(
+              top: s,
+              left: 0,
+              right: 0,
+              child: SizedBox(
+                width: g,
+                height: g,
+                child: DecoratedBox(
+                  decoration:
+                      BoxDecoration(color: widget.sockelFarbe, shape: BoxShape.circle),
+                ),
+              ),
+            ),
+            // Haupt-Kreis (sinkt beim Drücken)
+            AnimatedPositioned(
+              duration: Duration(milliseconds: _gedrueckt ? 50 : 100),
+              curve: Curves.easeOut,
+              top: _gedrueckt ? s : 0,
+              left: 0,
+              right: 0,
+              height: g,
+              child: widget.inhalt,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Abgeschlossen (grünes 3D) ─────────────────────────────────────────────────
+
+class _DoneBtn extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DoneBtn({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return _Druckbar3DBtn(
+      kreisGroesse: 82,
+      sockelHoehe: 5,
+      sockelFarbe: const Color(0xFF3D8B3D),
+      inhalt: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            colors: [Color(0xFF5DBB63), Color(0xFF4A9E4A)],
+            center: Alignment(-0.3, -0.3),
+            radius: 0.8,
+          ),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
+// ── Freigeschaltet (grünes 3D mit Modus-Emoji) ───────────────────────────────
+
+class _FreiBtn extends StatelessWidget {
+  final LernModus modus;
+  final VoidCallback onTap;
+  const _FreiBtn({required this.modus, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return _Druckbar3DBtn(
+      kreisGroesse: 82,
+      sockelHoehe: 5,
+      sockelFarbe: const Color(0xFF3D8B3D),
+      inhalt: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            colors: [Color(0xFF5DBB63), Color(0xFF4A9E4A)],
+            center: Alignment(-0.3, -0.3),
+            radius: 0.8,
+          ),
+          shape: BoxShape.circle,
+        ),
+        child: Center(child: Icon(_modusIcon(modus), color: Colors.white, size: 32)),
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
+// ── Perspektiv-Ring Painter (oben dünn → unten dick, 3D-Tiefenwirkung) ────────
+
+class _PerspektivRingPainter extends CustomPainter {
+  final Color ringFarbe;
+  const _PerspektivRingPainter({required this.ringFarbe});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 2; // 2px außerhalb Button-Rand (kreisGroesse/2 = 45)
+
+    for (double angle = 0; angle < 2 * pi; angle += 0.008) {
+      // sin(angle): -1=oben(12Uhr), 0=links/rechts(9/3Uhr), +1=unten(6Uhr)
+      final normalizedY = 1.0 - (sin(angle) + 1) / 2;
+      final dicke = 0.2 + (normalizedY * 16.8); // oben 0.2px, seiten ~8.6px, unten 17px
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        angle,
+        0.012,
+        false,
+        Paint()
+          ..color = ringFarbe
+          ..strokeWidth = dicke
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.butt,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+// ── Außenring 3D Painter (SweepGradient + Fortschrittsring) ──────────────────
+
+class _AussenRing3DPainter extends CustomPainter {
+  final double fortschritt;
+  const _AussenRing3DPainter({required this.fortschritt});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    // Feste Außenkante des Rings
+    const outerR = 45.0; // size.width(90)/2
+    const minSw = 3.0;   // oben: dünn
+    const maxSw = 8.0;   // unten: dick
+    const segments = 72;
+
+    // Schatten unten
+    canvas.drawCircle(
+      Offset(center.dx, center.dy + 3),
+      outerR - maxSw / 2,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = maxSw
+        ..color = const Color(0x28000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+
+    // Segmentierter Ring: oben dünn & hell, unten dick & dunkel
+    final segPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.butt;
+
+    for (int i = 0; i < segments; i++) {
+      final startAngle = -pi / 2 + (2 * pi * i / segments);
+      // leichte Überlappung damit keine Lücken entstehen
+      const sweepAngle = 2 * pi / segments + 0.02;
+      final midAngle = startAngle + sweepAngle / 2;
+      // t = 0 oben, t = 1 unten
+      final t = (sin(midAngle) + 1.0) / 2.0;
+      final sw = minSw + t * (maxSw - minSw);
+      // Außenkante bleibt konstant bei outerR
+      final segR = outerR - sw / 2;
+      final color = Color.lerp(
+        const Color(0xFFFFFFFF), // oben: weiß/hell
+        const Color(0xFFB0AEA8), // unten: dunkelgrau
+        t,
+      )!;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: segR),
+        startAngle,
+        sweepAngle,
+        false,
+        segPaint
+          ..strokeWidth = sw
+          ..color = color,
+      );
+    }
+
+    // Gold-Fortschrittsring (obendrauf)
+    if (fortschritt > 0) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: outerR - maxSw / 2),
+        -pi / 2,
+        2 * pi * fortschritt,
+        false,
+        Paint()
+          ..color = const Color(0xFFF9A825)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 5.0
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AussenRing3DPainter o) => o.fortschritt != fortschritt;
+}
+
+// ── Pulsier-Ring Painter (einheitlich grün) ───────────────────────────────────
+
+class _PulsierRing3DPainter extends CustomPainter {
+  final double animValue; // 0.0 → 1.0
+  const _PulsierRing3DPainter({required this.animValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2 + 3.0);
+    final startR = size.width / 2 + 8.0; // 53px Startradius
+    final r = startR + animValue * 8.0;   // 51→59 (102px→118px diameter)
+    final sw = (3.0 - animValue * 2.0).clamp(0.3, 3.0);
+    final opacity = (1.0 - animValue * 0.9).clamp(0.0, 1.0);
+
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = sw
+        ..color = const Color(0xFFF9A825).withValues(alpha: opacity * 0.7),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PulsierRing3DPainter o) => o.animValue != animValue;
+}
+
+// ── Aktuell (grün 3D + Fortschrittsring + Sonar) ─────────────────────────────
+
+class _ActiveBtn extends StatelessWidget {
+  final LernModus modus;
+  final _Anims anims;
+  final VoidCallback onTap;
+  final double sectionProgress;
+
+  const _ActiveBtn({
+    required this.modus,
+    required this.anims,
+    required this.onTap,
+    required this.sectionProgress,
+  });
+
+  Widget _pulsierRing3D(Animation<double> scale, Animation<double> opacity) {
+    return AnimatedBuilder(
+      animation: scale,
+      builder: (_, _) => CustomPaint(
+        size: const Size(90, 90),
+        painter: _PulsierRing3DPainter(
+          animValue: ((scale.value - 1.0) / 0.2).clamp(0.0, 1.0),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 90,
+      height: 95, // 90 + 5 Sockel
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Sonar-Ring 1
+          _pulsierRing3D(anims.ringScale, anims.ringOpacity),
+          // Sonar-Ring 2 (versetzt)
+          _pulsierRing3D(anims.ring2Scale, anims.ring2Opacity),
+          // 3D Grün-Button (8px Offset → zentriert in 106px)
+          Positioned(
+            top: 0,
+            left: 0,
+            child: _Druckbar3DBtn(
+              kreisGroesse: 90,
+              sockelHoehe: 5,
+              sockelFarbe: const Color(0xFF3D8B3D),
+              inhalt: Container(
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [Color(0xFF5DBB63), Color(0xFF4A9E4A)],
+                    center: Alignment(-0.3, -0.3),
+                    radius: 0.8,
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(child: Icon(_modusIcon(modus), color: Colors.white, size: 36)),
+              ),
+              onTap: onTap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Gesperrt (grau 3D mit grauem Modus-Emoji) ───────────────────────────────
+
+class _LockedBtn extends StatelessWidget {
+  final LernModus modus;
+  const _LockedBtn({required this.modus});
+
+  @override
+  Widget build(BuildContext context) {
+    return _Druckbar3DBtn(
+      kreisGroesse: 82,
+      sockelHoehe: 5,
+      sockelFarbe: const Color(0xFFB0AEA8),
+      inhalt: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFD0CEC8),
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Icon(_modusIcon(modus), color: const Color(0xFF9E9C96), size: 28),
+        ),
+      ),
+      onTap: null,
+    );
+  }
+}
+
+// ── Abschnitt-Trenner ─────────────────────────────────────────────────────────
+
+class _AbschnittTrenner extends StatelessWidget {
+  final LernAbschnitt abschnitt;
+  final bool istFrei;
+  final bool istDone;
+  const _AbschnittTrenner(
+      {required this.abschnitt, required this.istFrei, required this.istDone});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAEAE5),
+        borderRadius: BorderRadius.circular(16),
+        border: istDone ? Border.all(color: const Color(0xFF4A9E4A), width: 1.5) : null,
+        boxShadow: const [
+          BoxShadow(color: Color(0x1F000000), offset: Offset(0, 3), blurRadius: 6),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Abschnitt ${abschnitt.stufe} — ${abschnitt.titel}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: istFrei ? const Color(0xFF1a1a1a) : const Color(0xFF999999),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  abschnitt.untertitel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: istFrei ? const Color(0xFF666666) : const Color(0xFFBBBBBB),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(
+              istDone ? '✅' : istFrei ? '▼' : '🔒',
+              style: TextStyle(
+                fontSize: 16,
+                color: istFrei && !istDone ? const Color(0xFF4A9E4A) : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Station Sheet ─────────────────────────────────────────────────────────────
+
+class _StationSheet extends StatelessWidget {
+  final LernStation station;
+  final bool abgeschlossen;
+  final VoidCallback onStart;
+  const _StationSheet(
+      {required this.station, required this.abgeschlossen, required this.onStart});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding:
+          EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.paddingOf(context).bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 22),
+          Icon(_modusIcon(station.modus), size: 56, color: const Color(0xFF4A9E4A)),
+          const SizedBox(height: 12),
+          Text(
+              lernModusLabel(station.modus).replaceFirst(RegExp(r'^\S+\s'), ''),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(lernModusFragenLabel(station),
+              style: TextStyle(
+                  fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w600)),
+          if (abgeschlossen) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4A9E4A).withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text('Bereits abgeschlossen ✅',
+                  style: TextStyle(
+                      color: Color(0xFF4A9E4A),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12)),
+            ),
+          ],
+          const SizedBox(height: 28),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: onStart,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A9E4A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: Text(abgeschlossen ? 'Nochmal spielen' : 'START',
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen',
+                  style: TextStyle(
+                      color: Color(0xFF888888),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Challenge Panel (Modal von unten) ────────────────────────────────────────
+
+class _ChallengePanel extends StatefulWidget {
+  final Set<String> done;
+  final void Function(String id) onTap;
+  final VoidCallback onClose;
+  const _ChallengePanel({
+    required this.done,
+    required this.onTap,
+    required this.onClose,
+  });
+
+  @override
+  State<_ChallengePanel> createState() => _ChallengePanelState();
+}
+
+class _ChallengePanelState extends State<_ChallengePanel> {
+  double _dragTotal = 0;
+
+  static const _karten = [
+    (
+      id: 'preis',
+      asset: 'assets/icons/challenge_preis.png',
+      emoji: '🏷️',
+      title: 'Das große Schätzen',
+      bg: Color(0xFFF9A825),
+    ),
+    (
+      id: 'higher_lower',
+      asset: 'assets/icons/challenge_higher_lower.png',
+      emoji: '⬆️',
+      title: 'Higher or Lower',
+      bg: Color(0xFF4A9E4A),
+    ),
+    (
+      id: 'ranking_game',
+      asset: 'assets/icons/challenge_ranking.png',
+      emoji: '🏅',
+      title: 'Ranking Quiz',
+      bg: Color(0xFF7C3AED),
+    ),
+    (
+      id: 'portfolio',
+      asset: 'assets/icons/challenge_portfolio.png',
+      emoji: '💼',
+      title: 'Portfolio des Tages',
+      bg: Color(0xFF4A90D9),
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final doneCount = widget.done.length;
+    final d = DailyChallenge.untilMidnight();
+    final countdown = 'Heute • Reset in ${d.inHours}h ${d.inMinutes % 60}m';
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F4F0),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x40000000),
+            blurRadius: 20,
+            offset: Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Drag Handle
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onVerticalDragUpdate: (d) {
+              if (d.delta.dy > 0) {
+                _dragTotal += d.delta.dy;
+                if (_dragTotal > 100) {
+                  _dragTotal = 0;
+                  widget.onClose();
+                }
+              }
+            },
+            onVerticalDragEnd: (_) => _dragTotal = 0,
+            child: SizedBox(
+              width: double.infinity,
+              child: Center(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD0CEC8),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 16, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '⚡ TÄGLICHE CHALLENGES',
+                      style: TextStyle(
+                        color: Color(0xFF4A9E4A),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      countdown,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF888888),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: widget.onClose,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAEAE5),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(Icons.close_rounded,
+                        color: Color(0xFF888888), size: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Fortschritts-Punkte
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    for (int i = 0; i < 4; i++) ...[
+                      if (i > 0)
+                        Expanded(
+                          child: Container(
+                            height: 1.5,
+                            color: const Color(0xFFD0CEC8),
+                          ),
+                        ),
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: i < doneCount
+                              ? const Color(0xFF4A9E4A)
+                              : const Color(0xFFEAEAE5),
+                          shape: BoxShape.circle,
+                          border: i < doneCount
+                              ? null
+                              : Border.all(
+                                  color: const Color(0xFFD0CEC8), width: 1.5),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$doneCount von 4 Challenges erledigt',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF888888),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Karten (2×2 Schachbrett-Grid)
+          Expanded(
+            child: GridView.count(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              childAspectRatio: 1.0,
+              children: [
+                for (final k in _karten)
+                  _GrossKarte(
+                    id: k.id,
+                    asset: k.asset,
+                    emoji: k.emoji,
+                    title: k.title,
+                    bg: k.bg,
+                    isDone: widget.done.contains(k.id),
+                    onTap: () => widget.onTap(k.id),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Große Challenge-Karte ─────────────────────────────────────────────────────
+
+class _GrossKarte extends StatefulWidget {
+  final String id, asset, emoji, title;
+  final Color bg;
+  final bool isDone;
+  final VoidCallback onTap;
+  const _GrossKarte({
+    required this.id,
+    required this.asset,
+    required this.emoji,
+    required this.title,
+    required this.bg,
+    required this.isDone,
+    required this.onTap,
+  });
+
+  @override
+  State<_GrossKarte> createState() => _GrossKarteState();
+}
+
+class _GrossKarteState extends State<_GrossKarte>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _shakeCtrl;
+  late final Animation<double> _shakeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _shakeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _shakeAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -8.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -8.0, end: 8.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 8.0, end: -5.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -5.0, end: 5.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 5.0, end: 0.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.linear));
+  }
+
+  @override
+  void dispose() {
+    _shakeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    if (widget.isDone) {
+      _shakeCtrl.forward(from: 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Heute bereits gespielt! Komm morgen wieder 🌅'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      widget.onTap();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _shakeAnim,
+      builder: (_, child) => Transform.translate(
+        offset: Offset(_shakeAnim.value, 0),
+        child: child,
+      ),
+      child: GestureDetector(
+        onTap: _handleTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: widget.bg,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Logo groß, kein weißlicher Hintergrund
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    widget.asset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (ctx, err, st) => Center(
+                      child: Text(widget.emoji,
+                          style: const TextStyle(fontSize: 52)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Titel unten
+              Text(
+                widget.title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Challenge-Button (oben rechts, fixed) ────────────────────────────────────
+
+class _ChallengeBtn extends StatefulWidget {
+  final int doneCount;
+  final VoidCallback onTap;
+  const _ChallengeBtn({required this.doneCount, required this.onTap});
+
+  @override
+  State<_ChallengeBtn> createState() => _ChallengeBtnState();
+}
+
+class _ChallengeBtnState extends State<_ChallengeBtn>
+    with SingleTickerProviderStateMixin {
+  bool _pressed = false;
+  late final AnimationController _glowCtrl;
+  late final Animation<double> _glowAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _glowAnim = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _glowCtrl, curve: Curves.easeOut));
+    _syncAnim();
+  }
+
+  @override
+  void didUpdateWidget(_ChallengeBtn old) {
+    super.didUpdateWidget(old);
+    _syncAnim();
+  }
+
+  void _syncAnim() {
+    if (widget.doneCount < 4) {
+      if (!_glowCtrl.isAnimating) _glowCtrl.repeat();
+    } else {
+      _glowCtrl.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _glowCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const sockelH = 4.0;
+    const outer = 58.0;
+    const inner = 50.0;
+    const pad = (outer - inner) / 2; // 4px
+    const outerBr = BorderRadius.all(Radius.circular(16));
+    const innerBr = BorderRadius.all(Radius.circular(14));
+    final allDone = widget.doneCount >= 4;
+    final badgeColor = allDone ? const Color(0xFF4A9E4A) : const Color(0xFFE53935);
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: SizedBox(
+        width: outer,
+        height: outer + sockelH,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Viereckiger Glow (pulsiert, nur wenn nicht alle erledigt)
+            if (!allDone)
+              AnimatedBuilder(
+                animation: _glowAnim,
+                builder: (_, _) {
+                  final v = _glowAnim.value;
+                  final extra = v * 16;
+                  final glowSize = outer + extra;
+                  final offset = -(extra / 2);
+                  return Positioned(
+                    top: offset + 3,
+                    left: offset,
+                    width: glowSize,
+                    height: glowSize,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18 + v * 4),
+                        border: Border.all(
+                          color: const Color(0xFF4A9E4A)
+                              .withValues(alpha: (0.6 - v * 0.6).clamp(0, 1)),
+                          width: (2.5 - v * 2.0).clamp(0.1, 2.5),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF4A9E4A)
+                                .withValues(alpha: (0.15 - v * 0.15).clamp(0, 0.15)),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            // Äußerer 3D-Rahmen (LinearGradient + BoxShadow)
+            Positioned(
+              top: 2,
+              left: 0,
+              child: Container(
+              width: outer,
+              height: outer,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFFFFFFF), Color(0xFFE0DDD6)],
+                ),
+                borderRadius: outerBr,
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 6,
+                    offset: Offset(2, 5),
+                  ),
+                  BoxShadow(
+                    color: Color(0xCCFFFFFF),
+                    blurRadius: 3,
+                    offset: Offset(-1, -2),
+                  ),
+                ],
+              ),
+            ),
+            ),
+            // Innerer Sockel (dunkelgrün, fix)
+            Positioned(
+              top: pad + sockelH,
+              left: pad,
+              width: inner,
+              height: inner,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Color(0xFF3D8B3D),
+                  borderRadius: innerBr,
+                ),
+              ),
+            ),
+            // Innere Deckfläche (animiert, sinkt beim Drücken)
+            AnimatedPositioned(
+              duration: Duration(milliseconds: _pressed ? 50 : 100),
+              curve: Curves.easeOut,
+              top: _pressed ? pad + sockelH : pad,
+              left: pad,
+              width: inner,
+              height: inner,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: const RadialGradient(
+                    colors: [Color(0xFF5DBB63), Color(0xFF4A9E4A)],
+                    center: Alignment(-0.3, -0.3),
+                    radius: 0.8,
+                  ),
+                  borderRadius: innerBr,
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x40000000),
+                      offset: Offset(0, 4),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.bolt_rounded, color: Colors.white, size: 22),
+                    SizedBox(height: 1),
+                    Text('Daily',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3)),
+                  ],
+                ),
+              ),
+            ),
+            // Badge (erledigte Challenges)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: badgeColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: Center(
+                  child: Text(
+                    '${widget.doneCount}',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Welt-Übersicht Sheet ──────────────────────────────────────────────────────
+
+class _WeltUebersichtSheet extends StatelessWidget {
+  final LernpfadSnapshot? snap;
+  final LernWelt aktivWelt;
+  final void Function(LernWelt) onWelt;
+  const _WeltUebersichtSheet(
+      {required this.snap, required this.aktivWelt, required this.onWelt});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F4F0),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding:
+          EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.paddingOf(context).bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 16),
+          const Text('Alle Welten',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 16),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                children: lernwelten.map((w) {
+                  final frei = snap?.istWeltFrei(w.id) ?? w.reihenfolge == 1;
+                  final fortschritt = snap?.weltFortschritt(w.id) ?? 0.0;
+                  final istAktiv = w.id == aktivWelt.id;
+                  return GestureDetector(
+                    onTap: frei ? () => onWelt(w) : null,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: istAktiv
+                            ? const Color(0xFF4A9E4A).withValues(alpha: 0.08)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: istAktiv
+                            ? Border.all(color: const Color(0xFF4A9E4A), width: 2)
+                            : null,
+                      ),
+                      child: Row(
+                        children: [
+                          Text(w.emoji,
+                              style: TextStyle(
+                                  fontSize: 22,
+                                  color: frei ? null : const Color(0xFFCCCCCC))),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(w.name,
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 14,
+                                        color: frei
+                                            ? const Color(0xFF1a1a1a)
+                                            : const Color(0xFF999999))),
+                                if (frei) ...[
+                                  const SizedBox(height: 4),
+                                  LinearProgressIndicator(
+                                    value: fortschritt,
+                                    backgroundColor: const Color(0xFFD4D4CC),
+                                    valueColor: const AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF4A9E4A)),
+                                    minHeight: 4,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            frei ? '${(fortschritt * 100).round()}%' : '🔒',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: frei
+                                    ? const Color(0xFF4A9E4A)
+                                    : const Color(0xFFBBBBBB)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

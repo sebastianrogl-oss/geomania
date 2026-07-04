@@ -1,0 +1,62 @@
+BACKUP - Karten-Quiz (Interaktive Weltkarte)
+===========================================
+Stand: 2026-06-17
+
+Flutter-Version: Flutter 3.44.1 / Dart 3.12.1
+
+Benoetigte Pakete (pubspec.yaml):
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.1
+  shared_preferences: ^2.3.3
+
+Asset:
+  assets/geo/ne_50m_countries.geojson  (Natural Earth 1:50m, 242 Features, 2.94 MB)
+  --> Backup liegt in: backups/karten_quiz/assets/geo/ne_50m_countries.geojson
+
+---
+
+GESICHERTE DATEIEN:
+  map_quiz_screen_backup.dart   -- Vollstaendiger Screen-Code
+  assets/geo/ne_50m_countries.geojson  -- GeoJSON-Weltkarte
+
+---
+
+FEATURES (Stand Backup):
+  - Interaktive Weltkarte (flutter_map + Natural Earth GeoJSON)
+  - Punkt-in-Polygon (PIP) Hit-Testing fuer Laender-Auswahl
+  - Mikrostaat-Punkte: Stadtstaaten (Vatikan, San Marino, Malta etc.)
+    werden als klickbare weisse Punkte dargestellt (bbox < 0.3 deg^2),
+    nur wenn kein grosses Pendant-Polygon mit gleicher ISO2 vorhanden ist
+  - Hover-Highlight (dunkelgruener Hover-Effekt fuer Desktop-Maus)
+  - Rot-Blinken: falscher Tipp -> richtiges Land blinkt rot bis gefunden
+  - Falsch-zuerst: Laender die erst nach Fehler gefunden wurden bleiben dauerhaft rot
+  - Richtig (erster Versuch): Laender bleiben weiss markiert
+  - Kontinent-Modus: Karte zeigt nur Laender des gewahlten Kontinents,
+    Ueberseegebiete werden per Ring-Zentroid-Pruefung korrekt ausgefiltert
+    (z.B. Franzoesisch-Guayana erscheint bei Europa-Quiz gedimmt)
+  - Scroll-Zoom: InteractiveFlag.scrollWheelZoom (Mausrad + Touchpad)
+  - +/- Buttons fuer Zoom
+  - Punkte-System (1000 Punkte fuer Erster-Versuch-Treffer)
+  - Taeglich-Challenge-Modus (isDaily: true)
+
+---
+
+WIEDERHERSTELLEN:
+  1. map_quiz_screen_backup.dart -> lib/screens/map_quiz_screen.dart kopieren
+  2. assets/geo/ne_50m_countries.geojson aus backups/karten_quiz/assets/geo/
+     nach assets/geo/ kopieren (falls nicht vorhanden)
+  3. pubspec.yaml: Pakete pruefen (flutter_map, latlong2, shared_preferences)
+  4. pubspec.yaml: Asset eintragen falls nicht vorhanden:
+       flutter:
+         assets:
+           - assets/geo/ne_50m_countries.geojson
+  5. lib/screens/home_screen.dart:
+     - Import einkommentieren: import 'map_quiz_screen.dart';
+     - _ChallengeInfo(id: 'map', ...) in der _challenges-Liste einkommentieren
+     - case 'map': Block in _start() einkommentieren
+  6. lib/screens/lernen_screen.dart:
+     - Import einkommentieren: import 'map_quiz_screen.dart';
+     - rawMapQ Variable und 'map': rawMapQ in _rawMaps einkommentieren
+     - _KategorieCard fuer 'Karte meistern' einkommentieren
+  7. flutter pub get
+  8. flutter run -d chrome --web-port 9090

@@ -1,0 +1,93 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geomania/data/lernpfad_data.dart';
+import 'package:geomania/screens/station_quiz_screen.dart';
+
+LernStation _station(LernModus modus, List<String> laender) => LernStation(
+      id: 'test_${modus.name}',
+      modus: modus,
+      fragenAnzahl: modus == LernModus.sortierSpiel ? 3 : 8,
+      laenderCodes: laender,
+      kategorien: const [],
+      schwierigkeitsgrad: 2,
+    );
+
+Future<void> _pumpStation(WidgetTester tester, LernStation station) async {
+  SharedPreferences.setMockInitialValues({});
+  await tester.pumpWidget(MaterialApp(
+    home: StationQuizScreen(station: station),
+  ));
+  // initState-Future (StationSession.laden + FragenGenerator) abwarten.
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  const europa = ['DE', 'FR', 'IT', 'ES', 'PL', 'SE', 'NO', 'GR', 'RO', 'HU'];
+  // Reine Inselstaaten -> nachbarland muss auf Flaggen-Fallback ausweichen.
+  const inseln = ['AU', 'NZ', 'FJ', 'SB', 'VU', 'WS', 'TO', 'FM'];
+
+  testWidgets('nachbarland rendert Frage + 4 Optionen, kein Absturz',
+      (tester) async {
+    await _pumpStation(tester, _station(LernModus.nachbarland, europa));
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('grenzt an'), findsOneWidget);
+    expect(find.byType(InkWell), findsNWidgets(4));
+  });
+
+  testWidgets('nachbarland auf Inselstaaten weicht auf Fallback aus (kein Crash)',
+      (tester) async {
+    await _pumpStation(tester, _station(LernModus.nachbarland, inseln));
+    expect(tester.takeException(), isNull);
+    // Fallback ist flaggenQuizBild -> Bild sichtbar, 4 Text-Optionen.
+    expect(find.byType(InkWell), findsNWidgets(4));
+  });
+
+  testWidgets('bipGesamt rendert Frage + Landkopf, kein Absturz',
+      (tester) async {
+    await _pumpStation(tester, _station(LernModus.bipGesamt, europa));
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Wie hoch ist das BIP'), findsOneWidget);
+    expect(find.byType(InkWell), findsNWidgets(4));
+  });
+
+  testWidgets('flaeche rendert Frage + Landkopf, kein Absturz',
+      (tester) async {
+    await _pumpStation(tester, _station(LernModus.flaeche, europa));
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Wie groß ist die Fläche'), findsOneWidget);
+    expect(find.byType(InkWell), findsNWidgets(4));
+  });
+
+  testWidgets('extremFrage rendert Frage + 4 Länder, OHNE die Antwort vorab zu verraten',
+      (tester) async {
+    await _pumpStation(tester, _station(LernModus.extremFrage, europa));
+    expect(tester.takeException(), isNull);
+    // Kein FlaggenWidget/Landkopf vor der Antwort (würde die Lösung verraten).
+    expect(find.byWidgetPredicate((w) => w.runtimeType.toString() == '_LandHeader'),
+        findsNothing);
+    expect(find.byType(InkWell), findsNWidgets(4));
+  });
+
+  testWidgets('waehrungZuLand rendert Frage + 4 Länder, OHNE die Antwort vorab zu verraten',
+      (tester) async {
+    await _pumpStation(tester, _station(LernModus.waehrungZuLand, europa));
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Welches Land nutzt'), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w.runtimeType.toString() == '_LandHeader'),
+        findsNothing);
+    expect(find.byType(InkWell), findsNWidgets(4));
+  });
+
+  testWidgets('Alle Fragen einer extremFrage-Station lassen sich beantworten',
+      (tester) async {
+    await _pumpStation(tester, _station(LernModus.extremFrage, europa));
+    for (int i = 0; i < 8; i++) {
+      expect(tester.takeException(), isNull, reason: 'Frage $i');
+      await tester.tap(find.byType(InkWell).first);
+      await tester.pump(const Duration(milliseconds: 1300));
+      await tester.pumpAndSettle();
+    }
+    expect(tester.takeException(), isNull);
+  });
+}

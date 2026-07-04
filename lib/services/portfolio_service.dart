@@ -1,0 +1,227 @@
+import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../data/portfolio_daten.dart';
+import 'tages_seed_service.dart';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WELTPORTFOLIO — Persistenz (Phase 2)
+// Kapital, Streak, Verlauf und Makro-Trend bleiben über Tage hinweg gespeichert.
+// ══════════════════════════════════════════════════════════════════════════════
+
+class PortfolioStatus {
+  final double kapital;
+  final double rekordKapital;
+  final int streak;
+  final List<double> verlauf; // älteste zuerst, max. 30 Einträge
+  final MakroTrend trend;
+  final int trendTag; // 1-basiert: "Tag X von trend.dauerTage"
+  final bool heuteGespielt;
+  final String heute; // yyyy-MM-dd
+
+  const PortfolioStatus({
+    required this.kapital,
+    required this.rekordKapital,
+    required this.streak,
+    required this.verlauf,
+    required this.trend,
+    required this.trendTag,
+    required this.heuteGespielt,
+    required this.heute,
+  });
+}
+
+class PortfolioSpielstilRohdaten {
+  final int tage;
+  final int auswahlen;        // Summe gewählter Länder über alle Tage
+  final double risikoSumme;   // Summe (gewichtetes Ø-Risiko pro Tag)
+  final double effektivSumme; // Summe (effektive Länderzahl / Diversifikation pro Tag)
+  final int newsTreffer;      // Anzahl gewählter Länder, die an dem Tag in den News waren
+  final int trendTreffer;     // Anzahl gewählter Länder, die vom Makro-Trend profitierten
+
+  const PortfolioSpielstilRohdaten({
+    required this.tage,
+    required this.auswahlen,
+    required this.risikoSumme,
+    required this.effektivSumme,
+    required this.newsTreffer,
+    required this.trendTreffer,
+  });
+}
+
+class PortfolioService {
+  static const double kStartKapital = 1000.0;
+  static const double kFloor = 100.0;
+
+  static const _kKapital         = 'pf_kapital';
+  static const _kRekord          = 'pf_rekord_kapital';
+  static const _kStreak          = 'pf_streak';
+  static const _kLetzterSpieltag = 'pf_letzter_spieltag';
+  static const _kVerlauf         = 'pf_verlauf';
+  static const _kTrendName       = 'pf_trend_name';
+  static const _kTrendStart      = 'pf_trend_start';
+
+  static const _kStilTage         = 'pf_stil_tage';
+  static const _kStilAuswahlen    = 'pf_stil_auswahlen';
+  static const _kStilRisikoSumme  = 'pf_stil_risiko_summe';
+  static const _kStilEffektivSumme = 'pf_stil_effektiv_summe';
+  static const _kStilNewsTreffer  = 'pf_stil_news_treffer';
+  static const _kStilTrendTreffer = 'pf_stil_trend_treffer';
+
+  // ── Datum-Helfer ─────────────────────────────────────────────────────────────
+
+  static String _formatDatum(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  static DateTime _parseDatum(String s) {
+    final teile = s.split('-');
+    return DateTime(int.parse(teile[0]), int.parse(teile[1]), int.parse(teile[2]));
+  }
+
+  static DateTime _heuteDatum() {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  // ── Makro-Trend-Rotation (seed-basiert, für alle Spieler gleich) ─────────────
+
+  static MakroTrend _waehleTrend(DateTime tag, {String? vorheriger}) {
+    final seed = TagesSeedService.seedFuer('portfolio_trend') +
+        tag.year * 10000 + tag.month * 100 + tag.day;
+    final kandidaten = trendPool.length > 1
+        ? trendPool.where((t) => t.name != vorheriger).toList()
+        : trendPool;
+    return kandidaten[Random(seed).nextInt(kandidaten.length)];
+  }
+
+  static Future<(MakroTrend, int)> _aktuellerTrend(
+      SharedPreferences prefs, DateTime heute) async {
+    final name = prefs.getString(_kTrendName);
+    final startStr = prefs.getString(_kTrendStart);
+
+    if (name == null || startStr == null) {
+      final trend = _waehleTrend(heute);
+      await prefs.setString(_kTrendName, trend.name);
+      await prefs.setString(_kTrendStart, _formatDatum(heute));
+      return (trend, 1);
+    }
+
+    final aktuell = trendPool.firstWhere((t) => t.name == name,
+        orElse: () => _waehleTrend(heute));
+    final start = _parseDatum(startStr);
+    final tageSeitStart = heute.difference(start).inDays;
+
+    if (tageSeitStart >= aktuell.dauerTage) {
+      // Trend abgelaufen → nächsten Trend wählen (nicht denselben zweimal hintereinander)
+      final naechster = _waehleTrend(heute, vorheriger: aktuell.name);
+      await prefs.setString(_kTrendName, naechster.name);
+      await prefs.setString(_kTrendStart, _formatDatum(heute));
+      return (naechster, 1);
+    }
+
+    return (aktuell, tageSeitStart + 1);
+  }
+
+  // ── Laden ─────────────────────────────────────────────────────────────────
+
+  static Future<PortfolioStatus> ladeStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final heute = _heuteDatum();
+    final heuteStr = _formatDatum(heute);
+
+    final letzterSpieltag = prefs.getString(_kLetzterSpieltag);
+
+    // Streak bricht sanft, wenn ein Tag verpasst wurde (Kapital bleibt unberührt).
+    var streak = prefs.getInt(_kStreak) ?? 0;
+    if (letzterSpieltag != null && letzterSpieltag != heuteStr) {
+      final gestern = heute.subtract(const Duration(days: 1));
+      if (_parseDatum(letzterSpieltag).isBefore(gestern)) {
+        streak = 0;
+        await prefs.setInt(_kStreak, 0);
+      }
+    }
+
+    final kapital = prefs.getDouble(_kKapital) ?? kStartKapital;
+    final rekord  = prefs.getDouble(_kRekord) ?? kapital;
+    final verlaufRoh = prefs.getStringList(_kVerlauf) ?? [];
+    final verlauf = verlaufRoh.map(double.parse).toList();
+
+    final (trend, trendTag) = await _aktuellerTrend(prefs, heute);
+
+    return PortfolioStatus(
+      kapital: kapital,
+      rekordKapital: rekord,
+      streak: streak,
+      verlauf: verlauf,
+      trend: trend,
+      trendTag: trendTag,
+      heuteGespielt: letzterSpieltag == heuteStr,
+      heute: heuteStr,
+    );
+  }
+
+  // ── Tag abschließen ──────────────────────────────────────────────────────────
+
+  static Future<PortfolioStatus> schliesseTagAb({
+    required double neuesKapital,
+    required double gewichtetesRisiko,
+    required double effektiveLaenderzahl,
+    required int newsTrefferAnzahl,
+    required int trendTrefferAnzahl,
+    required int anzahlLaender,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final heute = _heuteDatum();
+    final heuteStr = _formatDatum(heute);
+
+    final kapitalGeklemmt = neuesKapital.clamp(kFloor, double.infinity).toDouble();
+    final rekordBisher = prefs.getDouble(_kRekord) ?? kStartKapital;
+    final rekordNeu = max(rekordBisher, kapitalGeklemmt);
+
+    final letzterSpieltag = prefs.getString(_kLetzterSpieltag);
+    final streakBisher = prefs.getInt(_kStreak) ?? 0;
+    final gestern = _formatDatum(heute.subtract(const Duration(days: 1)));
+    final streakNeu = (letzterSpieltag == gestern) ? streakBisher + 1 : 1;
+
+    final verlaufRoh = prefs.getStringList(_kVerlauf) ?? [];
+    final verlaufNeu = [...verlaufRoh, kapitalGeklemmt.toString()];
+    if (verlaufNeu.length > 30) {
+      verlaufNeu.removeRange(0, verlaufNeu.length - 30);
+    }
+
+    await prefs.setDouble(_kKapital, kapitalGeklemmt);
+    await prefs.setDouble(_kRekord, rekordNeu);
+    await prefs.setInt(_kStreak, streakNeu);
+    await prefs.setString(_kLetzterSpieltag, heuteStr);
+    await prefs.setStringList(_kVerlauf, verlaufNeu);
+
+    await prefs.setInt(_kStilTage, (prefs.getInt(_kStilTage) ?? 0) + 1);
+    await prefs.setInt(_kStilAuswahlen,
+        (prefs.getInt(_kStilAuswahlen) ?? 0) + anzahlLaender);
+    await prefs.setDouble(_kStilRisikoSumme,
+        (prefs.getDouble(_kStilRisikoSumme) ?? 0) + gewichtetesRisiko);
+    await prefs.setDouble(_kStilEffektivSumme,
+        (prefs.getDouble(_kStilEffektivSumme) ?? 0) + effektiveLaenderzahl);
+    await prefs.setInt(_kStilNewsTreffer,
+        (prefs.getInt(_kStilNewsTreffer) ?? 0) + newsTrefferAnzahl);
+    await prefs.setInt(_kStilTrendTreffer,
+        (prefs.getInt(_kStilTrendTreffer) ?? 0) + trendTrefferAnzahl);
+
+    return ladeStatus();
+  }
+
+  // ── Spielstil-Rohdaten (für Phase 8) ─────────────────────────────────────────
+
+  static Future<PortfolioSpielstilRohdaten> ladeSpielstilRohdaten() async {
+    final prefs = await SharedPreferences.getInstance();
+    return PortfolioSpielstilRohdaten(
+      tage: prefs.getInt(_kStilTage) ?? 0,
+      auswahlen: prefs.getInt(_kStilAuswahlen) ?? 0,
+      risikoSumme: prefs.getDouble(_kStilRisikoSumme) ?? 0,
+      effektivSumme: prefs.getDouble(_kStilEffektivSumme) ?? 0,
+      newsTreffer: prefs.getInt(_kStilNewsTreffer) ?? 0,
+      trendTreffer: prefs.getInt(_kStilTrendTreffer) ?? 0,
+    );
+  }
+}

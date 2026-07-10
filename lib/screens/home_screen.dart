@@ -1,12 +1,18 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/lernpfad_data.dart';
+import '../services/challenge_panel_signal.dart';
+import '../services/challenge_rekord_service.dart';
 import '../services/daily_challenge.dart';
 import '../services/fortschritt_service.dart';
+import '../services/portfolio_service.dart';
+import '../services/profilbild_service.dart';
 import '../widgets/kontinent_hintergrund.dart';
 import '../widgets/pfad_deko_layer.dart';
 import '../widgets/pfad_maskottchen.dart';
+import 'challenge_start_screen.dart';
 import 'higher_lower_screen.dart';
+import 'portfolio/portfolio_ergebnis_ansicht_screen.dart';
 import 'portfolio_screen.dart';
 import 'preis_schaetzen_screen.dart';
 import 'ranking_game_screen.dart';
@@ -23,17 +29,17 @@ IconData _modusIcon(LernModus m) => switch (m) {
   LernModus.wirtschaftssektoren  => Icons.factory_rounded,
   LernModus.umrissBild           => Icons.map_rounded,
   LernModus.umrissMultiple       => Icons.map_rounded,
+  LernModus.flaggenQuizEingabe   => Icons.flag_rounded,
+  LernModus.umrissEingabe        => Icons.map_rounded,
   LernModus.nachbarland          => Icons.explore_rounded,
   LernModus.bipGesamt            => Icons.trending_up_rounded,
   LernModus.flaeche              => Icons.crop_square_rounded,
   LernModus.extremFrage          => Icons.emoji_events_rounded,
   LernModus.waehrungZuLand       => Icons.monetization_on_rounded,
-  LernModus.hauptstadtZuLand     => Icons.account_balance_rounded,
-  LernModus.groessteStadt        => Icons.location_city_rounded,
-  LernModus.flaggenFarbe         => Icons.palette_rounded,
   LernModus.extremFrageLeicht    => Icons.emoji_events_rounded,
   LernModus.zufallsFakt          => Icons.lightbulb_rounded,
   LernModus.bekanntesGebaeude    => Icons.temple_buddhist_rounded,
+  LernModus.grenzkettenRaetsel   => Icons.route_rounded,
 };
 
 class _Anims {
@@ -52,7 +58,8 @@ class _Anims {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onProfilTap;
+  const HomeScreen({super.key, this.onProfilTap});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -65,6 +72,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // springt die Ansicht bei 100%-Fortschritt immer zur letzten Welt zurück.
   bool _weltInitialisiert = false;
   Set<String> _doneChallenges = {};
+  String _profilbild = ProfilbildService.standard;
   bool _panelOffen = false;
   late final AnimationController _rippleCtrl;
   late final AnimationController _panelCtrl;
@@ -103,7 +111,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
     _load();
+    _ladeProfilbild();
     FortschrittService.resetSignal.addListener(_onResetSignal);
+    ChallengePanelSignal.oeffnen.addListener(_onChallengePanelOeffnenSignal);
+    ProfilbildService.geaendert.addListener(_ladeProfilbild);
+  }
+
+  // HomeScreen bleibt dank IndexedStack dauerhaft am Leben (kein initState()
+  // beim Tab-Wechsel) -> ein geändertes Profilbild vom Profil-Tab würde ohne
+  // dieses Signal hier nie nachgezogen.
+  Future<void> _ladeProfilbild() async {
+    final pfad = await ProfilbildService.getProfilbild();
+    if (mounted) setState(() => _profilbild = pfad);
+  }
+
+  // Nach Abschluss einer Tages-Challenge (finaler "Weiter"-Button im
+  // Ergebnis-Screen) soll man wieder direkt im Challenge-Panel landen statt
+  // nur auf dem Lernpfad — dafür wird dieses Signal gebumpt.
+  void _onChallengePanelOeffnenSignal() {
+    if (!mounted || _panelOffen) return;
+    setState(() => _panelOffen = true);
+    _panelCtrl.forward(from: 0);
   }
 
   // Reset/"Alles freischalten" ändert den Fortschritt grundlegend — dort
@@ -117,6 +145,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     FortschrittService.resetSignal.removeListener(_onResetSignal);
+    ChallengePanelSignal.oeffnen.removeListener(_onChallengePanelOeffnenSignal);
+    ProfilbildService.geaendert.removeListener(_ladeProfilbild);
     _rippleCtrl.dispose();
     _panelCtrl.dispose();
     super.dispose();
@@ -165,14 +195,65 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _challengeStarten(String id) async {
     await _closePanel();
-    await DailyChallenge.markDone(id);
+    // markDone() feuert jetzt erst beim tatsächlichen Abschluss der
+    // jeweiligen Challenge (siehe dortige _speichereErgebnis/_abschliessen),
+    // nicht mehr schon beim Antippen — sonst zählte ein abgebrochenes
+    // Spiel fälschlich als "heute erledigt".
     if (!mounted) return;
     final Widget screen;
     switch (id) {
-      case 'preis':        screen = const PreisSchaetzenScreen(); break;
-      case 'higher_lower': screen = const HigherLowerScreen(); break;
-      case 'ranking_game': screen = const RankingGameScreen(); break;
-      case 'portfolio':    screen = const PortfolioScreen(); break;
+      case 'preis':
+        screen = ChallengeStartScreen(
+          farbe: const Color(0xFFF9A825),
+          logoAsset: 'assets/icons/challenge_preis.png',
+          fallbackIcon: Icons.sell,
+          titel: 'Das große Schätzen',
+          startDatum: kChallengesStartDatum,
+          spielScreenBuilder: (_) => const PreisSchaetzenScreen(),
+          ergebnisScreenBuilder: (_) => const PreisSchaetzenScreen(nurAnsicht: true),
+          istHeuteGespielt: () async =>
+              (await ChallengeRekordService.getHeutigePunkte('preis')) != null,
+        );
+        break;
+      case 'higher_lower':
+        screen = ChallengeStartScreen(
+          farbe: const Color(0xFF4A9E4A),
+          logoAsset: 'assets/icons/challenge_higher_lower.png',
+          fallbackIcon: Icons.swap_vert,
+          titel: 'Higher or Lower',
+          startDatum: kChallengesStartDatum,
+          spielScreenBuilder: (_) => const HigherLowerScreen(),
+          ergebnisScreenBuilder: (_) => const HigherLowerScreen(nurAnsicht: true),
+          istHeuteGespielt: () async =>
+              (await ChallengeRekordService.getHeutigePunkte('higher_lower')) != null,
+        );
+        break;
+      case 'ranking_game':
+        screen = ChallengeStartScreen(
+          farbe: const Color(0xFF7C3AED),
+          logoAsset: 'assets/icons/challenge_ranking.png',
+          fallbackIcon: Icons.military_tech,
+          titel: 'Ranking Game',
+          startDatum: kChallengesStartDatum,
+          spielScreenBuilder: (_) => const RankingGameScreen(),
+          ergebnisScreenBuilder: (_) => const RankingGameScreen(nurAnsicht: true),
+          istHeuteGespielt: () async =>
+              (await ChallengeRekordService.getHeutigePunkte('ranking_game')) != null,
+        );
+        break;
+      case 'portfolio':
+        screen = ChallengeStartScreen(
+          farbe: const Color(0xFF4A90D9),
+          logoAsset: 'assets/icons/challenge_portfolio.png',
+          fallbackIcon: Icons.business_center,
+          titel: 'Portfolio',
+          startDatum: kChallengesStartDatum,
+          spielScreenBuilder: (_) => const PortfolioScreen(),
+          ergebnisScreenBuilder: (_) => const PortfolioErgebnisAnsichtScreen(),
+          istHeuteGespielt: () async =>
+              (await PortfolioService.ladeStatus()).heuteGespielt,
+        );
+        break;
       default: return;
     }
     await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
@@ -249,6 +330,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             weltEmoji: _aktivWelt.emoji,
             streak: snap?.streak ?? 0,
             punkte: snap?.gesamtRichtig ?? 0,
+            profilbild: _profilbild,
+            onProfilTap: widget.onProfilTap,
           ),
           _WeltBanner(
             welt: _aktivWelt,
@@ -256,66 +339,78 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             onUebersicht: _weltUebersicht,
           ),
           Expanded(
-            child: Stack(
-              children: [
-                // 0. Unsichtbarer Emoji-Preloader — lädt 🔥⭐🎁 Font-Glyphen synchron
-                Positioned(
-                  left: -9999,
-                  top: -9999,
-                  child: Wrap(
-                    children: ['🔥', '⭐', '🎁']
-                        .map((e) => Text(e, style: const TextStyle(fontSize: 1)))
-                        .toList(),
-                  ),
-                ),
-                // 1. Scrollbarer Lernpfad
-                snap == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : _Pfad(
-                        welt: _aktivWelt,
-                        snap: snap,
-                        aktuelleStationId: _aktuelleStation?.id,
-                        anims: _anims,
-                        onStationTap: _stationTippen,
-                      ),
-                // 2. Dunkler Overlay (schließt Panel beim Antippen)
-                if (_panelOffen)
-                  Positioned.fill(
-                    child: GestureDetector(
-                      onTap: () => _closePanel(),
-                      child: ColoredBox(
-                        color: Colors.black.withValues(alpha: 0.54),
+            // LayoutBuilder statt MediaQuery.of(context).size.height für die
+            // Panel-Höhe: MediaQuery liefert die GESAMTE Bildschirmhöhe, aber
+            // dieser Stack selbst ist durch Header+Banner darüber bereits
+            // verkleinert — "85% der Gesamthöhe" war dadurch auf dem Handy
+            // (wo Header/Banner proportional mehr Platz einnehmen als im
+            // breiten Desktop-Testfenster) HÖHER als der Stack selbst, sodass
+            // der obere Rand des Panels (inkl. Drag-Handle zum Wegwischen)
+            // vom Stack abgeschnitten wurde (Stack clippt standardmäßig).
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Stack(
+                  children: [
+                    // 0. Unsichtbarer Emoji-Preloader — lädt 🔥⭐🎁 Font-Glyphen synchron
+                    Positioned(
+                      left: -9999,
+                      top: -9999,
+                      child: Wrap(
+                        children: ['🔥', '⭐', '🎁']
+                            .map((e) => Text(e, style: const TextStyle(fontSize: 1)))
+                            .toList(),
                       ),
                     ),
-                  ),
-                // 3. Challenge Panel (Modal von unten, 85% Höhe)
-                if (_panelOffen)
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: SlideTransition(
-                      position: _panelSlide,
-                      child: SizedBox(
-                        height: MediaQuery.of(context).size.height * 0.85,
-                        child: _ChallengePanel(
-                          done: _doneChallenges,
-                          onTap: _challengeStarten,
-                          onClose: () => _closePanel(),
+                    // 1. Scrollbarer Lernpfad
+                    snap == null
+                        ? const Center(child: CircularProgressIndicator())
+                        : _Pfad(
+                            welt: _aktivWelt,
+                            snap: snap,
+                            aktuelleStationId: _aktuelleStation?.id,
+                            anims: _anims,
+                            onStationTap: _stationTippen,
+                          ),
+                    // 2. Dunkler Overlay (schließt Panel beim Antippen)
+                    if (_panelOffen)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onTap: () => _closePanel(),
+                          child: ColoredBox(
+                            color: Colors.black.withValues(alpha: 0.54),
+                          ),
                         ),
                       ),
+                    // 3. Challenge Panel (Modal von unten, 85% Höhe)
+                    if (_panelOffen)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: SlideTransition(
+                          position: _panelSlide,
+                          child: SizedBox(
+                            height: constraints.maxHeight * 0.85,
+                            child: _ChallengePanel(
+                              done: _doneChallenges,
+                              onTap: _challengeStarten,
+                              onClose: () => _closePanel(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    // 4. Challenge Button (immer ganz oben)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: _ChallengeBtn(
+                        doneCount: _doneChallenges.length,
+                        onTap: _togglePanel,
+                      ),
                     ),
-                  ),
-                // 4. Challenge Button (immer ganz oben)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: _ChallengeBtn(
-                    doneCount: _doneChallenges.length,
-                    onTap: _togglePanel,
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -330,7 +425,14 @@ class _GreenHeader extends StatelessWidget {
   final String weltEmoji;
   final int streak;
   final int punkte;
-  const _GreenHeader({required this.weltEmoji, required this.streak, required this.punkte});
+  final String profilbild;
+  final VoidCallback? onProfilTap;
+  const _GreenHeader(
+      {required this.weltEmoji,
+      required this.streak,
+      required this.punkte,
+      required this.profilbild,
+      this.onProfilTap});
 
   @override
   Widget build(BuildContext context) {
@@ -355,10 +457,24 @@ class _GreenHeader extends StatelessWidget {
           Text('$punkte',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
           const Spacer(),
-          Container(
-            width: 38, height: 38,
-            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-            child: const Icon(Icons.person_rounded, color: Color(0xFF4A9E4A), size: 22),
+          GestureDetector(
+            onTap: onProfilTap,
+            child: Container(
+              width: 38, height: 38,
+              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+              child: ClipOval(
+                child: ProfilbildService.istWeitformat(profilbild)
+                    ? FractionallySizedBox(
+                        widthFactor: 0.9,
+                        heightFactor: 0.9,
+                        child: Image.asset(profilbild, fit: BoxFit.cover),
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Image.asset(profilbild, fit: BoxFit.contain),
+                      ),
+              ),
+            ),
           ),
         ],
       ),
@@ -483,12 +599,8 @@ class _Pfad extends StatelessWidget {
         y = bY + bannerH + bannerAfterGap;
       }
 
-      final n = a.stationen.length;
       // Gerade Abschnitte starten rechts, ungerade links — immer von Mitte aus
       final localStart = (ai % 2 == 0) ? 0 : 4;
-      // Mindest-Füll-Stationen damit last position = Mitte (xPat[0] oder [4])
-      // Formel: kleinste k >= 0 sodass (n + k - 1) % 4 == 0
-      final filler = n == 0 ? 0 : ((1 - n) % 4 + 4) % 4;
 
       int localIdx = localStart;
 
@@ -546,19 +658,6 @@ class _Pfad extends StatelessWidget {
         globalStationIdx++;
       }
 
-      // Füll-Stationen: bringen den Pfad zurück zur Mitte vor dem Checkpoint
-      for (int fi = 0; fi < filler; fi++) {
-        final xFrac = xPat[localIdx % xPat.length];
-        final cx = xFrac * w;
-        overlays.add(Positioned(
-          left: cx - 41,
-          top: y - 41,
-          child: aDone ? _DoneBtn(onTap: () {}) : _LockedBtn(modus: LernModus.umrissBild),
-        ));
-        y += vGap;
-        localIdx++;
-      }
-
       // Checkpoint immer in der Mitte
       final mcx = 0.50 * w;
       overlays.add(Positioned(
@@ -595,13 +694,19 @@ class _Pfad extends StatelessWidget {
       screenWidth: w,
     ));
 
-    // Globus: freie Positionen (kein Clash mit Coin/Deko)
+    // Globus: freie Positionen (kein Clash mit Coin/Deko). Nicht jede Welt
+    // hat 4 Abschnitte (Südamerika/Ozeanien haben nur 3, siehe Teil 2 des
+    // Block-Umbaus) -> jeder Eintrag nur, wenn der Abschnitt tatsächlich
+    // existiert, sonst würde checkpointPunkte[3] einen RangeError werfen.
     final globusPunkte = [
-      if (welt.id != 'suedamerika')
+      if (welt.id != 'suedamerika' && checkpointPunkte.isNotEmpty)
         (pos: s.isNotEmpty && s[0].length > 10 ? s[0][10] : all.first, stufe: 1),
-      (pos: s.length > 1 && s[1].length > 10 ? s[1][10] : checkpointPunkte[1].pos, stufe: 2),
-      (pos: s.length > 2 && s[2].length > 2  ? s[2][2]  : checkpointPunkte[2].pos, stufe: 3),
-      (pos: s.length > 3 && s[3].length > 14 ? s[3][14] : checkpointPunkte[3].pos, stufe: 4),
+      if (checkpointPunkte.length > 1)
+        (pos: s.length > 1 && s[1].length > 10 ? s[1][10] : checkpointPunkte[1].pos, stufe: 2),
+      if (checkpointPunkte.length > 2)
+        (pos: s.length > 2 && s[2].length > 2  ? s[2][2]  : checkpointPunkte[2].pos, stufe: 3),
+      if (checkpointPunkte.length > 3)
+        (pos: s.length > 3 && s[3].length > 14 ? s[3][14] : checkpointPunkte[3].pos, stufe: 4),
     ];
     overlays.addAll(pfadGlobusOverlays(
       abschnitte: globusPunkte,
@@ -1473,26 +1578,47 @@ class _ChallengePanelState extends State<_ChallengePanel> {
             ),
           ),
           const SizedBox(height: 14),
-          // Karten (2×2 Schachbrett-Grid)
+          // Karten (2×2 Schachbrett-Grid) — Seitenverhältnis wird aus dem
+          // TATSÄCHLICH verfügbaren Platz berechnet (LayoutBuilder) statt
+          // eines fixen "1.0" (perfekt quadratisch): auf dem Handy ist die
+          // Panel-Höhe knapper als im breiten Desktop-Testfenster, ein
+          // starres Quadrat-Verhältnis ließ die 2 Reihen dort entweder nicht
+          // mehr vollständig hineinpassen (Scrollen nötig) oder unten
+          // ungenutzten Leerraum übrig — so füllen die 4 Kacheln den Bereich
+          // auf JEDER Bildschirmgröße gleichmäßig und exakt aus.
           Expanded(
-            child: GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-              childAspectRatio: 1.0,
-              children: [
-                for (final k in _karten)
-                  _GrossKarte(
-                    id: k.id,
-                    asset: k.asset,
-                    emoji: k.emoji,
-                    title: k.title,
-                    bg: k.bg,
-                    isDone: widget.done.contains(k.id),
-                    onTap: () => widget.onTap(k.id),
-                  ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const padding = EdgeInsets.fromLTRB(16, 0, 16, 20);
+                const spacing = 10.0;
+                final zellBreite =
+                    (constraints.maxWidth - padding.horizontal - spacing) / 2;
+                final zellHoehe =
+                    (constraints.maxHeight - padding.vertical - spacing) / 2;
+                return GridView.count(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: spacing,
+                  mainAxisSpacing: spacing,
+                  padding: padding,
+                  // Clamp als Absicherung gegen extrem knappe/negative
+                  // Constraints (z.B. während eines Zwischenschritts beim
+                  // Öffnen/Schließen des Panels) — sonst wäre childAspectRatio
+                  // <= 0 und GridView würde abstürzen.
+                  childAspectRatio: (zellBreite / zellHoehe).clamp(0.4, 2.5),
+                  children: [
+                    for (final k in _karten)
+                      _GrossKarte(
+                        id: k.id,
+                        asset: k.asset,
+                        emoji: k.emoji,
+                        title: k.title,
+                        bg: k.bg,
+                        isDone: widget.done.contains(k.id),
+                        onTap: () => widget.onTap(k.id),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -1550,18 +1676,9 @@ class _GrossKarteState extends State<_GrossKarte>
   }
 
   void _handleTap() {
-    if (widget.isDone) {
-      _shakeCtrl.forward(from: 0);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Heute bereits gespielt! Komm morgen wieder 🌅'),
-          duration: Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } else {
-      widget.onTap();
-    }
+    // Öffnet immer den ChallengeStartScreen — der entscheidet selbst anhand
+    // des Tagesstatus, ob "Spielen" oder "Ergebnis ansehen" angezeigt wird.
+    widget.onTap();
   }
 
   @override
@@ -1574,51 +1691,68 @@ class _GrossKarteState extends State<_GrossKarte>
       ),
       child: GestureDetector(
         onTap: _handleTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: widget.bg,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.18),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+        child: Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: widget.bg,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo groß, kein weißlicher Hintergrund
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.asset(
-                    widget.asset,
-                    fit: BoxFit.contain,
-                    errorBuilder: (ctx, err, st) => Center(
-                      child: Text(widget.emoji,
-                          style: const TextStyle(fontSize: 52)),
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Logo groß, kein weißlicher Hintergrund
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.asset(
+                        widget.asset,
+                        fit: BoxFit.contain,
+                        errorBuilder: (ctx, err, st) => Center(
+                          child: Text(widget.emoji,
+                              style: const TextStyle(fontSize: 52)),
+                        ),
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  // Titel unten
+                  Text(
+                    widget.title,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (widget.isDone)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: const BoxDecoration(
+                      color: Colors.white, shape: BoxShape.circle),
+                  child: const Icon(Icons.check_rounded,
+                      color: Color(0xFF4A9E4A), size: 16),
                 ),
               ),
-              const SizedBox(height: 10),
-              // Titel unten
-              Text(
-                widget.title,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );

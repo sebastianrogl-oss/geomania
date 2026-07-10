@@ -92,6 +92,14 @@ Widget _dekoImage(String datei, double left, double top, double size) => Positio
       ),
     );
 
+// Alle Deko-Bilder außer dem Globus (welt_globus.png) rücken 50px näher an
+// den Pfad heran (kleinerer Gap), damit in der Handyansicht (schmaler
+// Screen) mehr Abstand zum Bildschirmrand bleibt. Globus bewusst
+// ausgenommen — seine Position war bereits passend. Die Münze (siehe
+// muenze_widget.dart) ist ein eigenständiges Widget außerhalb dieser Deko-
+// Ebene und daher von dieser Verschiebung ohnehin nicht betroffen.
+const double _gapVerschiebung = 50.0;
+
 List<Widget> _layoutOverlays(
   List<({int a, int s, String datei, bool links})> layout,
   List<List<Offset>> stationenProAbschnitt,
@@ -104,9 +112,11 @@ List<Widget> _layoutOverlays(
     final abschnitt = stationenProAbschnitt[p.a];
     if (p.s >= abschnitt.length) continue;
     final pos = abschnitt[p.s];
+    final gap =
+        p.datei == 'welt_globus.png' ? _gap : _gap - _gapVerschiebung;
     final double left = p.links
-        ? (pos.dx - _btnRadius - _gap - size).clamp(0.0, screenWidth - size)
-        : (pos.dx + _btnRadius + _gap).clamp(0.0, screenWidth - size);
+        ? (pos.dx - _btnRadius - gap - size).clamp(0.0, screenWidth - size)
+        : (pos.dx + _btnRadius + gap).clamp(0.0, screenWidth - size);
     overlays.add(_dekoImage(p.datei, left, pos.dy - size / 2, size));
   }
   return overlays;

@@ -2,11 +2,17 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/portfolio_daten.dart';
+import '../services/challenge_panel_signal.dart';
 import '../services/daily_challenge.dart';
+import '../services/daily_resume_service.dart';
+import '../services/portfolio_markt_service.dart';
 import '../services/portfolio_service.dart';
 import '../utils/portfolio_format.dart';
+import 'portfolio/portfolio_investieren_screen.dart';
 import 'portfolio/portfolio_marktbriefing_screen.dart';
 import 'portfolio_beispiel_screen.dart';
+
+const _kPortfolioId = 'portfolio';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WELTPORTFOLIO — Depot-Überblick (Startscreen des Spiels, Phase 3)
@@ -46,7 +52,49 @@ class _PortfolioScreenState extends State<PortfolioScreen>
 
   Future<void> _lade() async {
     final status = await PortfolioService.ladeStatus();
-    if (mounted) setState(() => _status = status);
+    if (!mounted) return;
+
+    // Zwischenstand einer abgebrochenen Runde von HEUTE? -> direkt an der
+    // gespeicherten Phase fortsetzen statt neu zu starten (siehe
+    // DailyResumeService: der Schlüssel ist bereits tagesgebunden, ein
+    // Zwischenstand vom Vortag wird dadurch automatisch nie gefunden).
+    if (!status.heuteGespielt) {
+      final zwischenstand = await DailyResumeService.laden(_kPortfolioId);
+      final phase = zwischenstand?['phase'] as int?;
+      if (phase != null && mounted) {
+        if (phase >= 2) {
+          final laender = ((zwischenstand?['laender'] as List<dynamic>?) ?? [])
+              .map((e) => e as String)
+              .toList();
+          final gewichtungRoh =
+              (zwischenstand?['gewichtung'] as Map<String, dynamic>?) ?? {};
+          final gewichtung =
+              gewichtungRoh.map((k, v) => MapEntry(k, (v as num).toInt()));
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PortfolioInvestierenScreen(
+                status: status,
+                markt: ladeTagesMarkt(),
+                resumeLaender: laender,
+                resumeGewichtung: gewichtung,
+              ),
+            ),
+          );
+        } else {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PortfolioMarktbriefingScreen(status: status),
+            ),
+          );
+        }
+        _lade();
+        return;
+      }
+    }
+
+    setState(() => _status = status);
   }
 
   Future<void> _starteInvestitionstag() async {
@@ -99,7 +147,10 @@ class _PortfolioScreenState extends State<PortfolioScreen>
     return Row(
       children: [
         GestureDetector(
-          onTap: () => Navigator.pop(context),
+          // ChallengePanelSignal statt einfachem Navigator.pop, damit man
+          // konsistent zur Tages-Challenges-Übersicht zurückkehrt (mit
+          // geöffnetem Panel), nicht nur zur "leeren" Hauptseite dahinter.
+          onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(

@@ -11,6 +11,7 @@ class TagesSeedService {
       'ranking_game': 2000,
       'portfolio': 3000,
       'portfolio_trend': 3500,
+      'portfolio_gewichtung': 4000,
     };
     return heutigerSeed + (offsets[challenge] ?? 0);
   }

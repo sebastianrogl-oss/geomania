@@ -80,6 +80,41 @@ class LernpfadSnapshot {
     return done / a.stationen.length;
   }
 
+  /// Fortschritt (0.0-1.0) über ALLE Stationen des gesamten Lernpfads, deren
+  /// Modus zu [thema] gehört (siehe lernModusThema()) — z.B. 'flaggen' für
+  /// alle drei Flaggen-Varianten zusammen, über jeden Kontinent hinweg.
+  double themaFortschritt(String thema) {
+    int done = 0, total = 0;
+    for (final w in lernwelten) {
+      for (final a in w.abschnitte) {
+        for (final s in a.stationen) {
+          if (lernModusThema(s.modus) != thema) continue;
+          total++;
+          if (stationen[s.id]?.istAbgeschlossen ?? false) done++;
+        }
+      }
+    }
+    return total == 0 ? 0.0 : done / total;
+  }
+
+  /// Fortschritt (0.0-1.0) über ALLE Stationen des gesamten Lernpfads, deren
+  /// Modus in [modi] enthalten ist — für Profil-Kategorien, die mehrere
+  /// LernModus-Werte zu einer Anzeige zusammenfassen (z.B. "Länder-Daten &
+  /// Rekorde" aus preisSchaetzen+extremFrage+wirtschaftssektoren+...).
+  double modiFortschritt(Set<LernModus> modi) {
+    int done = 0, total = 0;
+    for (final w in lernwelten) {
+      for (final a in w.abschnitte) {
+        for (final s in a.stationen) {
+          if (!modi.contains(s.modus)) continue;
+          total++;
+          if (stationen[s.id]?.istAbgeschlossen ?? false) done++;
+        }
+      }
+    }
+    return total == 0 ? 0.0 : done / total;
+  }
+
   int get abgeschlosseneStationenAnzahl =>
       stationen.values.where((d) => d.istAbgeschlossen).length;
 
@@ -494,6 +529,15 @@ class FortschrittService {
 
   // ── Reset ──────────────────────────────────────────────────────────────────
 
+  // "Alles zurücksetzen" betrifft Lernpfad UND Tages-Challenges (Rekorde,
+  // Streaks, "heute gespielt", Portfolio-Kapital, Abzeichen) — ein echter
+  // Neustart. Das Löschen der lokalen "heute gespielt"-Keys (z.B. 'daily_',
+  // 'ch_heute_') zwingt danach zu einer erneuten Runde, falls man eine
+  // Challenge heute schon gespielt hatte — das ist inzwischen unproblematisch:
+  // RanglisteService.ladeEigenenPlatzHeute() vergleicht für die Platz-
+  // Berechnung gegen den tatsächlich in Firestore gespeicherten Wert, nicht
+  // gegen den lokalen Session-Wert, daher bleibt die Rangliste-Anzeige auch
+  // nach einem erzwungenen Wiederholungsversuch korrekt.
   static Future<void> allesDatenZuruecksetzen() async {
     final prefs = await SharedPreferences.getInstance();
     final toRemove = prefs.getKeys().where((k) =>
@@ -501,37 +545,134 @@ class FortschrittService {
         k.startsWith('ch_rekord_') ||
         k.startsWith('ch_heute_') ||
         k.startsWith('daily_') ||
-        k.startsWith('pf_')).toList();
+        k.startsWith('pf_') ||
+        k.startsWith('streak_') ||
+        k.startsWith('letzterSpieltag_') ||
+        k.startsWith('spieltage_') ||
+        k.startsWith('anzahlGespielt_') ||
+        k.startsWith('summePunkte_') ||
+        k.startsWith('besteStreak_') ||
+        k == 'abzeichen_freigeschaltet').toList();
     for (final k in toRemove) {
       await prefs.remove(k);
     }
     resetSignal.value++;
   }
 
-  // ── Länder-Round-Robin (Kern-Modi: Flaggen/Hauptstädte/Umriss) ────────────
+  /// Setzt NUR einen einzelnen Kontinenten zurück: alle Stationen/Abschnitte/
+  /// Welt-Freischaltungen DIESES Kontinents sowie alle zugehörigen Round-
+  /// Robin-Tracker (inkl. der festen Ziehreihenfolge) — beide Schlüssel-
+  /// Formate aus dem Block-Umbau (welt-weit für "Welt" bzw. abschnitts-
+  /// gescoped für die 6 Block-Kontinente, siehe station_session_service.dart
+  /// _rrModusKey()). Andere Kontinente UND globale Werte (Streak,
+  /// Gesamtpunkte) bleiben unberührt.
+  static Future<void> kontinentZuruecksetzen(String weltId) async {
+    final welt = weltById(weltId);
+    if (welt == null) return;
+    final prefs = await SharedPreferences.getInstance();
+
+    final toRemove = <String>{'$_wFrei$weltId', '$_wDone$weltId'};
+    for (final a in welt.abschnitte) {
+      toRemove.addAll({'$_aFrei${a.id}', '$_aDone${a.id}', '$_aWdh${a.id}'});
+      for (final s in a.stationen) {
+        toRemove.addAll({
+          '$_sDone${s.id}',
+          '$_sRichtig${s.id}',
+          '$_sFalsch${s.id}',
+          '$_sGespielt${s.id}',
+          '$_sGestartet${s.id}',
+          '$_sIdx${s.id}',
+          '$_sAktive${s.id}',
+          '$_sFalsche${s.id}',
+        });
+      }
+    }
+
+    // Round-Robin + feste Reihenfolge: zwei Schlüssel-Formen möglich
+    // (siehe Kommentar oben), beide beginnen mit 'lp_rr_' bzw. 'lp_rr_ord_'
+    // gefolgt direkt von der weltId.
+    final rrPrefix = '$_rrPrefix${weltId}_';
+    final rrOrdPrefix = '${_rrPrefix}ord_${weltId}_';
+    toRemove.addAll(prefs
+        .getKeys()
+        .where((k) => k.startsWith(rrPrefix) || k.startsWith(rrOrdPrefix)));
+
+    for (final k in toRemove) {
+      await prefs.remove(k);
+    }
+    resetSignal.value++;
+  }
+
+  /// Der Kontinent, den der Spieler aktuell aktiv bespielt: der erste, noch
+  /// nicht zu 100% abgeschlossene (in Reihenfolge Europa → Welt), sonst der
+  /// letzte. Dieselbe Logik wie die Auto-Auswahl im Home-Screen, aber
+  /// eigenständig berechnet (kein Zugriff auf dessen privaten State nötig).
+  static Future<LernWelt> aktuelleWelt() async {
+    final snap = await ladeSnapshot();
+    var aktiv = lernwelten.first;
+    for (final w in lernwelten) {
+      aktiv = w;
+      if (snap.weltFortschritt(w.id) < 1.0) break;
+    }
+    return aktiv;
+  }
+
+  // ── Länder-Round-Robin (Kern-/Eingabe-Modi) ────────────────────────────────
   //
-  // Pro (Welt, Abschnitt, Thema) merkt sich ein Set von ISO2-Codes, welche
-  // Länder in diesem Thema bereits gezogen wurden — damit kein Land ein
-  // zweites Mal drankommt, bevor nicht der ganze Länderpool des Abschnitts
-  // einmal durch war. Wird automatisch mit allesDatenZuruecksetzen() /
+  // Pro (Welt, Modus) merkt sich ein Set von ISO2-Codes, welche Länder in
+  // genau diesem Modus für genau diese Welt bereits gezogen wurden — DURCH-
+  // GÄNGIG über alle Abschnitte dieser Welt hinweg, OHNE Reset beim
+  // Abschnittswechsel (nur wenn der Zyklus komplett durch ist, beginnt eine
+  // neue Runde). Wird automatisch mit allesDatenZuruecksetzen() /
   // allesFreischalten()-Reset gelöscht (Präfix 'lp_').
 
-  static String _rrKey(String weltId, String abschnittId, String thema) =>
-      '$_rrPrefix${weltId}_${abschnittId}_$thema';
+  static String _rrKey(String weltId, String modusKey) =>
+      '$_rrPrefix${weltId}_$modusKey';
 
   static Future<Set<String>> rrBereitsAbgefragt(
-      String weltId, String abschnittId, String thema) async {
+      String weltId, String modusKey) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_rrKey(weltId, abschnittId, thema));
+    final raw = prefs.getString(_rrKey(weltId, modusKey));
     if (raw == null) return {};
     return (jsonDecode(raw) as List<dynamic>).cast<String>().toSet();
   }
 
-  static Future<void> rrSpeichern(String weltId, String abschnittId,
-      String thema, Set<String> abgefragt) async {
+  static Future<void> rrSpeichern(
+      String weltId, String modusKey, Set<String> abgefragt) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        _rrKey(weltId, abschnittId, thema), jsonEncode(abgefragt.toList()));
+    await prefs.setString(_rrKey(weltId, modusKey), jsonEncode(abgefragt.toList()));
+  }
+
+  // ── Feste, gewichtete Ziehreihenfolge (graduelle Schwierigkeits-Einmischung) ──
+  //
+  // Pro (Welt, Modus) wird die nach Schwierigkeit gewichtete Ziehreihenfolge
+  // über den aktuell freigeschalteten Länderpool berechnet und dauerhaft
+  // gespeichert, damit die Tendenz "leicht am Anfang, schwerer zum Ende"
+  // über den gesamten Round-Robin-Zyklus DIESES EINEN Modus konsistent
+  // bleibt, statt bei jeder Station neu (und damit unzusammenhängend)
+  // gewürfelt zu werden. Wächst der freigeschaltete Pool (Abschnittswechsel)
+  // oder läuft der Zyklus komplett durch, wird sie neu berechnet.
+
+  static String _ordKey(String weltId, String modusKey) =>
+      '${_rrPrefix}ord_${weltId}_$modusKey';
+
+  static Future<List<String>?> ladeFesteReihenfolge(
+      String weltId, String modusKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_ordKey(weltId, modusKey));
+    if (raw == null) return null;
+    return (jsonDecode(raw) as List<dynamic>).cast<String>();
+  }
+
+  static Future<void> speichereFesteReihenfolge(
+      String weltId, String modusKey, List<String> reihenfolge) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_ordKey(weltId, modusKey), jsonEncode(reihenfolge));
+  }
+
+  static Future<void> loescheFesteReihenfolge(String weltId, String modusKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_ordKey(weltId, modusKey));
   }
 
   // ── Test-Modus: alles freischalten ────────────────────────────────────────

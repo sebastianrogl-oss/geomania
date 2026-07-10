@@ -21,12 +21,10 @@ class ModusSticker extends StatelessWidget {
     switch (modus) {
       case LernModus.flaggenQuizBild:
       case LernModus.flaggenQuizMultiple:
-      case LernModus.flaggenFarbe:
+      case LernModus.flaggenQuizEingabe:
         return _FlaggenSticker(istGesperrt: istGesperrt, groesse: groesse);
       case LernModus.hauptstaedteMultiple:
       case LernModus.hauptstaedteEingabe:
-      case LernModus.hauptstadtZuLand:
-      case LernModus.groessteStadt:
         return SizedBox(
           width: groesse * 1.15,
           height: groesse,
@@ -57,7 +55,9 @@ class ModusSticker extends StatelessWidget {
         );
       case LernModus.umrissBild:
       case LernModus.umrissMultiple:
+      case LernModus.umrissEingabe:
       case LernModus.nachbarland:
+      case LernModus.grenzkettenRaetsel:
         return SizedBox(
           width: groesse,
           height: groesse,

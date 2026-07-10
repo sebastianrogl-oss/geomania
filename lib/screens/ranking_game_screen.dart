@@ -2,9 +2,16 @@ import 'dart:math';
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/country_rankings.dart';
+import '../services/abzeichen_service.dart';
+import '../services/challenge_ergebnis_service.dart';
+import '../services/challenge_panel_signal.dart';
 import '../services/challenge_rekord_service.dart';
+import '../services/daily_challenge.dart';
+import '../services/daily_resume_service.dart';
 import '../services/tages_seed_service.dart';
 import '../services/rangliste_service.dart';
+import '../widgets/abzeichen_popup.dart';
+import '../widgets/rangliste_ergebnis_karte.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -146,7 +153,10 @@ enum _Status { laden, spielen, aufloesung }
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class RankingGameScreen extends StatefulWidget {
-  const RankingGameScreen({super.key});
+  /// Wenn true: zeigt nur das heute bereits erzielte Ergebnis erneut an,
+  /// startet KEINE neue Runde (für "Ergebnisse" im Start-Screen).
+  final bool nurAnsicht;
+  const RankingGameScreen({super.key, this.nurAnsicht = false});
   @override
   State<RankingGameScreen> createState() => _RankingGameScreenState();
 }
@@ -167,16 +177,90 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
   @override
   void initState() {
     super.initState();
-    _init();
+    if (widget.nurAnsicht) {
+      _ladeHeutigesErgebnis();
+    } else {
+      _init();
+    }
+  }
+
+  /// Zeigt das heute bereits erzielte Ergebnis erneut an, ohne eine neue
+  /// Runde zu starten (siehe RankingGameScreen.nurAnsicht). _baue() liefert
+  /// dank des tages-basierten Seeds dieselben Länder/Kategorien wie beim
+  /// tatsächlichen Spiel — nur die getroffene Zuordnung muss rekonstruiert
+  /// werden.
+  Future<void> _ladeHeutigesErgebnis() async {
+    _rekord = await ChallengeRekordService.getRekord(_kId);
+    final heute = await ChallengeRekordService.getHeutigePunkte(_kId) ?? 0;
+    _baue();
+    final detail = await ChallengeErgebnisService.laden(_kId);
+    final zuordnungenRoh =
+        (detail?['zuordnungen'] as Map<String, dynamic>?) ?? {};
+
+    final neueZuordnungen = <String, _Zuordnung>{};
+    for (final entry in zuordnungenRoh.entries) {
+      final kat = _tagesKats.cast<RankingCategory?>().firstWhere(
+          (k) => k?.id == entry.key, orElse: () => null);
+      final land = _laender.cast<CountryRanking?>().firstWhere(
+          (l) => l?.iso2 == entry.value, orElse: () => null);
+      if (kat == null || land == null) continue;
+      final rang = _weltrang(land, kat);
+      neueZuordnungen[entry.key] =
+          _Zuordnung(land: land, rang: rang, punkte: _berechnePunkte(rang));
+    }
+
+    setState(() {
+      _zuordnungen = neueZuordnungen;
+      _verwendeteKategorien = neueZuordnungen.keys.toSet();
+      _aktuellerIndex = _laender.length;
+      _neuerRekord = _rekord != null && heute >= _rekord!;
+      _status = _Status.aufloesung;
+    });
   }
 
   Future<void> _init() async {
     _rekord = await ChallengeRekordService.getRekord(_kId);
     _baue();
+
+    final zwischenstand = await DailyResumeService.laden(_kId);
+    if (zwischenstand == null) return;
+    final zuordnungenRoh =
+        (zwischenstand['zuordnungen'] as Map<String, dynamic>?) ?? {};
+    if (zuordnungenRoh.isEmpty) return;
+
+    final neueZuordnungen = <String, _Zuordnung>{};
+    for (final entry in zuordnungenRoh.entries) {
+      final kat = _tagesKats.firstWhere((k) => k.id == entry.key);
+      final land = _laender.cast<CountryRanking?>().firstWhere(
+          (l) => l?.iso2 == entry.value, orElse: () => null);
+      if (land == null) continue;
+      final rang = _weltrang(land, kat);
+      neueZuordnungen[entry.key] =
+          _Zuordnung(land: land, rang: rang, punkte: _berechnePunkte(rang));
+    }
+    if (neueZuordnungen.isEmpty) return;
+
+    setState(() {
+      _zuordnungen = neueZuordnungen;
+      _verwendeteKategorien = neueZuordnungen.keys.toSet();
+      _aktuellerIndex = neueZuordnungen.length;
+    });
   }
 
-  void _baue() {
-    final seed = TagesSeedService.seedFuer(_kId);
+  Future<void> _zwischenstandSpeichern() async {
+    await DailyResumeService.speichern(_kId, {
+      'zuordnungen': {
+        for (final e in _zuordnungen.entries) e.key: e.value.land.iso2,
+      },
+    });
+  }
+
+  static const _kMaxZiehVersuche = 20;
+
+  // Zieht Länder+Kategorien für einen gegebenen Versuchs-Seed (dieselbe
+  // Logik wie bisher, nur als eigene Methode damit _baue() sie in einer
+  // Schleife mit unterschiedlichen Seeds aufrufen kann).
+  (List<CountryRanking>, List<RankingCategory>) _zieheKombination(int seed) {
     final katRng = Random(seed + 77);
     final tagesKats =
         (List.of(rankingCategories)..shuffle(katRng)).take(_kAnzahl).toList();
@@ -192,6 +276,25 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
       ..shuffle(rng);
     final laender = pool.take(_kAnzahl).toList();
 
+    return (laender, tagesKats);
+  }
+
+  void _baue() {
+    final baseSeed = TagesSeedService.seedFuer(_kId);
+
+    var laender = <CountryRanking>[];
+    var tagesKats = <RankingCategory>[];
+    var versuch = 0;
+    do {
+      (laender, tagesKats) = _zieheKombination(baseSeed + versuch * 1000);
+      versuch++;
+    } while (!_istGueltigeKombination(laender, tagesKats) &&
+        versuch < _kMaxZiehVersuche);
+
+    if (!_istGueltigeKombination(laender, tagesKats)) {
+      laender = _ersetzeProblematischesLand(laender, tagesKats);
+    }
+
     setState(() {
       _tagesKats = tagesKats;
       _laender = laender;
@@ -200,6 +303,102 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
       _aktuellerIndex = 0;
       _status = _Status.spielen;
     });
+  }
+
+  // ── Faire Tageskombination: bipartites Matching (Kuhn's Algorithm) ────────
+  //
+  // Stellt sicher, dass für die gezogenen 8 Länder/Kategorien eine
+  // VOLLSTÄNDIGE Zuordnung existiert, bei der jedes Land eine Kategorie mit
+  // Weltrang < 100 bekommt — geprüft schon bei der Ziehung (_baue), nicht
+  // erst nachträglich bei der Auflösung repariert.
+
+  Map<String, List<int>> _guteKategorienGraph(
+      List<CountryRanking> laender, List<RankingCategory> kategorien) {
+    final graph = <String, List<int>>{};
+    for (final land in laender) {
+      graph[land.iso2] = [
+        for (var k = 0; k < kategorien.length; k++)
+          if (_weltrang(land, kategorien[k]) < 100) k,
+      ];
+    }
+    return graph;
+  }
+
+  Map<String, String> _bipartitesMatching(List<CountryRanking> laender,
+      List<RankingCategory> kategorien, Map<String, List<int>> graph) {
+    final matchKatIndex = <int, String>{}; // katIndex -> iso2
+
+    bool tryKuppeln(String iso, Set<int> besucht) {
+      for (final katIdx in graph[iso]!) {
+        if (besucht.contains(katIdx)) continue;
+        besucht.add(katIdx);
+        if (!matchKatIndex.containsKey(katIdx) ||
+            tryKuppeln(matchKatIndex[katIdx]!, besucht)) {
+          matchKatIndex[katIdx] = iso;
+          return true;
+        }
+      }
+      return false;
+    }
+
+    for (final land in laender) {
+      tryKuppeln(land.iso2, <int>{});
+    }
+
+    final ergebnis = <String, String>{};
+    matchKatIndex.forEach((katIdx, iso) {
+      ergebnis[iso] = kategorien[katIdx].id;
+    });
+    return ergebnis;
+  }
+
+  bool _istGueltigeKombination(
+      List<CountryRanking> laender, List<RankingCategory> kategorien) {
+    final graph = _guteKategorienGraph(laender, kategorien);
+    if (graph.values.any((liste) => liste.isEmpty)) return false;
+    final matching = _bipartitesMatching(laender, kategorien, graph);
+    return matching.length == laender.length;
+  }
+
+  // Äußerst unwahrscheinlicher Fallback (siehe _kMaxZiehVersuche): tauscht
+  // das Land mit den wenigsten Rang<100-Optionen deterministisch gegen das
+  // Land aus dem restlichen Länder-Pool mit den meisten Rang<100-Optionen.
+  List<CountryRanking> _ersetzeProblematischesLand(
+      List<CountryRanking> laender, List<RankingCategory> kategorien) {
+    final graph = _guteKategorienGraph(laender, kategorien);
+    var schlechtestesIso = laender.first.iso2;
+    var minGute = graph[schlechtestesIso]!.length;
+    for (final land in laender) {
+      final anzahl = graph[land.iso2]!.length;
+      if (anzahl < minGute) {
+        minGute = anzahl;
+        schlechtestesIso = land.iso2;
+      }
+    }
+
+    final restPool = countryRankings.where((c) =>
+        c.gdpPerCapita != null &&
+        c.population != null &&
+        c.area != null &&
+        c.lifeExpectancy != null &&
+        !laender.any((l) => l.iso2 == c.iso2));
+
+    CountryRanking? bestesErsatz;
+    var besteAnzahl = -1;
+    for (final kandidat in restPool) {
+      final anzahl =
+          kategorien.where((k) => _weltrang(kandidat, k) < 100).length;
+      if (anzahl > besteAnzahl) {
+        besteAnzahl = anzahl;
+        bestesErsatz = kandidat;
+      }
+    }
+    if (bestesErsatz == null) return laender;
+
+    return [
+      for (final land in laender)
+        if (land.iso2 == schlechtestesIso) bestesErsatz else land,
+    ];
   }
 
   int _weltrang(CountryRanking land, RankingCategory kat) {
@@ -231,6 +430,8 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) _abschliessen();
       });
+    } else {
+      _zwischenstandSpeichern();
     }
   }
 
@@ -238,64 +439,36 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
     final pts = _gesamtPunkte();
     _neuerRekord = await ChallengeRekordService.setzeFallsBesser(_kId, pts);
     await ChallengeRekordService.speichereHeutigePunkte(_kId, pts);
+    await ChallengeRekordService.summeErhoehen(_kId, pts.toDouble());
+    await ChallengeErgebnisService.speichern(_kId, {
+      'zuordnungen': {
+        for (final e in _zuordnungen.entries) e.key: e.value.land.iso2,
+      },
+    });
     if (_neuerRekord) _rekord = pts;
     await RanglisteService.ergebnisSpeichern(challengeId: 'ranking', wert: pts);
+    await DailyChallenge.markDone(_kId);
+    await DailyResumeService.loeschen(_kId);
+    final neueAbzeichen = await AbzeichenService.pruefeNachChallengeAbschluss(
+      heutePerfekt: pts >= _kAnzahl * 100,
+      neuerRekordHeute: _neuerRekord,
+    );
+    if (mounted && neueAbzeichen.isNotEmpty) {
+      await AbzeichenPopup.zeigen(context, neueAbzeichen);
+    }
+    if (!mounted) return;
     setState(() => _status = _Status.aufloesung);
   }
 
   int _gesamtPunkte() =>
       _zuordnungen.values.fold(0, (sum, z) => sum + z.punkte);
 
-  // iso2 → katId: greedy bijection (bestes Land je Kategorie)
-  // Optimale Zuordnung (maximale Gesamtpunktzahl) per Bitmask-DP.
-  // Ein gieriger Ansatz (höchste Einzelpunktzahl zuerst) kann ein Land
-  // fälschlich auf 0 Punkte zwingen, obwohl eine bessere Gesamtlösung
-  // existiert – siehe Assignment-Problem.
+  // iso2 → katId: vollständiges bipartites Matching über Rang<100-Kanten.
+  // Kein Zwei-Phasen-Fallback mehr nötig — _baue() garantiert bereits bei
+  // der Ziehung, dass eine vollständige Zuordnung existiert.
   Map<String, String> _berechneIdealeKonstellation() {
-    final n = _laender.length;
-    final punkte = List.generate(
-      n,
-      (i) => List.generate(
-          n, (j) => _berechnePunkte(_weltrang(_laender[i], _tagesKats[j]))),
-    );
-
-    final voll = (1 << n) - 1;
-    final dp = List<int>.filled(1 << n, -1);
-    final wahl = List<int>.filled(1 << n, -1);
-    dp[0] = 0;
-
-    for (int mask = 0; mask <= voll; mask++) {
-      if (dp[mask] < 0) continue;
-      final land = _bitCount(mask); // Index des als Nächstes zuzuordnenden Landes
-      if (land >= n) continue;
-      for (int kat = 0; kat < n; kat++) {
-        if (mask & (1 << kat) != 0) continue;
-        final neueMask = mask | (1 << kat);
-        final neuerWert = dp[mask] + punkte[land][kat];
-        if (neuerWert > dp[neueMask]) {
-          dp[neueMask] = neuerWert;
-          wahl[neueMask] = kat;
-        }
-      }
-    }
-
-    final ergebnis = <String, String>{}; // iso2 → katId
-    var mask = voll;
-    for (int land = n - 1; land >= 0; land--) {
-      final kat = wahl[mask];
-      ergebnis[_laender[land].iso2] = _tagesKats[kat].id;
-      mask &= ~(1 << kat);
-    }
-    return ergebnis;
-  }
-
-  int _bitCount(int mask) {
-    var count = 0;
-    while (mask != 0) {
-      count += mask & 1;
-      mask >>= 1;
-    }
-    return count;
+    final graph = _guteKategorienGraph(_laender, _tagesKats);
+    return _bipartitesMatching(_laender, _tagesKats, graph);
   }
 
   @override
@@ -317,6 +490,25 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
     return SafeArea(
       child: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAEAE5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.arrow_back_rounded,
+                        color: Color(0xFF1A1A1A), size: 20),
+                  ),
+                ),
+              ],
+            ),
+          ),
           _buildHeader(),
           const Divider(color: Color(0xFFD0CEC8), height: 1),
           const SizedBox(height: 8),
@@ -549,15 +741,6 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
                         fontWeight: FontWeight.w900,
                         color: Color(0xFF1A1A1A))),
                 const SizedBox(height: 4),
-                Text('$gesamtPunkte / $maxPunkte',
-                    style: const TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF4A9E4A))),
-                const Text('Punkte',
-                    style: TextStyle(
-                        fontSize: 14, color: Color(0xFF888888))),
-                const SizedBox(height: 4),
                 if (_neuerRekord)
                   const Text('Neuer Rekord!',
                       style: TextStyle(
@@ -568,6 +751,31 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
                   Text('Rekord: $_rekord Pkt.',
                       style: const TextStyle(
                           fontSize: 12, color: Color(0xFF888888))),
+                const SizedBox(height: 16),
+                RanglisteErgebnisKarte(
+                  challengeId: 'ranking',
+                  eigenerWert: gesamtPunkte,
+                  punkteLabel: 'Gesamtpunktzahl',
+                  farbe: const Color(0xFF7C3AED),
+                  punkteAnzeige: RichText(
+                    text: TextSpan(children: [
+                      TextSpan(
+                          text: '$gesamtPunkte',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF1A1A1A))),
+                      TextSpan(
+                          text: ' / $maxPunkte',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFB0AEA8))),
+                    ]),
+                  ),
+                ),
               ],
             ),
           ),
@@ -699,11 +907,30 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
               ),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Center(
-              child: Text('Morgen wieder verfügbar',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                        color: const Color(0xFF4A9E4A),
+                        borderRadius: BorderRadius.circular(16)),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: const Text('Weiter',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('Morgen wieder verfügbar',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
+              ],
             ),
           ),
         ],

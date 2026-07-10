@@ -1,8 +1,8 @@
-import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/portfolio_daten.dart';
 import '../services/portfolio_engine.dart';
 import '../utils/portfolio_format.dart';
+import 'portfolio_flagge.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WELTPORTFOLIO — Länder-Aufschlüsselungskarte
@@ -34,10 +34,7 @@ class PortfolioLandKarte extends StatelessWidget {
         children: [
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: CountryFlag.fromCountryCode(b.iso, width: 28, height: 19),
-              ),
+              PortfolioFlagge(iso: b.iso, width: 28, height: 19, radius: 3),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(landName(b.iso),

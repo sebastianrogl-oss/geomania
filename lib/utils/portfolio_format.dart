@@ -1,6 +1,6 @@
 // Gemeinsame Formatierungs-Helfer für alle Weltportfolio-Screens.
 
-String fmtKapital(double k) {
+String fmtKapital(double k, {bool mitVorzeichen = false}) {
   final rounded = k.round().abs();
   final s = rounded.toString();
   final buf = StringBuffer();
@@ -10,7 +10,8 @@ String fmtKapital(double k) {
     buf.write(s[i]);
     cnt++;
   }
-  return '${k < 0 ? '-' : ''}${buf.toString().split('').reversed.join('')} \$';
+  final vorzeichen = k < 0 ? '-' : (mitVorzeichen && k > 0 ? '+' : '');
+  return '$vorzeichen${buf.toString().split('').reversed.join('')} \$';
 }
 
 String fmtProzent(double p) {

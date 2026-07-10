@@ -114,6 +114,7 @@ const List<Country> countries = [
   Country(iso2: 'JP', name: 'Japan', capital: 'Tokio', flagEmoji: '🇯🇵', latitude: 36.0, longitude: 138.0, region: 'Asien', gdp: 4027597523551, population: 123975371),
   Country(iso2: 'IN', name: 'Indien', capital: 'Neu-Delhi', flagEmoji: '🇮🇳', latitude: 20.0, longitude: 77.0, region: 'Asien', gdp: 3909891533858, population: 1450935791),
   Country(iso2: 'KR', name: 'Südkorea', capital: 'Seoul', flagEmoji: '🇰🇷', latitude: 37.0, longitude: 127.5, region: 'Asien', gdp: 1875388209407, population: 51751065),
+  Country(iso2: 'TW', name: 'Taiwan', capital: 'Taipeh', flagEmoji: '🇹🇼', latitude: 23.7, longitude: 121.0, region: 'Asien', gdp: 790726296740, population: 23572000),
   Country(iso2: 'ID', name: 'Indonesien', capital: 'Jakarta', flagEmoji: '🇮🇩', latitude: -5.0, longitude: 120.0, region: 'Asien', gdp: 1396300098191, population: 283487931),
   Country(iso2: 'TH', name: 'Thailand', capital: 'Bangkok', flagEmoji: '🇹🇭', latitude: 15.0, longitude: 100.0, region: 'Asien', gdp: 526517658842, population: 71668011),
   Country(iso2: 'VN', name: 'Vietnam', capital: 'Hanoi', flagEmoji: '🇻🇳', latitude: 16.0, longitude: 106.0, region: 'Asien', gdp: 476388230307, population: 100987686),

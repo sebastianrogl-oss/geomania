@@ -15,7 +15,7 @@ class Land {
 }
 
 const List<Land> alleLaender = [
-  // ── EUROPA (44) ───────────────────────────────────────────────────────────────
+  // ── EUROPA (46) ───────────────────────────────────────────────────────────────
   Land(iso: 'DE', name: 'Deutschland',        kontinent: 'europa', region: 'westeuropa',  schwierigkeit: 1),
   Land(iso: 'FR', name: 'Frankreich',         kontinent: 'europa', region: 'westeuropa',  schwierigkeit: 1),
   Land(iso: 'IT', name: 'Italien',            kontinent: 'europa', region: 'westeuropa',  schwierigkeit: 1),
@@ -32,6 +32,8 @@ const List<Land> alleLaender = [
   Land(iso: 'AD', name: 'Andorra',            kontinent: 'europa', region: 'westeuropa',  schwierigkeit: 3),
   Land(iso: 'LI', name: 'Liechtenstein',      kontinent: 'europa', region: 'westeuropa',  schwierigkeit: 3),
   Land(iso: 'SM', name: 'San Marino',         kontinent: 'europa', region: 'westeuropa',  schwierigkeit: 3),
+  Land(iso: 'MT', name: 'Malta',              kontinent: 'europa', region: 'westeuropa',  schwierigkeit: 3),
+  Land(iso: 'VA', name: 'Vatikanstadt',       kontinent: 'europa', region: 'westeuropa',  schwierigkeit: 3),
   Land(iso: 'SE', name: 'Schweden',           kontinent: 'europa', region: 'nordeuropa',  schwierigkeit: 1),
   Land(iso: 'NO', name: 'Norwegen',           kontinent: 'europa', region: 'nordeuropa',  schwierigkeit: 1),
   Land(iso: 'DK', name: 'Dänemark',           kontinent: 'europa', region: 'nordeuropa',  schwierigkeit: 2),
@@ -48,6 +50,7 @@ const List<Land> alleLaender = [
   Land(iso: 'BG', name: 'Bulgarien',          kontinent: 'europa', region: 'osteuropa',   schwierigkeit: 2),
   Land(iso: 'HR', name: 'Kroatien',           kontinent: 'europa', region: 'osteuropa',   schwierigkeit: 2),
   Land(iso: 'GR', name: 'Griechenland',       kontinent: 'europa', region: 'osteuropa',   schwierigkeit: 2),
+  Land(iso: 'CY', name: 'Zypern',             kontinent: 'europa', region: 'osteuropa',   schwierigkeit: 2),
   Land(iso: 'UA', name: 'Ukraine',            kontinent: 'europa', region: 'osteuropa',   schwierigkeit: 2),
   Land(iso: 'SI', name: 'Slowenien',          kontinent: 'europa', region: 'osteuropa',   schwierigkeit: 3),
   Land(iso: 'RS', name: 'Serbien',            kontinent: 'europa', region: 'osteuropa',   schwierigkeit: 3),

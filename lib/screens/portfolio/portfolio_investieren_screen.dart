@@ -1,7 +1,11 @@
-import 'dart:math';
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../../data/portfolio_daten.dart';
+import '../../services/abzeichen_service.dart';
+import '../../services/challenge_ergebnis_service.dart';
+import '../../services/challenge_panel_signal.dart';
+import '../../services/challenge_rekord_service.dart';
+import '../../services/daily_resume_service.dart';
 import '../../services/portfolio_engine.dart';
 import '../../services/portfolio_markt_service.dart';
 import '../../services/portfolio_rendite_service.dart';
@@ -9,28 +13,33 @@ import '../../services/portfolio_service.dart';
 import '../../services/tages_seed_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/rangliste_service.dart';
+import '../../widgets/abzeichen_popup.dart';
+import '../../widgets/portfolio_flagge.dart';
 import 'portfolio_aufloesung_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WELTPORTFOLIO — Screen 2: Investieren (Karten-Deck + Gewichtung) (Phase 5)
 // ══════════════════════════════════════════════════════════════════════════════
 
-const Map<String, Color> _kontinentFarben = {
-  'europa': Color(0xFF1565C0),
-  'asien': Color(0xFF7C3AED),
-  'amerika': Color(0xFF2E7D32),
-  'afrika': Color(0xFFE65100),
-  'ozeanien': Color(0xFF00838F),
-};
+Color _kontinentFarbe(String iso) => kontinentFarbeFuerId(landKontinent[iso]);
 
-Color _kontinentFarbe(String iso) =>
-    _kontinentFarben[landKontinent[iso]] ?? const Color(0xFF888888);
+const _kPortfolioId = 'portfolio';
 
 class PortfolioInvestierenScreen extends StatefulWidget {
   final PortfolioStatus status;
   final TagesMarkt markt;
-  const PortfolioInvestierenScreen(
-      {super.key, required this.status, required this.markt});
+  // Wiederherstellung eines Zwischenstands (siehe PortfolioScreen) — null
+  // bei einem frisch gestarteten Investitionstag.
+  final List<String>? resumeLaender;
+  final Map<String, int>? resumeGewichtung;
+
+  const PortfolioInvestierenScreen({
+    super.key,
+    required this.status,
+    required this.markt,
+    this.resumeLaender,
+    this.resumeGewichtung,
+  });
 
   @override
   State<PortfolioInvestierenScreen> createState() =>
@@ -41,106 +50,157 @@ class _PortfolioInvestierenScreenState
     extends State<PortfolioInvestierenScreen> {
   static const _kAuswahlAnzahl = 3;
 
-  late final PageController _pageCtrl = PageController(viewportFraction: 0.72);
-  double _seite = 0;
+  // Die 3 Ziel-Slots (null = leer). _gewaehlt bleibt als abgeleitete Liste
+  // erhalten, damit der restliche Code (Gewichtung, Risiko, Kontinents-Bonus)
+  // unverändert mit einer flachen Länderliste weiterarbeiten kann.
+  final List<String?> _slots = List.filled(_kAuswahlAnzahl, null);
+  List<String> get _gewaehlt => _slots.whereType<String>().toList();
 
-  final List<String> _gewaehlt = [];
   bool _gewichtungPhase = false;
   bool _wirdAbgeschlossen = false;
   Map<String, int> _gewichte = {};
-  String? _aktivesPreset;
-
-  late final Map<String, double> _erwartungen = {
-    for (final iso in widget.markt.laenderPool)
-      iso: erwarteteRendite(iso, widget.markt.news, widget.status.trend),
-  };
-  late final double _minErwartung = _erwartungen.values.reduce(min);
-  late final double _maxErwartung = _erwartungen.values.reduce(max);
 
   @override
   void initState() {
     super.initState();
-    _pageCtrl.addListener(() {
-      setState(() => _seite = _pageCtrl.page ?? 0);
-    });
-  }
-
-  @override
-  void dispose() {
-    _pageCtrl.dispose();
-    super.dispose();
-  }
-
-  // ── Auswahl-Logik ─────────────────────────────────────────────────────────
-
-  double _chanceFraktion(String iso) {
-    final spanne = (_maxErwartung - _minErwartung).abs() < 0.01
-        ? 1.0
-        : _maxErwartung - _minErwartung;
-    return ((_erwartungen[iso]! - _minErwartung) / spanne).clamp(0.0, 1.0);
-  }
-
-  void _tippLand(String iso) {
-    setState(() {
-      if (_gewaehlt.contains(iso)) {
-        _gewaehlt.remove(iso);
-        _gewichtungPhase = false;
-      } else if (_gewaehlt.length < _kAuswahlAnzahl) {
-        _gewaehlt.add(iso);
-        if (_gewaehlt.length == _kAuswahlAnzahl) {
-          _wendePresetAn('gleich');
-          _gewichtungPhase = true;
-        }
+    final resumeLaender = widget.resumeLaender;
+    if (resumeLaender != null && resumeLaender.isNotEmpty) {
+      for (var i = 0; i < resumeLaender.length && i < _slots.length; i++) {
+        _slots[i] = resumeLaender[i];
       }
-    });
-  }
-
-  Map<String, int> _presetGewichte(String preset) {
-    final a = _gewaehlt[0], b = _gewaehlt[1], c = _gewaehlt[2];
-    switch (preset) {
-      case 'favorit':
-        return {a: 50, b: 25, c: 25};
-      case 'konzentriert':
-        return {a: 70, b: 15, c: 15};
-      case 'gleich':
-      default:
-        return {a: 34, b: 33, c: 33};
+    }
+    if (_slots.every((s) => s != null)) {
+      final resumeGewichtung = widget.resumeGewichtung;
+      _gewichte = (resumeGewichtung != null && resumeGewichtung.isNotEmpty)
+          ? Map.of(resumeGewichtung)
+          : {for (final iso in _gewaehlt) iso: 0};
+      _gewichtungPhase = true;
     }
   }
 
-  void _wendePresetAn(String preset) {
-    setState(() {
-      _gewichte = _presetGewichte(preset);
-      _aktivesPreset = preset;
+  // ── Flug-Animation (Tippen auf eine Grid-Karte fliegt in den nächsten
+  // freien Slot) ──────────────────────────────────────────────────────────
+  final GlobalKey _stackKey = GlobalKey();
+  final Map<String, GlobalKey> _gridKeys = {};
+  final List<GlobalKey> _slotKeys =
+      List.generate(_kAuswahlAnzahl, (_) => GlobalKey());
+  String? _flugIso;
+  Rect? _flugStart;
+  Rect? _flugZiel;
+  int? _flugZielIndex;
+
+  // ── Auswahl-Logik ─────────────────────────────────────────────────────────
+
+  GlobalKey _keyFuerLand(String iso) =>
+      _gridKeys.putIfAbsent(iso, () => GlobalKey());
+
+  int? _ersterFreierSlot() {
+    for (var i = 0; i < _slots.length; i++) {
+      if (_slots[i] == null) return i;
+    }
+    return null;
+  }
+
+  // Zwischenstand bei jedem Phasenübergang bzw. jeder Auswahl-/Gewichtungs-
+  // Änderung sichern, damit ein Schließen der App mitten in der Runde nicht
+  // zum Neustart führt (siehe PortfolioScreen._fortsetzenFallsVorhanden).
+  Future<void> _zwischenstandSpeichern() async {
+    await DailyResumeService.speichern(_kPortfolioId, {
+      'phase': _gewichtungPhase ? 3 : 2,
+      'laender': _gewaehlt,
+      'gewichtung': _gewichte,
     });
   }
 
-  void _nudge(String iso, int delta) {
-    final andere = _gewaehlt.where((i) => i != iso).toList();
+  void _platziereInSlot(String iso, int slotIndex) {
+    if (_slots[slotIndex] != null || _slots.contains(iso)) return;
     setState(() {
-      if (delta > 0) {
-        andere.sort((a, b) => _gewichte[b]!.compareTo(_gewichte[a]!));
-        for (final donor in andere) {
-          if (_gewichte[donor]! - delta >= 0 && _gewichte[iso]! + delta <= 100) {
-            _gewichte[donor] = _gewichte[donor]! - delta;
-            _gewichte[iso] = _gewichte[iso]! + delta;
-            break;
-          }
-        }
-      } else {
-        final d = -delta;
-        andere.sort((a, b) => _gewichte[a]!.compareTo(_gewichte[b]!));
-        for (final empfaenger in andere) {
-          if (_gewichte[iso]! - d >= 0 && _gewichte[empfaenger]! + d <= 100) {
-            _gewichte[empfaenger] = _gewichte[empfaenger]! + d;
-            _gewichte[iso] = _gewichte[iso]! - d;
-            break;
-          }
-        }
+      _slots[slotIndex] = iso;
+      if (_slots.every((s) => s != null)) {
+        // Alle Slider starten bei 0% — der Spieler verteilt das Kapital
+        // selbst in 5%-Schritten (siehe _setzeGewicht), statt einer
+        // vorgegebenen Zufallsverteilung. KEIN automatischer Phasenwechsel
+        // mehr — der Spieler muss explizit auf "Weiter" tippen (siehe
+        // _weiterZurGewichtung), damit ein Antippen des 3. Landes nicht
+        // sofort ungewollt zur nächsten Phase springt.
+        _gewichte = {for (final land in _gewaehlt) land: 0};
       }
-      _aktivesPreset = null;
+    });
+    _zwischenstandSpeichern();
+  }
+
+  void _weiterZurGewichtung() {
+    if (_gewaehlt.length != _kAuswahlAnzahl) return;
+    setState(() => _gewichtungPhase = true);
+    _zwischenstandSpeichern();
+  }
+
+  void _entferneAusSlot(int index) {
+    setState(() {
+      _slots[index] = null;
+    });
+    _zwischenstandSpeichern();
+  }
+
+  // Tippen auf eine Grid-Karte: misst Start- (Karte) und Zielposition
+  // (nächster freier Slot) im Koordinatensystem des umschließenden Stacks
+  // und lässt eine Miniatur-Karte animiert dorthin fliegen. Die eigentliche
+  // Auswahl (_platziereInSlot) passiert erst wenn die Animation fertig ist.
+  void _startFlug(String iso) {
+    if (_flugIso != null) return;
+    final frei = _ersterFreierSlot();
+    if (frei == null) return;
+
+    final gridBox =
+        _keyFuerLand(iso).currentContext?.findRenderObject() as RenderBox?;
+    final slotBox =
+        _slotKeys[frei].currentContext?.findRenderObject() as RenderBox?;
+    final stackBox =
+        _stackKey.currentContext?.findRenderObject() as RenderBox?;
+
+    if (gridBox == null || slotBox == null || stackBox == null) {
+      _platziereInSlot(iso, frei);
+      return;
+    }
+
+    final startGlobal = gridBox.localToGlobal(Offset.zero, ancestor: stackBox);
+    final zielGlobal = slotBox.localToGlobal(Offset.zero, ancestor: stackBox);
+
+    setState(() {
+      _flugIso = iso;
+      _flugStart = startGlobal & gridBox.size;
+      _flugZiel = zielGlobal & slotBox.size;
+      _flugZielIndex = frei;
     });
   }
+
+  void _flugAbgeschlossen() {
+    final iso = _flugIso;
+    final ziel = _flugZielIndex;
+    setState(() {
+      _flugIso = null;
+      _flugStart = null;
+      _flugZiel = null;
+      _flugZielIndex = null;
+    });
+    if (iso != null && ziel != null) _platziereInSlot(iso, ziel);
+  }
+
+  // Setzt das Gewicht von [iso] unabhängig von den anderen beiden Slidern
+  // (keine automatische Umverteilung mehr) — hart auf ein Vielfaches von 5
+  // gerundet, auch wenn der Slider selbst dank divisions:20 schon auf
+  // 5%-Schritte einrastet (siehe Slider in _buildGewichtZeile). Ob die Summe
+  // aller drei Gewichte 100% ergibt, prüft _gewichtungGueltig separat und
+  // steuert darüber den "Investieren"-Button.
+  void _setzeGewicht(String iso, int neuerWert) {
+    final ziel = ((neuerWert / 5).round() * 5).clamp(0, 100);
+    if (ziel == (_gewichte[iso] ?? 0)) return;
+    setState(() => _gewichte[iso] = ziel);
+    _zwischenstandSpeichern();
+  }
+
+  int get _gewichtungSumme => _gewichte.values.fold(0, (a, b) => a + b);
+  bool get _gewichtungGueltig => _gewichtungSumme == 100;
 
   double _gewichtetesRisiko() {
     var summe = 0.0;
@@ -177,18 +237,81 @@ class _PortfolioInvestierenScreenState
       trendTrefferAnzahl: ergebnis.trendTrefferAnzahl,
       anzahlLaender: _gewaehlt.length,
     );
+    // Runde erfolgreich abgeschlossen -> Zwischenstand nicht mehr nötig.
+    await DailyResumeService.loeschen(_kPortfolioId);
+
+    await ChallengeErgebnisService.speichern('portfolio', {
+      'ergebnis': {
+        'kontinentsBonus': ergebnis.kontinentsBonus,
+        'allianzBonus': ergebnis.allianzBonus,
+        'erfuellteAllianzen': ergebnis.erfuellteAllianzen
+            .map((n) => {
+                  'titel': n.titel,
+                  'allianzKontinente': n.allianzKontinente,
+                  'allianzBonus': n.allianzBonus,
+                })
+            .toList(),
+        'sektorKomboBonus': ergebnis.sektorKomboBonus,
+        'erfuellteSektorKombos': ergebnis.erfuellteSektorKombos
+            .map((n) => {
+                  'titel': n.titel,
+                  'sektorKombo': n.sektorKombo,
+                  'sektorKomboBonus': n.sektorKomboBonus,
+                })
+            .toList(),
+        'depotRenditeGesamt': ergebnis.depotRenditeGesamt,
+        'altesKapital': ergebnis.altesKapital,
+        'neuesKapital': ergebnis.neuesKapital,
+        'gewichtetesRisiko': ergebnis.gewichtetesRisiko,
+        'effektiveLaenderzahl': ergebnis.effektiveLaenderzahl,
+        'newsTrefferAnzahl': ergebnis.newsTrefferAnzahl,
+        'trendTrefferAnzahl': ergebnis.trendTrefferAnzahl,
+        'beitraege': ergebnis.beitraege
+            .map((b) => {
+                  'iso': b.iso,
+                  'anteilProzent': b.anteilProzent,
+                  'basis': b.basis,
+                  'news': b.news,
+                  'newsNamen': b.newsNamen,
+                  'trend': b.trend,
+                  'schwankung': b.schwankung,
+                  'tagesRendite': b.tagesRendite,
+                  'beitragProzent': b.beitragProzent,
+                })
+            .toList(),
+      },
+    });
+
+    final altesKapital = widget.status.kapital;
+    final gewinnHeuteAbsolut = neuerStatus.kapital - altesKapital;
+    final tagesRenditeProzent =
+        altesKapital > 0 ? gewinnHeuteAbsolut / altesKapital * 100 : 0.0;
+
+    final istRekord = await ChallengeRekordService.setzeFallsBesser(
+        'portfolio', gewinnHeuteAbsolut.round());
+    if (istRekord) {
+      await ChallengeRekordService.setzeRekordProzent(
+          'portfolio', tagesRenditeProzent);
+    }
 
     if (AuthService.uid != null) {
       await RanglisteService.portfolioKapitalSpeichern(neuerStatus.kapital);
-      final altesKapital = widget.status.kapital;
-      if (altesKapital > 0) {
-        final tagesRenditeInProzent =
-            (neuerStatus.kapital - altesKapital) / altesKapital;
-        await RanglisteService.ergebnisSpeichern(
-          challengeId: 'portfolio',
-          wert: (tagesRenditeInProzent * 100).round(),
-        );
-      }
+      await RanglisteService.ergebnisSpeichern(
+        challengeId: 'portfolio',
+        wert: gewinnHeuteAbsolut.round(),
+        renditeProzent: tagesRenditeProzent,
+      );
+    }
+
+    // Portfolio hat keine "Punktzahl" mit festem Maximum -> "perfekt" bleibt
+    // hier bewusst aus, nur über Preis/Ranking erreichbar. Ein neuer Rekord
+    // zeigt sich daran, dass der Rekordwert sich gegenüber vorher erhöht hat.
+    final istNeuerRekord = neuerStatus.rekordKapital > widget.status.rekordKapital;
+    final neueAbzeichen = await AbzeichenService.pruefeNachChallengeAbschluss(
+      neuerRekordHeute: istNeuerRekord,
+    );
+    if (mounted && neueAbzeichen.isNotEmpty) {
+      await AbzeichenPopup.zeigen(context, neueAbzeichen);
     }
 
     if (!mounted) return;
@@ -207,28 +330,37 @@ class _PortfolioInvestierenScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F0E8),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: _gewichtungPhase ? _buildGewichtung() : _buildDeck(),
-            ),
-          ],
+    // Phasen 1-3 sind ein durchgehender Flow ohne Rückwärts-Navigation
+    // (siehe auch _buildHeader ohne Zurück-Pfeil und _buildGewichtung ohne
+    // "Auswahl ändern"-Link) — einziger Ausstieg ist der Auflösungs-Screen.
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F0E8),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: _gewichtungPhase ? _buildGewichtung() : _buildAuswahl(),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildHeader() {
+    // Zurück-Pfeil führt IMMER direkt zum Challenge-Panel/Menü (nicht zur
+    // vorherigen Phase) — die PopScope-Sperre gegen Wisch-/Hardware-Zurück
+    // zwischen den Phasen bleibt davon unberührt bestehen.
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
@@ -259,202 +391,435 @@ class _PortfolioInvestierenScreenState
     );
   }
 
-  // ── Karten-Deck ───────────────────────────────────────────────────────────
+  // ── Länderauswahl: Grid + Ziel-Slots ────────────────────────────────────────
 
-  Widget _buildDeck() {
-    return Column(
+  Widget _buildAuswahl() {
+    return Stack(
+      key: _stackKey,
       children: [
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 320,
-          child: PageView.builder(
-            controller: _pageCtrl,
-            itemCount: widget.markt.laenderPool.length,
-            itemBuilder: (_, i) => _buildKarte(widget.markt.laenderPool[i], i),
-          ),
+        Column(
+          children: [
+            const SizedBox(height: 8),
+            Expanded(
+              // LayoutBuilder statt fixem childAspectRatio: die Karte hat
+              // einen breitenunabhängigen Fixteil (Name, Sektor-/Status-Chips
+              // — feste Schriftgrößen) plus einen zur Kartenbreite
+              // proportionalen Flaggenanteil. Ein reines Seitenverhältnis
+              // geht fälschlich davon aus, dass die GESAMTE Höhe proportional
+              // zur Breite mitschrumpft — bei echter Handy-Kartenbreite
+              // (~85-90px statt der ~186px im breiten Test-Fenster, in dem
+              // das Verhältnis ursprünglich kalibriert wurde) reichte die so
+              // berechnete Zellhöhe für den Fixteil nicht mehr aus (RenderFlex-
+              // Overflow ~77-87px, per Widget-Test bei 390px/360px Breite
+              // gemessen). Die Formel unten berechnet die tatsächlich nötige
+              // Höhe für JEDE Breite direkt (statt eines für eine Breite
+              // passenden Verhältnisses), inkl. 20px Sicherheitsmarge.
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const kPadding = 12.0;
+                  const kSpacing = 10.0;
+                  const kCols = 4;
+                  final kartenBreite = (constraints.maxWidth -
+                          kPadding * 2 -
+                          kSpacing * (kCols - 1)) /
+                      kCols;
+                  final kartenHoehe = 159.0 + kartenBreite * 0.61 + 20.0;
+                  return GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: kPadding),
+                    // Feste 4 Spalten statt MaxCrossAxisExtent: bei genau 16
+                    // Ländern ergeben sich damit immer exakt 4 volle Reihen zu
+                    // je 4 Karten, unabhängig von der Fensterbreite.
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: kCols,
+                      crossAxisSpacing: kSpacing,
+                      mainAxisSpacing: kSpacing,
+                      mainAxisExtent: kartenHoehe,
+                    ),
+                    itemCount: widget.markt.laenderPool.length,
+                    itemBuilder: (_, i) =>
+                        _buildGridKarte(widget.markt.laenderPool[i]),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildSlotLeiste(),
+            if (_gewaehlt.length >= 2) ...[
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _buildBonusBox(kontinentsBonusProzent(_gewaehlt)),
+              ),
+            ],
+            // Erst hier, per explizitem Tap, geht es zur Gewichtung —
+            // kein automatischer Sprung mehr sobald der 3. Slot gefüllt ist.
+            if (_gewaehlt.length == _kAuswahlAnzahl) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: GestureDetector(
+                  onTap: _weiterZurGewichtung,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4)),
+                      ],
+                    ),
+                    child: const Text('Weiter →',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white, fontSize: 16,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+          ],
         ),
-        const SizedBox(height: 12),
-        if (_gewaehlt.isNotEmpty) _buildAusgewaehlteLeiste(),
+        if (_flugIso != null && _flugStart != null && _flugZiel != null)
+          TweenAnimationBuilder<Rect?>(
+            key: ValueKey('flug_$_flugIso'),
+            tween: RectTween(begin: _flugStart, end: _flugZiel),
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutCubic,
+            onEnd: _flugAbgeschlossen,
+            builder: (context, rect, child) {
+              if (rect == null) return const SizedBox.shrink();
+              // Positioned.fromRect zwingt die Karte auf die exakte,
+              // interpolierte Box-Größe — vom Grid-Zellen-Maß bis zum ZIEL-
+              // Rect des noch LEEREN Slots (nur 96px hoch, siehe _buildSlot),
+              // was kleiner ist als die Mini-Karte braucht -> ohne Gegenmaß-
+              // nahme ein RenderFlex-Overflow (gelb-schwarzer Streifen)
+              // während des 400ms-Tweens. FittedBox skaliert den natürlich
+              // bemessenen Karteninhalt (SizedBox unten, bewusst mit etwas
+              // Marge dimensioniert) stattdessen verzerrungsfrei auf jede
+              // Zielgröße, ohne dass die Column je zu wenig Platz bekommt.
+              return Positioned.fromRect(
+                rect: rect,
+                child: IgnorePointer(
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox(
+                      width: 105,
+                      height: 225,
+                      child: _buildMiniKarte(_flugIso!, istAusgewaehlt: true),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
       ],
     );
   }
 
-  Widget _buildKarte(String iso, int index) {
-    final profil = landProfile[iso]!;
-    final diff = _seite - index;
-    final scale = (1 - diff.abs() * 0.18).clamp(0.80, 1.0);
-    final opacity = (1 - diff.abs() * 0.55).clamp(0.35, 1.0);
+  // Kompakte Karte für das Auswahl-Grid — NUR per Tippen auswählbar (Tap =
+  // Flug-Animation in den nächsten freien Slot). Kein Drag & Drop mehr, um
+  // versehentliche Auswahl durch Wischen zu vermeiden.
+  Widget _buildGridKarte(String iso) {
     final ausgewaehlt = _gewaehlt.contains(iso);
-    final inNews = widget.markt.news
-        .any((n) => n.gewinner.contains(iso) || n.verlierer.contains(iso));
-    final trendProfitiert = profil.sektoren.contains(widget.status.trend.sektor);
+    final voll = _ersterFreierSlot() == null;
+    final versteckt = iso == _flugIso;
+    final inaktiv = ausgewaehlt || (voll && !ausgewaehlt);
 
-    return Transform.scale(
-      scale: scale,
-      child: Opacity(
-        opacity: opacity,
-        child: GestureDetector(
-          onTap: () => _tippLand(iso),
-          child: Container(
-            margin: EdgeInsets.symmetric(
-                horizontal: 6, vertical: ausgewaehlt ? 0 : 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: ausgewaehlt
-                    ? const Color(0xFF1A1A1A)
-                    : inNews
-                        ? const Color(0xFFF9A825)
-                        : const Color(0xFFEAEAE5),
-                width: ausgewaehlt ? 3.5 : (inNews ? 2.5 : 1.5),
+    final karte = Opacity(
+      key: _keyFuerLand(iso),
+      opacity: versteckt ? 0 : (inaktiv ? 0.35 : 1.0),
+      child: _buildMiniKarte(iso),
+    );
+
+    if (versteckt || inaktiv) return karte;
+
+    return GestureDetector(
+      onTap: () => _startFlug(iso),
+      child: karte,
+    );
+  }
+
+  // Gemeinsame Kartenoptik für Grid-Zelle, Flug-Miniatur UND befüllten Slot.
+  // [gross] = befüllter Slot: mehr Platz, größere Flagge/Schrift, Sektor-Chips
+  // nebeneinander statt gestapelt. [istAusgewaehlt] = goldener Rahmen — nur
+  // für den befüllten Slot bzw. die gerade fliegende Karte, sonst dezentes Grau.
+  Widget _buildMiniKarte(String iso, {bool gross = false, bool istAusgewaehlt = false}) {
+    final sektoren = landProfile[iso]!.sektoren;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(gross ? 18 : 14),
+        border: Border.all(
+          color: istAusgewaehlt ? const Color(0xFFF9A825) : const Color(0xFFEAEAE5),
+          width: istAusgewaehlt ? 2.5 : 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+              color: const Color(0xFF1A1A1A).withValues(alpha: 0.08),
+              offset: const Offset(0, 3),
+              blurRadius: 6),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (gross)
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+              child: SizedBox(
+                width: double.infinity,
+                height: 60,
+                child: CountryFlag.fromCountryCode(iso, width: double.infinity, height: 60),
               ),
-              boxShadow: [
-                BoxShadow(
-                    color: const Color(0xFF1A1A1A),
-                    offset: Offset(0, ausgewaehlt ? 3 : 6),
-                    blurRadius: 0),
-              ],
+            )
+          else
+            // Doppelt so groß wie zuvor (bezogen auf den früheren ~52px-
+            // Breitenanteil der Karte) und horizontal mittig statt
+            // linksbündig — der restliche Inhalt (Name, Badges, Chips)
+            // rutscht dadurch entsprechend weiter nach unten (siehe erhöhte
+            // childAspectRatio im GridView unten). LayoutBuilder statt
+            // fixer Pixelwerte, damit die Flagge nie breiter als die
+            // tatsächliche Kartenbreite wird (die je nach Bildschirmbreite
+            // variiert, siehe SliverGridDelegateWithFixedCrossAxisCount).
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Center(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final breite = constraints.maxWidth * 0.88;
+                    return PortfolioFlagge(
+                        iso: iso, width: breite, height: breite * 36 / 52);
+                  },
+                ),
+              ),
             ),
+          Padding(
+            padding: EdgeInsets.symmetric(
+                horizontal: gross ? 10 : 8, vertical: gross ? 8 : 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(20),
-                          topRight: Radius.circular(20)),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 100,
-                        child: CountryFlag.fromCountryCode(iso,
-                            width: double.infinity, height: 100),
-                      ),
-                    ),
-                    if (ausgewaehlt)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                              color: Color(0xFF1A1A1A), shape: BoxShape.circle),
-                          child: const Icon(Icons.check,
-                              color: Colors.white, size: 16),
-                        ),
-                      ),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(landName(iso),
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF1A1A1A))),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _kontinentFarbe(iso),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(kontinentName(iso),
-                            style: const TextStyle(fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white)),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildBalken('Chance', _chanceFraktion(iso),
-                          const Color(0xFF4A9E4A)),
-                      const SizedBox(height: 5),
-                      _buildBalken('Stabilität', (1 - profil.risiko).clamp(0.0, 1.0),
-                          const Color(0xFF4A90D9)),
-                      if (inNews) ...[
-                        const SizedBox(height: 8),
-                        _buildTag('🔥 heute in den News', const Color(0xFFF9A825)),
-                      ],
-                      if (trendProfitiert) ...[
-                        const SizedBox(height: 6),
-                        _buildTag('📈 Trend-Sektor', const Color(0xFF1A1A1A)),
-                      ],
-                    ],
+                Text(landName(iso),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: gross ? 14 : 12,
+                        fontWeight: FontWeight.w800, color: const Color(0xFF1A1A1A))),
+                SizedBox(height: gross ? 5 : 3),
+                Container(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: gross ? 7 : 5, vertical: gross ? 2 : 1),
+                  decoration: BoxDecoration(
+                    color: _kontinentFarbe(iso),
+                    borderRadius: BorderRadius.circular(20),
                   ),
+                  child: Text(kontinentName(iso),
+                      style: TextStyle(fontSize: gross ? 9 : 7,
+                          fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
+                SizedBox(height: gross ? 8 : 5),
+                if (gross) ...[
+                  // Gestapelt statt nebeneinander: die "gross"-Karte steckt in
+                  // der 3-Slots-Leiste beim Auswählen (nur ~1/3 Bildschirm-
+                  // breite auf dem Handy) — nebeneinander hatten die festen
+                  // Chip-Mindestbreiten (Emoji+5-Punkte-Ranking) dort keinen
+                  // Platz mehr und liefen über (RenderFlex-Overflow).
+                  if (sektoren.isNotEmpty) _buildSektorChip(iso, 0, gross: true),
+                  if (sektoren.length > 1) ...[
+                    const SizedBox(height: 4),
+                    _buildSektorChip(iso, 1, gross: true),
+                  ],
+                ] else ...[
+                  if (sektoren.isNotEmpty) _buildSektorChip(iso, 0, gross: false),
+                  if (sektoren.length > 1) ...[
+                    const SizedBox(height: 3),
+                    _buildSektorChip(iso, 1, gross: false),
+                  ],
+                  // Chance/Stabilität wieder auf der Grid-Karte (nur hier,
+                  // nicht auf der "gross"-Slot-Karte) — abgeleitet aus den
+                  // bestehenden LandProfil-Feldern (kein separates Datenfeld
+                  // vorhanden): Chance = normalisiertes basisWachstum,
+                  // Stabilität = 1 - risiko.
+                  const SizedBox(height: 6),
+                  _statusChip('Chance', Icons.trending_up, _chanceWert(iso),
+                      const Color(0xFF4A9E4A)),
+                  const SizedBox(height: 4),
+                  _statusChip('Stabilität', Icons.shield, _stabilitaetWert(iso),
+                      const Color(0xFF4A90D9)),
+                ],
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildBalken(String label, double fraktion, Color farbe) {
-    final gefuellt = (fraktion * 5).round().clamp(0, 5);
-    return Row(
-      children: [
-        SizedBox(
-          width: 58,
-          child: Text(label,
-              style: const TextStyle(fontSize: 10, color: Color(0xFF888888),
-                  fontWeight: FontWeight.w600)),
-        ),
-        ...List.generate(5, (i) => Container(
-          width: 13, height: 8,
-          margin: const EdgeInsets.only(right: 2),
-          decoration: BoxDecoration(
-            color: i < gefuellt ? farbe : const Color(0xFFEAEAE5),
-            borderRadius: BorderRadius.circular(2),
-          ),
-        )),
-      ],
-    );
-  }
+  // "Chance" = normalisiertes basisWachstum (~-1.0 bis 2.3 -> 0.0-1.0),
+  // "Stabilität" = 1 - risiko (risiko ist bereits 0.0-1.0 skaliert).
+  double _chanceWert(String iso) =>
+      ((landProfile[iso]!.basisWachstum + 1.0) / 3.3).clamp(0.0, 1.0);
 
-  Widget _buildTag(String text, Color farbe) {
+  double _stabilitaetWert(String iso) =>
+      (1.0 - landProfile[iso]!.risiko).clamp(0.0, 1.0);
+
+  // Identisches Design UND identische Maße wie _buildSektorChip(gross:false)
+  // — bewusst exakt dieselben Zahlenwerte übernommen (nicht die größere
+  // "gross"-Slot-Variante), da genau diese kompakte Chip-Größe direkt
+  // darüber auf derselben Grid-Karte für die Sektoren verwendet wird. Icon
+  // statt Sektor-Emoji, sonst 1:1 dieselbe Struktur (Label + 5-Punkte-Ranking).
+  Widget _statusChip(String label, IconData icon, double staerke0bis1, Color farbe) {
+    final ranking = (staerke0bis1 * 5).round().clamp(1, 5);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
         color: farbe.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: farbe.withValues(alpha: 0.4), width: 1),
       ),
-      child: Text(text,
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: farbe)),
+      child: Row(
+        children: [
+          Icon(icon, size: 9, color: farbe),
+          const SizedBox(width: 2),
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w700, color: farbe)),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(5, (i) => Container(
+              margin: const EdgeInsets.only(left: 0.75),
+              width: 3.5,
+              height: 3.5,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i < ranking ? farbe : farbe.withValues(alpha: 0.2),
+              ),
+            )),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildAusgewaehlteLeiste() {
-    return SizedBox(
-      height: 52,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: _gewaehlt.map((iso) => Padding(
-          padding: const EdgeInsets.only(right: 10),
-          child: Column(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: CountryFlag.fromCountryCode(iso, width: 42, height: 28),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                landName(iso).length > 9
-                    ? '${landName(iso).substring(0, 8)}…'
-                    : landName(iso),
-                style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        )).toList(),
+  // Farbiger Chip für einen der 2 stärksten Sektoren eines Landes: Emoji +
+  // Name + 1-5-Ranking (5 Segmente, N gefüllt) statt eines unauffälligen
+  // Mini-Balkens. width: double.infinity statt MainAxisSize.min, damit lange
+  // Sektor-Namen im schmalen Grid ellipsieren statt die Karte zu sprengen.
+  Widget _buildSektorChip(String iso, int index, {required bool gross}) {
+    final sektorId = landProfile[iso]!.sektoren[index];
+    final sektor = portfolioSektoren.firstWhere((s) => s.id == sektorId);
+    final farbe = portfolioSektorFarben[sektorId] ?? const Color(0xFF888888);
+    final ranking = (getLandSektorStaerke(iso, sektorId) * 5).round().clamp(1, 5);
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+          horizontal: gross ? 8 : 5, vertical: gross ? 4 : 2),
+      decoration: BoxDecoration(
+        color: farbe.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: farbe.withValues(alpha: 0.4), width: 1),
       ),
+      child: Row(
+        children: [
+          Text(sektor.emoji, style: TextStyle(fontSize: gross ? 11 : 9)),
+          SizedBox(width: gross ? 3 : 2),
+          Expanded(
+            child: Text(sektor.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: gross ? 11 : 7.5,
+                    fontWeight: FontWeight.w700, color: farbe)),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(5, (i) => Container(
+              margin: EdgeInsets.only(left: gross ? 1.2 : 0.75),
+              width: gross ? 4 : 3.5,
+              height: gross ? 4 : 3.5,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i < ranking ? farbe : farbe.withValues(alpha: 0.2),
+              ),
+            )),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBonusBox(int bonus) {
+    if (bonus <= 0) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF4A9E4A), width: 1.5),
+      ),
+      child: Row(children: [
+        const Icon(Icons.add_circle_outline, color: Color(0xFF4A9E4A), size: 16),
+        const SizedBox(width: 8),
+        Text('Kontinents-Synergie: +$bonus%',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                color: Color(0xFF4A9E4A))),
+      ]),
+    );
+  }
+
+  // ── 3 Ziel-Slots ─────────────────────────────────────────────────────────
+
+  Widget _buildSlotLeiste() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          for (var i = 0; i < _kAuswahlAnzahl; i++) ...[
+            if (i > 0) const SizedBox(width: 10),
+            Expanded(child: _buildSlot(i)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Kein DragTarget mehr — Slots werden ausschließlich durch Antippen einer
+  // Grid-Karte befüllt (siehe _startFlug/_platziereInSlot).
+  Widget _buildSlot(int index) {
+    final iso = _slots[index];
+    final box = Container(
+      key: _slotKeys[index],
+      height: iso != null ? null : 96,
+      decoration: BoxDecoration(
+        color: iso != null ? Colors.transparent : const Color(0xFFF5F0E8),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: iso == null
+          ? Center(
+              child: Text('Slot ${index + 1}',
+                  style: const TextStyle(fontSize: 11,
+                      fontWeight: FontWeight.w700, color: Color(0xFF999999))),
+            )
+          : GestureDetector(
+              onTap: () => _entferneAusSlot(index),
+              child: _buildMiniKarte(iso, gross: true, istAusgewaehlt: true),
+            ),
+    );
+    if (iso != null) return box;
+    return CustomPaint(
+      foregroundPainter: const _GestrichelterRahmen(
+        color: Color(0xFFBBBBBB),
+        strokeWidth: 1.5,
+        radius: 14,
+      ),
+      child: box,
     );
   }
 
@@ -470,47 +835,18 @@ class _PortfolioInvestierenScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: () => setState(() => _gewichtungPhase = false),
-            child: const Text('← Auswahl ändern',
-                style: TextStyle(fontSize: 12, color: Color(0xFF888888),
-                    fontWeight: FontWeight.w600)),
-          ),
-          const SizedBox(height: 12),
-          const Text('PRESETS',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                  color: Color(0xFF888888), letterSpacing: 1.2)),
-          const SizedBox(height: 8),
-          _buildPresetButton('gleich', 'Gleich verteilt', '34 / 33 / 33'),
-          const SizedBox(height: 8),
-          _buildPresetButton('favorit', 'Ein Favorit', '50 / 25 / 25'),
-          const SizedBox(height: 8),
-          _buildPresetButton('konzentriert', 'Alles auf einen', '70 / 15 / 15'),
-          const SizedBox(height: 20),
+          // Kein "Auswahl ändern"-Link mehr: Phasen 1-3 sind ein
+          // durchgehender Flow ohne Rückwärts-Navigation.
           const Text('DEINE GEWICHTUNG',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                   color: Color(0xFF888888), letterSpacing: 1.2)),
           const SizedBox(height: 8),
           ..._gewaehlt.map(_buildGewichtZeile),
           const SizedBox(height: 16),
-          if (bonus > 0)
-            Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF4A9E4A), width: 1.5),
-              ),
-              child: Row(children: [
-                const Icon(Icons.add_circle_outline,
-                    color: Color(0xFF4A9E4A), size: 16),
-                const SizedBox(width: 8),
-                Text('Kontinents-Synergie: +$bonus%',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                        color: Color(0xFF4A9E4A))),
-              ]),
-            ),
+          if (bonus > 0) ...[
+            _buildBonusBox(bonus),
+            const SizedBox(height: 10),
+          ],
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
@@ -526,18 +862,35 @@ class _PortfolioInvestierenScreenState
                       color: risikoFarbe)),
             ]),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          // Summen-Anzeige: rot solange die 3 Gewichte (in 5%-Schritten,
+          // Start bei 0%) noch nicht exakt 100% ergeben — steuert zugleich,
+          // ob der Investieren-Button aktiv ist.
+          Center(
+            child: Text(
+              'Summe: $_gewichtungSumme% ${_gewichtungGueltig ? '✓' : '(muss 100% sein)'}',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: _gewichtungGueltig
+                      ? const Color(0xFF4A9E4A)
+                      : const Color(0xFFE53935)),
+            ),
+          ),
+          const SizedBox(height: 12),
           GestureDetector(
-            onTap: _wirdAbgeschlossen ? null : _investierenUndAbschliessen,
+            onTap: (_wirdAbgeschlossen || !_gewichtungGueltig)
+                ? null
+                : _investierenUndAbschliessen,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 18),
               decoration: BoxDecoration(
-                color: _wirdAbgeschlossen
+                color: (_wirdAbgeschlossen || !_gewichtungGueltig)
                     ? const Color(0xFFD0CEC8)
                     : const Color(0xFF1A1A1A),
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: _wirdAbgeschlossen
+                boxShadow: (_wirdAbgeschlossen || !_gewichtungGueltig)
                     ? null
                     : const [
                         BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4)),
@@ -565,43 +918,9 @@ class _PortfolioInvestierenScreenState
     );
   }
 
-  Widget _buildPresetButton(String preset, String label, String verteilung) {
-    final aktiv = _aktivesPreset == preset;
-    return GestureDetector(
-      onTap: () => _wendePresetAn(preset),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: aktiv ? const Color(0xFF1A1A1A) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: aktiv ? const Color(0xFF1A1A1A) : const Color(0xFFEAEAE5),
-              width: 1.5),
-          boxShadow: [
-            BoxShadow(
-                color: const Color(0xFF1A1A1A),
-                offset: Offset(0, aktiv ? 2 : 4),
-                blurRadius: 0),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
-                    color: aktiv ? Colors.white : const Color(0xFF1A1A1A))),
-            Text(verteilung,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                    color: aktiv ? Colors.white70 : const Color(0xFF888888))),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildGewichtZeile(String iso) {
     final gewicht = _gewichte[iso] ?? 0;
+    final sektoren = landProfile[iso]!.sektoren;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -610,42 +929,116 @@ class _PortfolioInvestierenScreenState
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFEAEAE5)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: CountryFlag.fromCountryCode(iso, width: 28, height: 19),
+          Row(
+            children: [
+              PortfolioFlagge(iso: iso, width: 28, height: 19, radius: 3),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(landName(iso),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+              SizedBox(
+                width: 44,
+                child: Text('$gewicht%',
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(landName(iso),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          // Sektor-Chips (2 stärkste, 1-5-Ranking) — dieselbe kompakte
+          // Darstellung wie im Auswahl-Grid, damit sichtbar bleibt worauf
+          // man sich beim Verteilen des Kapitals einlässt.
+          Row(
+            children: [
+              if (sektoren.isNotEmpty)
+                Expanded(child: _buildSektorChip(iso, 0, gross: false)),
+              if (sektoren.length > 1) ...[
+                const SizedBox(width: 6),
+                Expanded(child: _buildSektorChip(iso, 1, gross: false)),
+              ],
+            ],
           ),
-          _nudgeButton(Icons.remove, () => _nudge(iso, -10)),
-          SizedBox(
-            width: 44,
-            child: Text('$gewicht%',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 4,
+              activeTrackColor: const Color(0xFF1A1A1A),
+              inactiveTrackColor: const Color(0xFFEAEAE5),
+              thumbColor: const Color(0xFF1A1A1A),
+              overlayColor: const Color(0x1A1A1A1A),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+              // Unterdrückt die grüne Wert-Blase beim Ziehen komplett,
+              // unabhängig davon ob ein label gesetzt ist — der Prozentwert
+              // steht bereits fest neben dem Slider (siehe oben).
+              showValueIndicator: ShowValueIndicator.never,
+            ),
+            child: Slider(
+              value: gewicht.toDouble(),
+              min: 0,
+              max: 100,
+              divisions: 20,
+              onChanged: (v) => _setzeGewicht(iso, v.round()),
+            ),
           ),
-          _nudgeButton(Icons.add, () => _nudge(iso, 10)),
         ],
       ),
     );
   }
+}
 
-  Widget _nudgeButton(IconData icon, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 28, height: 28,
-        decoration: BoxDecoration(
-          color: const Color(0xFFEAEAE5),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, size: 16, color: const Color(0xFF1A1A1A)),
-      ),
-    );
+// Flutter hat keinen eingebauten gestrichelten Rand — statt einer neuen
+// Paket-Abhängigkeit (z.B. dotted_border) reicht ein kleiner CustomPainter
+// für die leeren Ziel-Slots.
+class _GestrichelterRahmen extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double radius;
+  static const _dashWidth = 6.0;
+  static const _dashGap = 5.0;
+
+  const _GestrichelterRahmen({
+    required this.color,
+    required this.strokeWidth,
+    required this.radius,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+    final rrect =
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    final rand = Path()..addRRect(rrect);
+    final gestrichelt = Path();
+    for (final metric in rand.computeMetrics()) {
+      var distanz = 0.0;
+      var zeichnen = true;
+      while (distanz < metric.length) {
+        final laenge = zeichnen ? _dashWidth : _dashGap;
+        if (zeichnen) {
+          gestrichelt.addPath(
+              metric.extractPath(
+                  distanz, (distanz + laenge).clamp(0, metric.length)),
+              Offset.zero);
+        }
+        distanz += laenge;
+        zeichnen = !zeichnen;
+      }
+    }
+    canvas.drawPath(gestrichelt, paint);
   }
+
+  @override
+  bool shouldRepaint(covariant _GestrichelterRahmen oldDelegate) =>
+      color != oldDelegate.color ||
+      strokeWidth != oldDelegate.strokeWidth ||
+      radius != oldDelegate.radius;
 }

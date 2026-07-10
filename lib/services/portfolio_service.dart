@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/portfolio_daten.dart';
+import 'challenge_rekord_service.dart';
+import 'daily_challenge.dart';
 import 'tages_seed_service.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -14,7 +16,6 @@ class PortfolioStatus {
   final int streak;
   final List<double> verlauf; // älteste zuerst, max. 30 Einträge
   final MakroTrend trend;
-  final int trendTag; // 1-basiert: "Tag X von trend.dauerTage"
   final bool heuteGespielt;
   final String heute; // yyyy-MM-dd
 
@@ -24,7 +25,6 @@ class PortfolioStatus {
     required this.streak,
     required this.verlauf,
     required this.trend,
-    required this.trendTag,
     required this.heuteGespielt,
     required this.heute,
   });
@@ -57,8 +57,6 @@ class PortfolioService {
   static const _kStreak          = 'pf_streak';
   static const _kLetzterSpieltag = 'pf_letzter_spieltag';
   static const _kVerlauf         = 'pf_verlauf';
-  static const _kTrendName       = 'pf_trend_name';
-  static const _kTrendStart      = 'pf_trend_start';
 
   static const _kStilTage         = 'pf_stil_tage';
   static const _kStilAuswahlen    = 'pf_stil_auswahlen';
@@ -84,43 +82,14 @@ class PortfolioService {
     return DateTime(n.year, n.month, n.day);
   }
 
-  // ── Makro-Trend-Rotation (seed-basiert, für alle Spieler gleich) ─────────────
+  // ── Makro-Trend (täglich neu, seed-basiert, für alle Spieler gleich) ────────
+  // Kein mehrtägiger Zustand mehr — jeder Tag zieht unabhängig einen neuen
+  // Trend, daher keine Persistenz (kein "Tag X von Y"-Zähler) nötig.
 
-  static MakroTrend _waehleTrend(DateTime tag, {String? vorheriger}) {
+  static MakroTrend _heutigerTrend(DateTime heute) {
     final seed = TagesSeedService.seedFuer('portfolio_trend') +
-        tag.year * 10000 + tag.month * 100 + tag.day;
-    final kandidaten = trendPool.length > 1
-        ? trendPool.where((t) => t.name != vorheriger).toList()
-        : trendPool;
-    return kandidaten[Random(seed).nextInt(kandidaten.length)];
-  }
-
-  static Future<(MakroTrend, int)> _aktuellerTrend(
-      SharedPreferences prefs, DateTime heute) async {
-    final name = prefs.getString(_kTrendName);
-    final startStr = prefs.getString(_kTrendStart);
-
-    if (name == null || startStr == null) {
-      final trend = _waehleTrend(heute);
-      await prefs.setString(_kTrendName, trend.name);
-      await prefs.setString(_kTrendStart, _formatDatum(heute));
-      return (trend, 1);
-    }
-
-    final aktuell = trendPool.firstWhere((t) => t.name == name,
-        orElse: () => _waehleTrend(heute));
-    final start = _parseDatum(startStr);
-    final tageSeitStart = heute.difference(start).inDays;
-
-    if (tageSeitStart >= aktuell.dauerTage) {
-      // Trend abgelaufen → nächsten Trend wählen (nicht denselben zweimal hintereinander)
-      final naechster = _waehleTrend(heute, vorheriger: aktuell.name);
-      await prefs.setString(_kTrendName, naechster.name);
-      await prefs.setString(_kTrendStart, _formatDatum(heute));
-      return (naechster, 1);
-    }
-
-    return (aktuell, tageSeitStart + 1);
+        heute.year * 10000 + heute.month * 100 + heute.day;
+    return trendPool[Random(seed).nextInt(trendPool.length)];
   }
 
   // ── Laden ─────────────────────────────────────────────────────────────────
@@ -147,7 +116,7 @@ class PortfolioService {
     final verlaufRoh = prefs.getStringList(_kVerlauf) ?? [];
     final verlauf = verlaufRoh.map(double.parse).toList();
 
-    final (trend, trendTag) = await _aktuellerTrend(prefs, heute);
+    final trend = _heutigerTrend(heute);
 
     return PortfolioStatus(
       kapital: kapital,
@@ -155,7 +124,6 @@ class PortfolioService {
       streak: streak,
       verlauf: verlauf,
       trend: trend,
-      trendTag: trendTag,
       heuteGespielt: letzterSpieltag == heuteStr,
       heute: heuteStr,
     );
@@ -178,6 +146,12 @@ class PortfolioService {
     final kapitalGeklemmt = neuesKapital.clamp(kFloor, double.infinity).toDouble();
     final rekordBisher = prefs.getDouble(_kRekord) ?? kStartKapital;
     final rekordNeu = max(rekordBisher, kapitalGeklemmt);
+
+    // Tages-Rendite in % ggü. dem Kapital VOR diesem Abschluss — Basis für
+    // die "Ø Rendite"-Anzeige im Profil (analog zur Punkte-Summe der anderen
+    // drei Challenges).
+    final kapitalVorher = prefs.getDouble(_kKapital) ?? kStartKapital;
+    final renditeHeute = (kapitalGeklemmt - kapitalVorher) / kapitalVorher * 100;
 
     final letzterSpieltag = prefs.getString(_kLetzterSpieltag);
     final streakBisher = prefs.getInt(_kStreak) ?? 0;
@@ -207,6 +181,9 @@ class PortfolioService {
         (prefs.getInt(_kStilNewsTreffer) ?? 0) + newsTrefferAnzahl);
     await prefs.setInt(_kStilTrendTreffer,
         (prefs.getInt(_kStilTrendTreffer) ?? 0) + trendTrefferAnzahl);
+
+    await ChallengeRekordService.summeErhoehen('portfolio', renditeHeute);
+    await DailyChallenge.markDone('portfolio');
 
     return ladeStatus();
   }

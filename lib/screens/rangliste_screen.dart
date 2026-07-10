@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/profilbild_service.dart';
 import '../services/rangliste_service.dart';
 import '../utils/portfolio_format.dart';
 
@@ -31,11 +32,14 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
   _Challenge _challenge = _Challenge.schaetzen;
   int _portfolioSubTab = 0; // 0 = Heute, 1 = Gesamt (Alltime)
   late Future<List<RanglistenEintrag>> _future;
+  String? _eigenesProfilbild;
 
   @override
   void initState() {
     super.initState();
     _future = _ladeAktuelle();
+    ProfilbildService.getProfilbild()
+        .then((pfad) => mounted ? setState(() => _eigenesProfilbild = pfad) : null);
   }
 
   Future<List<RanglistenEintrag>> _ladeAktuelle() {
@@ -69,6 +73,9 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
 
   bool get _istGeld => _challenge == _Challenge.portfolio;
 
+  bool get _istPortfolioHeute =>
+      _challenge == _Challenge.portfolio && _portfolioSubTab == 0;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -93,24 +100,26 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
                           fontSize: 12,
                           fontWeight: FontWeight.w600)),
                   const SizedBox(height: 16),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
+                  SizedBox(
+                    width: double.infinity,
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        for (final c in _Challenge.values) ...[
+                        for (final c in _Challenge.values)
                           _ChallengePill(
                             label: c.label,
                             active: _challenge == c,
                             onTap: () => _wechsleChallenge(c),
                           ),
-                          const SizedBox(width: 8),
-                        ],
                       ],
                     ),
                   ),
                   if (_challenge == _Challenge.portfolio) ...[
                     const SizedBox(height: 10),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _SubTabPill(
                           label: 'Heute',
@@ -163,8 +172,12 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                       itemCount: liste.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, i) =>
-                          _RangZeile(eintrag: liste[i], istGeld: _istGeld),
+                      itemBuilder: (context, i) => _RangZeile(
+                        eintrag: liste[i],
+                        istGeld: _istGeld,
+                        mitVorzeichen: _istPortfolioHeute,
+                        eigenesProfilbild: _eigenesProfilbild,
+                      ),
                     );
                   },
                 ),
@@ -250,8 +263,15 @@ class _SubTabPill extends StatelessWidget {
 class _RangZeile extends StatelessWidget {
   final RanglistenEintrag eintrag;
   final bool istGeld;
+  final bool mitVorzeichen;
+  final String? eigenesProfilbild;
 
-  const _RangZeile({required this.eintrag, required this.istGeld});
+  const _RangZeile({
+    required this.eintrag,
+    required this.istGeld,
+    this.mitVorzeichen = false,
+    this.eigenesProfilbild,
+  });
 
   Color? get _rangFarbe => switch (eintrag.rang) {
         1 => const Color(0xFFF9A825),
@@ -259,6 +279,9 @@ class _RangZeile extends StatelessWidget {
         3 => const Color(0xFFA1887F),
         _ => null,
       };
+
+  String? get _profilbildPfad =>
+      eintrag.istIch ? (eigenesProfilbild ?? eintrag.profilbildPfad) : eintrag.profilbildPfad;
 
   @override
   Widget build(BuildContext context) {
@@ -297,6 +320,8 @@ class _RangZeile extends StatelessWidget {
               ),
             ),
           ),
+          _ProfilbildIcon(pfad: _profilbildPfad),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               eintrag.name,
@@ -308,16 +333,73 @@ class _RangZeile extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            istGeld ? fmtKapital(eintrag.wert.toDouble()) : '${eintrag.wert}',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF1A1A1A),
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                istGeld
+                    ? fmtKapital(eintrag.wert.toDouble(),
+                        mitVorzeichen: mitVorzeichen)
+                    : '${eintrag.wert}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              // Prozent zusätzlich zum Dollar-Betrag — macht Ergebnisse mit
+              // unterschiedlichem Kapitalstand untereinander vergleichbar.
+              if (mitVorzeichen && eintrag.renditeProzent != null)
+                Text(
+                  fmtProzent(eintrag.renditeProzent!),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF888888),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Profilbild-Icon ────────────────────────────────────────────────────────────
+
+class _ProfilbildIcon extends StatelessWidget {
+  final String? pfad;
+  const _ProfilbildIcon({required this.pfad});
+
+  static const _platzhalter =
+      Icon(Icons.person, size: 18, color: Color(0xFF888888));
+
+  @override
+  Widget build(BuildContext context) {
+    final pfad = this.pfad;
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+      ),
+      child: pfad == null
+          ? _platzhalter
+          : ClipOval(
+              child: ProfilbildService.istWeitformat(pfad)
+                  ? Image.asset(pfad,
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => _platzhalter)
+                  : Padding(
+                      padding: const EdgeInsets.all(3),
+                      child: Image.asset(pfad,
+                          fit: BoxFit.contain,
+                          errorBuilder: (c, e, s) => _platzhalter),
+                    ),
+            ),
     );
   }
 }

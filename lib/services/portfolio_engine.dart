@@ -33,8 +33,15 @@ class PortfolioLandBeitrag {
 
 class PortfolioTagesErgebnis {
   final List<PortfolioLandBeitrag> beitraege;
-  final int kontinentsBonus; // Prozentpunkte
-  final double depotRenditeGesamt; // inkl. Kontinents-Bonus
+  final int kontinentsBonus; // Prozentpunkte ("gleicher Kontinent"-Bonus)
+  // NEU, unabhängig vom Kontinents-Bonus oben (siehe berechneAllianzBonus in
+  // portfolio_rendite_service.dart) — beide können gleichzeitig greifen.
+  final double allianzBonus; // Prozentpunkte, Summe aller erfüllten Allianzen
+  final List<MarktNews> erfuellteAllianzen; // für die zeilenweise Anzeige
+  // NEU, ebenfalls unabhängig (siehe berechneSektorKomboBonus).
+  final double sektorKomboBonus; // Prozentpunkte, Summe aller erfüllten Kombos
+  final List<MarktNews> erfuellteSektorKombos; // für die zeilenweise Anzeige
+  final double depotRenditeGesamt; // inkl. Kontinents-, Allianz- UND Sektor-Kombo-Bonus
   final double altesKapital;
   final double neuesKapital;
   final double gewichtetesRisiko; // 0.0-1.0
@@ -45,6 +52,10 @@ class PortfolioTagesErgebnis {
   const PortfolioTagesErgebnis({
     required this.beitraege,
     required this.kontinentsBonus,
+    required this.allianzBonus,
+    required this.erfuellteAllianzen,
+    required this.sektorKomboBonus,
+    required this.erfuellteSektorKombos,
     required this.depotRenditeGesamt,
     required this.altesKapital,
     required this.neuesKapital,
@@ -54,6 +65,11 @@ class PortfolioTagesErgebnis {
     required this.trendTrefferAnzahl,
   });
 }
+
+// Verstärkt profil.basisWachstum, damit die Wahl des Landes selbst spürbar
+// relevant bleibt gegenüber den News-/Allianz-/Sektor-Kombo-Boni, die durch
+// den festen 3-Slot-News-Aufbau tendenziell dominieren würden.
+const double _kBasisWachstumFaktor = 3.0;
 
 PortfolioTagesErgebnis berechneTagesErgebnis({
   required Map<String, int> gewichte, // iso -> Prozent, Summe 100
@@ -74,8 +90,8 @@ PortfolioTagesErgebnis berechneTagesErgebnis({
     final anteil = eintrag.value / 100.0;
     final profil = landProfile[iso]!;
 
-    final basis = profil.basisWachstum;
-    final news = nachrichtenEffekt(iso, heutigeNews);
+    final basis = profil.basisWachstum * _kBasisWachstumFaktor;
+    final news = nachrichtenEffekt(iso, heutigeNews, tagesSeed);
     final newsNamen = heutigeNews
         .where((n) =>
             n.gewinner.contains(iso) ||
@@ -110,14 +126,26 @@ PortfolioTagesErgebnis berechneTagesErgebnis({
     if (trendWert != 0) trendTreffer++;
   }
 
-  final kontBonus = kontinentsBonusProzent(gewichte.keys.toList());
-  depotRendite += kontBonus;
+  final gewaehlteLaender = gewichte.keys.toList();
+  final kontBonus = kontinentsBonusProzent(gewaehlteLaender);
+  final erfuellteAllianzen = erfuellteAllianzNews(gewaehlteLaender, heutigeNews);
+  final allianzBonusWert =
+      erfuellteAllianzen.fold(0.0, (summe, n) => summe + n.allianzBonus!);
+  final sektorGewichtung = berechneSektorGewichtung(gewichte);
+  final erfuellteKombos = erfuellteSektorKombos(sektorGewichtung, heutigeNews);
+  final sektorKomboBonusWert =
+      erfuellteKombos.fold(0.0, (summe, n) => summe + n.sektorKomboBonus!);
+  depotRendite += kontBonus + allianzBonusWert + sektorKomboBonusWert;
 
   final neuesKapital = altesKapital * (1 + depotRendite / 100);
 
   return PortfolioTagesErgebnis(
     beitraege: beitraege,
     kontinentsBonus: kontBonus,
+    allianzBonus: allianzBonusWert,
+    erfuellteAllianzen: erfuellteAllianzen,
+    sektorKomboBonus: sektorKomboBonusWert,
+    erfuellteSektorKombos: erfuellteKombos,
     depotRenditeGesamt: depotRendite,
     altesKapital: altesKapital,
     neuesKapital: neuesKapital,

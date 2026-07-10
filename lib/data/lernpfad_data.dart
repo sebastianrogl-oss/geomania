@@ -9,6 +9,8 @@ enum LernModus {
   hauptstaedteEingabe,  // Hauptstadt Texteingabe
   umrissBild,           // Umriss sehen → Land wählen
   umrissMultiple,       // Land sehen → Umriss wählen
+  flaggenQuizEingabe,   // Flagge sehen → Ländername eintippen
+  umrissEingabe,        // Umriss sehen → Ländername eintippen
   waehrungsQuiz,
   sortierSpiel,
   preisSchaetzen,
@@ -18,12 +20,10 @@ enum LernModus {
   flaeche,              // "Wie groß ist die Fläche von X?"
   extremFrage,          // Superlativ: größte/kleinste/bevölkerungsreichste
   waehrungZuLand,       // "Welches Land nutzt Währung X?" (umgekehrtes Währungsquiz)
-  hauptstadtZuLand,     // "Welches Land hat die Hauptstadt X?" (umgekehrtes Hauptstädte-Quiz)
-  groessteStadt,        // "Was ist die größte Stadt von X?"
-  flaggenFarbe,         // "Welche Farben hat die Flagge von X?"
   extremFrageLeicht,    // Superlativ, aber nur unter sehr bekannten Ländern
   zufallsFakt,          // Rätsel-artiger Fun-Fact → gesuchtes Land erraten
   bekanntesGebaeude,    // "In welchem Land steht [Bauwerk]?"
+  grenzkettenRaetsel,   // "Durch welches Land MUSST du NICHT fahren?"
 }
 
 // ── Klassen ───────────────────────────────────────────────────────────────────
@@ -97,34 +97,41 @@ class LernWelt {
 // wird schrittweise komplettiert: die leichtere Variante ist von Anfang an
 // dabei, die zweite kommt in einem späteren Level dazu. Level 4 enthält
 // den vollständigen Modus-Satz.
+//
+// Die 3 Eingabe-Varianten (flaggenQuizEingabe, umrissEingabe,
+// hauptstaedteEingabe) sind grundsätzlich schon ab Level 1 (Einsteiger)
+// verfügbar — die INNERHALB EINES ABSCHNITTS geltende Reihenfolge-Regel
+// (_eingabeVorbedingung/_eingabeErlaubt, siehe unten) sorgt weiterhin
+// dafür, dass sie erst gezogen werden, nachdem die leichtere Variante
+// desselben Themas in genau diesem Abschnitt schon vorkam.
 
 const List<LernModus> _modiEinsteiger = [
   LernModus.flaggenQuizBild,
   LernModus.flaggenQuizMultiple,
   LernModus.hauptstaedteMultiple,
-  LernModus.hauptstadtZuLand,
   LernModus.waehrungsQuiz,
   LernModus.umrissBild,
   LernModus.bipGesamt,
   LernModus.flaeche,
-  LernModus.flaggenFarbe,
+  LernModus.umrissMultiple,
   LernModus.extremFrageLeicht,
-  LernModus.groessteStadt,
   LernModus.nachbarland,
+  LernModus.hauptstaedteEingabe,
+  LernModus.flaggenQuizEingabe,
+  LernModus.umrissEingabe,
 ];
 
 const List<LernModus> _modiFortgeschritten = [
   ..._modiEinsteiger,
-  LernModus.umrissMultiple,
   LernModus.sortierSpiel,
   LernModus.waehrungZuLand,
   LernModus.zufallsFakt,
   LernModus.bekanntesGebaeude,
+  LernModus.grenzkettenRaetsel,
 ];
 
 const List<LernModus> _modiProfi = [
   ..._modiFortgeschritten,
-  LernModus.hauptstaedteEingabe,
   LernModus.preisSchaetzen,
   LernModus.extremFrage,
 ];
@@ -148,12 +155,14 @@ List<LernModus> modiFuerLevel(int level) => switch (level) {
 String lernModusThema(LernModus m) => switch (m) {
       LernModus.flaggenQuizBild ||
       LernModus.flaggenQuizMultiple ||
-      LernModus.flaggenFarbe =>
+      LernModus.flaggenQuizEingabe =>
         'flaggen',
-      LernModus.umrissBild || LernModus.umrissMultiple => 'umriss',
+      LernModus.umrissBild ||
+      LernModus.umrissMultiple ||
+      LernModus.umrissEingabe =>
+        'umriss',
       LernModus.hauptstaedteMultiple ||
-      LernModus.hauptstaedteEingabe ||
-      LernModus.hauptstadtZuLand =>
+      LernModus.hauptstaedteEingabe =>
         'hauptstaedte',
       LernModus.waehrungsQuiz || LernModus.waehrungZuLand => 'waehrung',
       LernModus.sortierSpiel => 'sortieren',
@@ -163,14 +172,37 @@ String lernModusThema(LernModus m) => switch (m) {
       LernModus.bipGesamt => 'bip',
       LernModus.flaeche => 'flaeche',
       LernModus.extremFrage || LernModus.extremFrageLeicht => 'extrem',
-      LernModus.groessteStadt => 'groessteStadt',
       LernModus.zufallsFakt => 'fakt',
       LernModus.bekanntesGebaeude => 'gebaeude',
+      LernModus.grenzkettenRaetsel => 'grenzketten',
     };
 
 /// Bevorzugt bei Gleichstand die noch selten genutzte Variante eines Themas.
 int _variantenPrioritaet(LernModus m, Map<LernModus, int> zaehler) =>
     zaehler[m] ?? 0;
+
+/// Mindestanzahl an leichteren Varianten desselben Themas, die in diesem
+/// Abschnitt schon vorgekommen sein müssen, bevor die Eingabe-Variante
+/// selbst gezogen werden darf (aufsteigende Schwierigkeit: Bild/Multiple
+/// zuerst, Eingabe erst danach — einheitlich mindestens einmal pro Thema).
+int? _eingabeVorbedingung(LernModus m) => switch (m) {
+      LernModus.hauptstaedteEingabe => 1,
+      LernModus.flaggenQuizEingabe => 1,
+      LernModus.umrissEingabe => 1,
+      _ => null,
+    };
+
+/// Prüft, ob [m] (falls es eine Eingabe-Variante ist) in der bisherigen
+/// Sequenz dieses Abschnitts schon genug leichtere Varianten desselben
+/// Themas gesehen hat, um selbst gezogen werden zu dürfen.
+bool _eingabeErlaubt(LernModus m, List<LernModus> bisher) {
+  final vorbedingung = _eingabeVorbedingung(m);
+  if (vorbedingung == null) return true;
+  final thema = lernModusThema(m);
+  final leichtereBisher =
+      bisher.where((x) => x != m && lernModusThema(x) == thema).length;
+  return leichtereBisher >= vorbedingung;
+}
 
 /// Erzeugt eine gut durchmischte Modus-Sequenz für einen Abschnitt:
 /// nie derselbe Modus und nie dasselbe Thema zweimal direkt hintereinander,
@@ -198,15 +230,29 @@ List<LernModus> erzeugeModusSequenz(
     }
 
     // Kandidaten: nicht der letzte Modus UND nicht dasselbe Thema wie
-    // zuletzt (damit z.B. nicht Flagge-Bild direkt auf Flagge-Multiple folgt).
+    // zuletzt (damit z.B. nicht Flagge-Bild direkt auf Flagge-Multiple folgt)
+    // UND (falls Eingabe-Variante) noch genug leichtere Varianten gesehen.
     var kandidaten = pool
-        .where((m) => m != letzter && lernModusThema(m) != letztesThema)
+        .where((m) =>
+            m != letzter &&
+            lernModusThema(m) != letztesThema &&
+            _eingabeErlaubt(m, sequenz))
         .toList();
 
-    // Falls dadurch leer (kleiner Pool): nur "nicht letzter Modus" erzwingen.
+    // Falls dadurch leer (kleiner Pool): nur "nicht letzter Modus" erzwingen,
+    // Eingabe-Gate bleibt aber bestehen.
+    if (kandidaten.isEmpty) {
+      kandidaten =
+          pool.where((m) => m != letzter && _eingabeErlaubt(m, sequenz)).toList();
+    }
+
+    // Äußerster Rand-Fall (z.B. Pool besteht praktisch nur noch aus
+    // gesperrten Eingabe-Varianten): Gate ignorieren, damit die Sequenz nie
+    // leer bleibt.
     if (kandidaten.isEmpty) {
       kandidaten = pool.where((m) => m != letzter).toList();
     }
+    if (kandidaten.isEmpty) kandidaten = pool;
 
     // Unter den Kandidaten: die mit dem niedrigsten Zähler bevorzugen
     // (gleichmäßige Verteilung).
@@ -230,65 +276,69 @@ List<LernModus> erzeugeModusSequenz(
 }
 
 // ── Länderlisten ──────────────────────────────────────────────────────────────
+//
+// Jeder Block-Kontinent (alles außer Welt) hat drei DISJUNKTE Länder-Blöcke
+// (A/B/C, sortiert nach Land.schwierigkeit aus alle_laender.dart) für seine
+// ersten Abschnitte — kein Land kommt in mehr als einem Block vor. Der
+// jeweils LETZTE Abschnitt eines Kontinents ist der Wiederholungs-Abschnitt:
+// er nutzt die volle "*All"-Liste (alle Blöcke gemischt, keine Grenzen mehr).
+// Bei Südamerika/Ozeanien (nur 2 Blöcke, 3 Abschnitte) übernimmt Block B den
+// zweiten und der volle Kontinent den dritten (Wiederholungs-)Abschnitt.
 
-const _europaA1 = ['DE', 'FR', 'IT', 'ES', 'GB', 'PT', 'NL', 'BE', 'CH', 'AT'];
-const _europaA2 = [
-  'DE', 'FR', 'IT', 'ES', 'GB', 'PT', 'NL', 'BE', 'CH', 'AT',
-  'PL', 'SE', 'NO', 'DK', 'FI', 'IE', 'GR', 'CZ', 'HU', 'RO',
+const _europaBlockA = [
+  'DE', 'FR', 'IT', 'ES', 'PT', 'GB', 'SE', 'NO', 'PL', 'RU',
+  'NL', 'BE', 'CH', 'AT', 'IE', 'DK',
 ];
-const _europaAll = [
-  'DE', 'FR', 'GB', 'IT', 'ES', 'PT', 'NL', 'BE', 'CH', 'AT',
-  'SE', 'NO', 'DK', 'FI', 'PL', 'CZ', 'HU', 'GR', 'RO', 'HR',
-  'RS', 'BG', 'UA', 'RU', 'TR', 'AL', 'AD', 'BA', 'BY', 'CY',
-  'EE', 'IE', 'IS', 'LI', 'LT', 'LU', 'LV', 'MC', 'MD', 'ME',
-  'MK', 'MT', 'SI', 'SK', 'SM', 'VA', 'XK',
+const _europaBlockB = [
+  'FI', 'IS', 'CZ', 'SK', 'HU', 'RO', 'BG', 'HR', 'GR', 'UA',
+  'CY', 'LT', 'EE', 'LV', 'SI',
 ];
+const _europaBlockC = [
+  'LU', 'MC', 'AD', 'LI', 'SM', 'MT', 'VA', 'RS', 'BA', 'ME',
+  'MK', 'AL', 'MD', 'BY', 'XK',
+];
+const _europaAll = [..._europaBlockA, ..._europaBlockB, ..._europaBlockC];
 
-const _suedamAll = [
-  'BR', 'AR', 'CO', 'CL', 'PE', 'VE', 'EC', 'BO', 'UY', 'PY', 'GY', 'SR',
-];
+const _suedamBlockA = ['BR', 'AR', 'CL', 'CO', 'PE', 'VE'];
+const _suedamBlockB = ['EC', 'BO', 'PY', 'UY', 'GY', 'SR'];
+const _suedamAll = [..._suedamBlockA, ..._suedamBlockB];
 
-const _nordamA1  = ['US', 'CA', 'MX', 'CU', 'GT', 'CR', 'PA', 'JM'];
-const _nordamAll = [
-  'US', 'CA', 'MX', 'CU', 'DO', 'HT', 'GT', 'HN', 'SV', 'NI',
-  'CR', 'PA', 'BZ', 'JM', 'TT', 'BB', 'BS', 'AG', 'DM', 'GD',
-  'KN', 'LC', 'VC',
-];
+const _nordamBlockA = ['US', 'CA', 'MX', 'CU', 'GT', 'PA', 'JM', 'DO'];
+const _nordamBlockB = ['BZ', 'HN', 'SV', 'NI', 'CR', 'HT', 'TT', 'BB'];
+const _nordamBlockC = ['LC', 'VC', 'GD', 'AG', 'DM', 'KN', 'BS'];
+const _nordamAll = [..._nordamBlockA, ..._nordamBlockB, ..._nordamBlockC];
 
-const _afrikaA1  = ['NG', 'EG', 'ZA', 'KE', 'ET', 'GH', 'MA', 'TZ', 'DZ', 'TN'];
-const _afrikaA2  = [
-  'NG', 'EG', 'ZA', 'KE', 'ET', 'GH', 'MA', 'TZ', 'DZ', 'TN',
-  'CM', 'CI', 'AO', 'MZ', 'MG', 'SD', 'ML', 'NE', 'CD', 'SN',
-  'TD', 'SO', 'UG', 'BI', 'RW',
+const _afrikaBlockA = [
+  'NG', 'EG', 'ZA', 'MA', 'DZ', 'TN', 'LY', 'SD', 'ET', 'KE',
+  'TZ', 'GH', 'CD', 'AO', 'MG', 'ZW', 'UG', 'RW',
 ];
-const _afrikaAll = [
-  'NG', 'ET', 'EG', 'ZA', 'KE', 'GH', 'TZ', 'MA', 'DZ', 'TN',
-  'SN', 'CM', 'CI', 'MG', 'AO', 'BF', 'BI', 'BJ', 'BW', 'CD',
-  'CF', 'CG', 'CV', 'DJ', 'ER', 'GA', 'GM', 'GN', 'GQ', 'GW',
-  'KM', 'LR', 'LS', 'LY', 'ML', 'MR', 'MU', 'MW', 'MZ', 'NA',
-  'NE', 'RW', 'SC', 'SD', 'SL', 'SO', 'SS', 'ST', 'SZ', 'TD',
-  'TG', 'UG', 'ZM', 'ZW',
+const _afrikaBlockB = [
+  'SS', 'CG', 'MZ', 'CM', 'CI', 'NE', 'ML', 'BF', 'SN', 'ZM',
+  'BI', 'SO', 'ER', 'DJ', 'MW', 'BW', 'NA', 'LS',
 ];
+const _afrikaBlockC = [
+  'SZ', 'GA', 'GQ', 'CF', 'TD', 'MR', 'GM', 'GW', 'GN', 'SL',
+  'LR', 'TG', 'BJ', 'CV', 'ST', 'KM', 'SC', 'MU',
+];
+const _afrikaAll = [..._afrikaBlockA, ..._afrikaBlockB, ..._afrikaBlockC];
 
-const _asienA1  = ['CN', 'JP', 'IN', 'KR', 'TH', 'VN', 'ID', 'SA', 'AE', 'IR'];
-const _asienA2  = [
-  'CN', 'JP', 'IN', 'KR', 'TH', 'VN', 'ID', 'SA', 'AE', 'IR',
-  'PK', 'BD', 'PH', 'MY', 'SG', 'IQ', 'IL', 'JO', 'KW', 'QA',
-  'OM', 'YE', 'AF', 'UZ', 'KZ',
+const _asienBlockA = [
+  'CN', 'JP', 'IN', 'SA', 'TR', 'ID', 'KR', 'TH', 'VN', 'PK',
+  'BD', 'PH', 'MY', 'AE', 'IL', 'KZ',
 ];
-const _asienAll = [
-  'CN', 'JP', 'IN', 'KR', 'ID', 'TH', 'VN', 'PH', 'MY', 'SG',
-  'PK', 'BD', 'NP', 'MM', 'KZ', 'UZ', 'GE', 'AM', 'AZ', 'AF',
-  'KG', 'TJ', 'TM', 'MN', 'LA', 'KH', 'BT', 'LK', 'MV', 'TL',
-  'BN', 'SA', 'AE', 'IR', 'IQ', 'IL', 'JO', 'LB', 'QA', 'KW',
-  'OM', 'YE', 'BH', 'SY', 'PS',
+const _asienBlockB = [
+  'NP', 'IQ', 'IR', 'AF', 'MN', 'SG', 'MM', 'KH', 'LA', 'LK',
+  'SY', 'JO', 'LB', 'KW', 'QA', 'BH',
 ];
+const _asienBlockC = [
+  'OM', 'YE', 'UZ', 'TM', 'AZ', 'GE', 'AM', 'TJ', 'KG', 'KP',
+  'TW', 'BT', 'MV', 'BN', 'TL', 'PS',
+];
+const _asienAll = [..._asienBlockA, ..._asienBlockB, ..._asienBlockC];
 
-const _ozeanienA1  = ['AU', 'NZ', 'PG', 'FJ', 'SB', 'VU', 'WS', 'TO'];
-const _ozeanienAll = [
-  'AU', 'NZ', 'PG', 'FJ', 'SB', 'VU', 'WS', 'TO',
-  'FM', 'PW', 'MH', 'KI', 'TV', 'NR',
-];
+const _ozeanienBlockA = ['AU', 'NZ', 'FJ', 'PG', 'WS', 'VU', 'SB'];
+const _ozeanienBlockB = ['TO', 'KI', 'FM', 'PW', 'MH', 'NR', 'TV'];
+const _ozeanienAll = [..._ozeanienBlockA, ..._ozeanienBlockB];
 
 const _weltA1 = [
   'DE', 'FR', 'GB', 'IT', 'ES', 'US', 'CA', 'CN', 'JP', 'IN',
@@ -318,87 +368,116 @@ final _weltAlle = countries.map((c) => c.iso2).toList();
 // ── Station-Hilfsfunktionen ───────────────────────────────────────────────────
 
 LernStation _st(
-  String wid, int a, int i, LernModus m, List<String> l, {
+  String wid, int a, int i, LernModus m, List<String> l, int fragenProStation, {
   List<String> k = const [],
 }) {
   return LernStation(
     id: '${wid}_${a}_${i.toString().padLeft(2, '0')}',
     modus: m,
-    fragenAnzahl: m == LernModus.sortierSpiel ? 3 : 8,
+    fragenAnzahl: m == LernModus.sortierSpiel ? 3 : fragenProStation,
     laenderCodes: l,
     kategorien: k,
     schwierigkeitsgrad: a,
   );
 }
 
-/// Baut die Stationsliste eines Abschnitts: [anzahl] bleibt exakt wie
-/// vorgegeben, nur die Modus-Verteilung kommt aus [erzeugeModusSequenz].
+/// Baut die Stationsliste eines Abschnitts. [anzahl] wird bei Bedarf um 1-3
+/// echte, spielbare Stationen aufgestockt, damit der Zickzack-Pfad exakt
+/// mittig vor dem Checkpoint endet (siehe home_screen.dart _Pfad) — früher
+/// wurde das mit rein dekorativen, nicht spielbaren Füll-Punkten gelöst,
+/// jetzt bekommen auch diese Positionen einen vollen, funktionierenden
+/// Modus aus derselben Verteilungslogik wie jede andere Station.
+///
+/// [modusPoolLevel] überschreibt den für die Modus-Verteilung genutzten
+/// Level-Pool (unabhängig von [stufe], die weiterhin den
+/// Schwierigkeitsgrad/das Label der Station bestimmt) — genutzt für "Welt",
+/// wo von Anfang an der VOLLE Modus-Satz (inkl. aller Unterhaltungs-Modi)
+/// zur Verfügung stehen soll, weil Welt keine Block-Vollrotation pro
+/// Abschnitt braucht und dadurch mehr Raum für Abwechslung hat.
 List<LernStation> _baueAbschnitt(
   String wid, int stufe, List<String> laender, int anzahl, {
   bool istAllerErsterAbschnitt = false,
+  int fragenProStation = 8,
+  int? modusPoolLevel,
 }) {
-  final modi = erzeugeModusSequenz(anzahl, stufe, istAllerErsterAbschnitt);
+  final polster = anzahl == 0 ? 0 : ((1 - anzahl) % 4 + 4) % 4;
+  final gesamt = anzahl + polster;
+  final modi = erzeugeModusSequenz(
+      gesamt, modusPoolLevel ?? stufe, istAllerErsterAbschnitt);
   return [
-    for (int i = 0; i < anzahl; i++) _st(wid, stufe, i + 1, modi[i], laender),
+    for (int i = 0; i < gesamt; i++)
+      _st(wid, stufe, i + 1, modi[i], laender, fragenProStation),
   ];
 }
 
 // ── WELT 1 — EUROPA ───────────────────────────────────────────────────────────
 
-final _europaA1St = _baueAbschnitt('europa', 1, _europaA1, 17,
+final _europaA1St = _baueAbschnitt('europa', 1, _europaBlockA, 21,
     istAllerErsterAbschnitt: true);
-final _europaA2St = _baueAbschnitt('europa', 2, _europaA2, 18);
-final _europaA3St = _baueAbschnitt('europa', 3, _europaAll, 22);
+final _europaA2St = _baueAbschnitt('europa', 2, _europaBlockB, 22);
+final _europaA3St = _baueAbschnitt('europa', 3, _europaBlockC, 22);
 final _europaA4St = _baueAbschnitt('europa', 4, _europaAll, 25);
 
 // ── WELT 2 — SÜDAMERIKA ───────────────────────────────────────────────────────
 
-final _suedamA1St = _baueAbschnitt('suedamerika', 1, _suedamAll, 10);
-final _suedamA2St = _baueAbschnitt('suedamerika', 2, _suedamAll, 12);
-final _suedamA3St = _baueAbschnitt('suedamerika', 3, _suedamAll, 14);
-final _suedamA4St = _baueAbschnitt('suedamerika', 4, _suedamAll, 16);
+final _suedamA1St =
+    _baueAbschnitt('suedamerika', 1, _suedamBlockA, 10, fragenProStation: 6);
+final _suedamA2St =
+    _baueAbschnitt('suedamerika', 2, _suedamBlockB, 12, fragenProStation: 6);
+final _suedamA3St =
+    _baueAbschnitt('suedamerika', 3, _suedamAll, 14, fragenProStation: 6);
 
 // ── WELT 3 — NORDAMERIKA ──────────────────────────────────────────────────────
 
-final _nordamA1St = _baueAbschnitt('nordamerika', 1, _nordamA1, 12);
-final _nordamA2St = _baueAbschnitt('nordamerika', 2, _nordamAll, 14);
-final _nordamA3St = _baueAbschnitt('nordamerika', 3, _nordamAll, 18);
+final _nordamA1St = _baueAbschnitt('nordamerika', 1, _nordamBlockA, 12);
+final _nordamA2St = _baueAbschnitt('nordamerika', 2, _nordamBlockB, 14);
+final _nordamA3St = _baueAbschnitt('nordamerika', 3, _nordamBlockC, 18);
 final _nordamA4St = _baueAbschnitt('nordamerika', 4, _nordamAll, 20);
 
 // ── WELT 4 — AFRIKA ───────────────────────────────────────────────────────────
 
-final _afrikaA1St = _baueAbschnitt('afrika', 1, _afrikaA1, 18);
-final _afrikaA2St = _baueAbschnitt('afrika', 2, _afrikaA2, 22);
-final _afrikaA3St = _baueAbschnitt('afrika', 3, _afrikaAll, 26);
-final _afrikaA4St = _baueAbschnitt('afrika', 4, _afrikaAll, 30);
+final _afrikaA1St =
+    _baueAbschnitt('afrika', 1, _afrikaBlockA, 18, fragenProStation: 9);
+final _afrikaA2St =
+    _baueAbschnitt('afrika', 2, _afrikaBlockB, 22, fragenProStation: 9);
+final _afrikaA3St =
+    _baueAbschnitt('afrika', 3, _afrikaBlockC, 26, fragenProStation: 9);
+final _afrikaA4St =
+    _baueAbschnitt('afrika', 4, _afrikaAll, 30, fragenProStation: 9);
 
 // ── WELT 5 — ASIEN ────────────────────────────────────────────────────────────
 
-final _asienA1St = _baueAbschnitt('asien', 1, _asienA1, 16);
-final _asienA2St = _baueAbschnitt('asien', 2, _asienA2, 20);
-final _asienA3St = _baueAbschnitt('asien', 3, _asienAll, 24);
+final _asienA1St = _baueAbschnitt('asien', 1, _asienBlockA, 20);
+final _asienA2St = _baueAbschnitt('asien', 2, _asienBlockB, 20);
+final _asienA3St = _baueAbschnitt('asien', 3, _asienBlockC, 24);
 final _asienA4St = _baueAbschnitt('asien', 4, _asienAll, 28);
 
 // ── WELT 6 — OZEANIEN ─────────────────────────────────────────────────────────
 
-final _ozeanienA1St = _baueAbschnitt('ozeanien', 1, _ozeanienA1, 10);
-final _ozeanienA2St = _baueAbschnitt('ozeanien', 2, _ozeanienAll, 12);
-final _ozeanienA3St = _baueAbschnitt('ozeanien', 3, _ozeanienAll, 14);
-final _ozeanienA4St = _baueAbschnitt('ozeanien', 4, _ozeanienAll, 16);
+final _ozeanienA1St =
+    _baueAbschnitt('ozeanien', 1, _ozeanienBlockA, 10, fragenProStation: 7);
+final _ozeanienA2St =
+    _baueAbschnitt('ozeanien', 2, _ozeanienBlockB, 12, fragenProStation: 7);
+final _ozeanienA3St =
+    _baueAbschnitt('ozeanien', 3, _ozeanienAll, 14, fragenProStation: 7);
 
 // ── WELT 7 — DIE WELT ────────────────────────────────────────────────────────
 
-final _weltA1St = _baueAbschnitt('welt', 1, _weltA1, 25);
-final _weltA2St = _baueAbschnitt('welt', 2, _weltA2, 30);
-final _weltA3St = _baueAbschnitt('welt', 3, _weltAlle, 35);
-final _weltA4St = _baueAbschnitt('welt', 4, _weltAlle, 40);
+final _weltA1St = _baueAbschnitt('welt', 1, _weltA1, 25,
+    fragenProStation: 12, modusPoolLevel: 4);
+final _weltA2St = _baueAbschnitt('welt', 2, _weltA2, 30,
+    fragenProStation: 12, modusPoolLevel: 4);
+final _weltA3St = _baueAbschnitt('welt', 3, _weltAlle, 35,
+    fragenProStation: 12, modusPoolLevel: 4);
+final _weltA4St = _baueAbschnitt('welt', 4, _weltAlle, 40,
+    fragenProStation: 12, modusPoolLevel: 4);
 
 // ── Hauptliste ────────────────────────────────────────────────────────────────
 
 final List<LernWelt> lernwelten = [
   LernWelt(
     id: 'europa', name: 'Europa', emoji: '🇪🇺',
-    kontinent: 'Europa', totalLaender: 47, laenderCodes: _europaAll,
+    kontinent: 'Europa', totalLaender: 46, laenderCodes: _europaAll,
     reihenfolge: 1,
     abschnitte: [
       LernAbschnitt(id: 'europa_1', stufe: 1, titel: 'Einsteiger',
@@ -406,7 +485,7 @@ final List<LernWelt> lernwelten = [
       LernAbschnitt(id: 'europa_2', stufe: 2, titel: 'Fortgeschritten',
         untertitel: 'Nord- und Osteuropa', stationen: _europaA2St),
       LernAbschnitt(id: 'europa_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Ganz Europa meistern', stationen: _europaA3St),
+        untertitel: 'Kleinstaaten & der Balkan', stationen: _europaA3St),
       LernAbschnitt(id: 'europa_4', stufe: 4, titel: 'Meister',
         untertitel: 'Europa-Experte werden', stationen: _europaA4St,
         hatTimer: true),
@@ -422,9 +501,7 @@ final List<LernWelt> lernwelten = [
       LernAbschnitt(id: 'suedamerika_2', stufe: 2, titel: 'Fortgeschritten',
         untertitel: 'Wirtschaft und Währungen', stationen: _suedamA2St),
       LernAbschnitt(id: 'suedamerika_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Alle 12 Länder beherrschen', stationen: _suedamA3St),
-      LernAbschnitt(id: 'suedamerika_4', stufe: 4, titel: 'Meister',
-        untertitel: 'Südamerika-Experte', stationen: _suedamA4St,
+        untertitel: 'Südamerika-Experte', stationen: _suedamA3St,
         hatTimer: true),
     ],
   ),
@@ -438,7 +515,7 @@ final List<LernWelt> lernwelten = [
       LernAbschnitt(id: 'nordamerika_2', stufe: 2, titel: 'Fortgeschritten',
         untertitel: 'Karibik & ganz Mittelamerika', stationen: _nordamA2St),
       LernAbschnitt(id: 'nordamerika_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Alle 23 Länder meistern', stationen: _nordamA3St),
+        untertitel: 'Die kleinen Karibikstaaten', stationen: _nordamA3St),
       LernAbschnitt(id: 'nordamerika_4', stufe: 4, titel: 'Meister',
         untertitel: 'Nordamerika-Experte', stationen: _nordamA4St,
         hatTimer: true),
@@ -454,7 +531,7 @@ final List<LernWelt> lernwelten = [
       LernAbschnitt(id: 'afrika_2', stufe: 2, titel: 'Fortgeschritten',
         untertitel: 'Zentral- und Ostafrika', stationen: _afrikaA2St),
       LernAbschnitt(id: 'afrika_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Ganz Afrika kennen', stationen: _afrikaA3St),
+        untertitel: 'Westafrika & Inselstaaten', stationen: _afrikaA3St),
       LernAbschnitt(id: 'afrika_4', stufe: 4, titel: 'Meister',
         untertitel: 'Afrika-Experte werden', stationen: _afrikaA4St,
         hatTimer: true),
@@ -462,7 +539,7 @@ final List<LernWelt> lernwelten = [
   ),
   LernWelt(
     id: 'asien', name: 'Asien', emoji: '🌏',
-    kontinent: 'Asien', totalLaender: 45, laenderCodes: _asienAll,
+    kontinent: 'Asien', totalLaender: 48, laenderCodes: _asienAll,
     reihenfolge: 5,
     abschnitte: [
       LernAbschnitt(id: 'asien_1', stufe: 1, titel: 'Einsteiger',
@@ -470,7 +547,7 @@ final List<LernWelt> lernwelten = [
       LernAbschnitt(id: 'asien_2', stufe: 2, titel: 'Fortgeschritten',
         untertitel: 'Naher Osten & Südostasien', stationen: _asienA2St),
       LernAbschnitt(id: 'asien_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Ganz Asien meistern', stationen: _asienA3St),
+        untertitel: 'Zentralasien & der Kaukasus', stationen: _asienA3St),
       LernAbschnitt(id: 'asien_4', stufe: 4, titel: 'Meister',
         untertitel: 'Asien-Experte werden', stationen: _asienA4St,
         hatTimer: true),
@@ -484,17 +561,15 @@ final List<LernWelt> lernwelten = [
       LernAbschnitt(id: 'ozeanien_1', stufe: 1, titel: 'Einsteiger',
         untertitel: 'Australien & die Pazifikinseln', stationen: _ozeanienA1St),
       LernAbschnitt(id: 'ozeanien_2', stufe: 2, titel: 'Fortgeschritten',
-        untertitel: 'Alle 14 Inselstaaten', stationen: _ozeanienA2St),
+        untertitel: 'Die entlegenen Inselstaaten', stationen: _ozeanienA2St),
       LernAbschnitt(id: 'ozeanien_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Ozeanien-Profi werden', stationen: _ozeanienA3St),
-      LernAbschnitt(id: 'ozeanien_4', stufe: 4, titel: 'Meister',
-        untertitel: 'Ozeanien-Experte', stationen: _ozeanienA4St,
+        untertitel: 'Ozeanien-Experte', stationen: _ozeanienA3St,
         hatTimer: true),
     ],
   ),
   LernWelt(
     id: 'welt', name: 'Die Welt', emoji: '🌐',
-    kontinent: 'Welt', totalLaender: 195, laenderCodes: const ['*'],
+    kontinent: 'Welt', totalLaender: 197, laenderCodes: const ['*'],
     reihenfolge: 7,
     abschnitte: [
       LernAbschnitt(id: 'welt_1', stufe: 1, titel: 'Einsteiger',
@@ -519,6 +594,8 @@ String lernModusLabel(LernModus m) => switch (m) {
   LernModus.hauptstaedteEingabe  => 'Hauptstädte (Eingabe)',
   LernModus.umrissBild           => 'Umriss-Quiz (Bild)',
   LernModus.umrissMultiple       => 'Umriss-Quiz (Multiple)',
+  LernModus.flaggenQuizEingabe   => 'Flaggen-Quiz (Eingabe)',
+  LernModus.umrissEingabe        => 'Umriss-Quiz (Eingabe)',
   LernModus.waehrungsQuiz        => 'Währungs-Quiz',
   LernModus.sortierSpiel         => 'Sortier-Spiel',
   LernModus.preisSchaetzen       => 'Das große Schätzen',
@@ -528,12 +605,10 @@ String lernModusLabel(LernModus m) => switch (m) {
   LernModus.flaeche              => 'Flächen-Quiz (Größe)',
   LernModus.extremFrage          => 'Superlativ-Quiz (Extrem)',
   LernModus.waehrungZuLand       => 'Währungs-Quiz (Land)',
-  LernModus.hauptstadtZuLand     => 'Hauptstädte-Quiz (Land)',
-  LernModus.groessteStadt        => 'Städte-Quiz (Größte)',
-  LernModus.flaggenFarbe         => 'Flaggen-Quiz (Farben)',
   LernModus.extremFrageLeicht    => 'Superlativ-Quiz (Leicht)',
   LernModus.zufallsFakt          => 'Wissens-Quiz (Fun-Fact)',
   LernModus.bekanntesGebaeude    => 'Wahrzeichen-Quiz',
+  LernModus.grenzkettenRaetsel   => 'Grenzketten-Rätsel',
 };
 
 String lernModusFragenLabel(LernStation s) =>

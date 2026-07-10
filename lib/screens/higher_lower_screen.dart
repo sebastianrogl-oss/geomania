@@ -1,12 +1,70 @@
 import 'dart:math';
+import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
+import '../data/abzeichen_data.dart';
 import '../data/country_rankings.dart';
+import '../services/abzeichen_service.dart';
+import '../services/challenge_ergebnis_service.dart';
+import '../services/challenge_panel_signal.dart';
 import '../services/challenge_rekord_service.dart';
+import '../services/daily_challenge.dart';
+import '../services/daily_resume_service.dart';
 import '../services/tages_seed_service.dart';
 import '../services/rangliste_service.dart';
+import '../widgets/abzeichen_popup.dart';
+import '../widgets/rangliste_ergebnis_karte.dart';
+
+// ── Runden-Historie (für die Game-Over-Liste) ──────────────────────────────
+
+class _HigherLowerRunde {
+  final String land1Iso;
+  final String land1Name;
+  final String land2Iso;
+  final String land2Name;
+  final double wert1;
+  final double wert2;
+  final bool wahlHoeher;
+  final bool warRichtig;
+
+  const _HigherLowerRunde({
+    required this.land1Iso,
+    required this.land1Name,
+    required this.land2Iso,
+    required this.land2Name,
+    required this.wert1,
+    required this.wert2,
+    required this.wahlHoeher,
+    required this.warRichtig,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'land1Iso': land1Iso,
+        'land1Name': land1Name,
+        'land2Iso': land2Iso,
+        'land2Name': land2Name,
+        'wert1': wert1,
+        'wert2': wert2,
+        'wahlHoeher': wahlHoeher,
+        'warRichtig': warRichtig,
+      };
+
+  static _HigherLowerRunde fromJson(Map<String, dynamic> j) => _HigherLowerRunde(
+        land1Iso: j['land1Iso'] as String,
+        land1Name: j['land1Name'] as String,
+        land2Iso: j['land2Iso'] as String,
+        land2Name: j['land2Name'] as String,
+        wert1: (j['wert1'] as num).toDouble(),
+        wert2: (j['wert2'] as num).toDouble(),
+        wahlHoeher: j['wahlHoeher'] as bool,
+        warRichtig: j['warRichtig'] as bool,
+      );
+}
 
 class HigherLowerScreen extends StatefulWidget {
-  const HigherLowerScreen({super.key});
+  /// Wenn true: zeigt nur das heute bereits erzielte Ergebnis erneut an,
+  /// startet KEINE neue Runde (für "Ergebnisse" im Start-Screen).
+  final bool nurAnsicht;
+  const HigherLowerScreen({super.key, this.nurAnsicht = false});
 
   @override
   State<HigherLowerScreen> createState() => _HigherLowerScreenState();
@@ -25,17 +83,60 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
   int _naechsterSeedIdx = 0;
 
   int _score = 0;
-  int _totalPunkte = 0;
   bool _answered = false;
   bool? _lastCorrect;
   bool _gameOver = false;
 
   int? _rekord;
 
+  final List<_HigherLowerRunde> _historie = [];
+
+  // _category/_leftCountry/_rightCountry werden nur innerhalb der
+  // (nicht awaiteten) async Lade-Methoden gesetzt, die build() aber sofort
+  // nach initState() bereits ohne diese Daten aufruft — ohne dieses Flag
+  // greift der allererste Frame auf die noch uninitialisierten late-Felder
+  // zu (LateInitializationError).
+  bool _bereit = false;
+
   @override
   void initState() {
     super.initState();
-    _ladeUndStarte();
+    if (widget.nurAnsicht) {
+      _ladeHeutigesErgebnis();
+    } else {
+      _ladeUndStarte();
+    }
+  }
+
+  /// Zeigt das heute bereits erzielte Ergebnis erneut an, ohne eine neue
+  /// Runde zu starten (siehe HigherLowerScreen.nurAnsicht).
+  Future<void> _ladeHeutigesErgebnis() async {
+    _rekord = await ChallengeRekordService.getRekord(_kId);
+    final heute = await ChallengeRekordService.getHeutigePunkte(_kId) ?? 0;
+    final detail = await ChallengeErgebnisService.laden(_kId);
+    final katId = detail?['categoryId'] as String?;
+    final wrongIso2 = detail?['wrongIso2'] as String?;
+    final historieRoh = (detail?['historie'] as List<dynamic>?) ?? [];
+    final historie = historieRoh
+        .map((e) => _HigherLowerRunde.fromJson(e as Map<String, dynamic>))
+        .toList();
+    setState(() {
+      _score = heute;
+      _category = rankingCategories.firstWhere(
+        (k) => k.id == katId,
+        orElse: () => rankingCategories.first,
+      );
+      _rightCountry = countryRankings.firstWhere(
+        (c) => c.iso2 == wrongIso2,
+        orElse: () => countryRankings.first,
+      );
+      _leftCountry = _rightCountry;
+      _historie
+        ..clear()
+        ..addAll(historie);
+      _gameOver = true;
+      _bereit = true;
+    });
   }
 
   Future<void> _ladeUndStarte() async {
@@ -44,7 +145,48 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
     final katRng = Random(TagesSeedService.seedFuer(_kId) + 555);
     _category = rankingCategories[katRng.nextInt(rankingCategories.length)];
     _generiereSeedLaender();
+
+    final zwischenstand = await DailyResumeService.laden(_kId);
+    if (zwischenstand != null) {
+      final links = countryRankings
+          .cast<CountryRanking?>()
+          .firstWhere((c) => c?.iso2 == zwischenstand['leftIso2'], orElse: () => null);
+      final rechts = countryRankings
+          .cast<CountryRanking?>()
+          .firstWhere((c) => c?.iso2 == zwischenstand['rightIso2'], orElse: () => null);
+      if (links != null && rechts != null) {
+        final historieRoh =
+            (zwischenstand['historie'] as List<dynamic>?) ?? [];
+        final historie = historieRoh
+            .map((e) => _HigherLowerRunde.fromJson(e as Map<String, dynamic>))
+            .toList();
+        setState(() {
+          _score = zwischenstand['score'] as int? ?? 0;
+          _naechsterSeedIdx = zwischenstand['seedIdx'] as int? ?? 2;
+          _leftCountry = links;
+          _rightCountry = rechts;
+          _answered = false;
+          _lastCorrect = null;
+          _gameOver = false;
+          _historie
+            ..clear()
+            ..addAll(historie);
+          _bereit = true;
+        });
+        return;
+      }
+    }
     _startGame();
+  }
+
+  Future<void> _zwischenstandSpeichern() async {
+    await DailyResumeService.speichern(_kId, {
+      'score': _score,
+      'seedIdx': _naechsterSeedIdx,
+      'leftIso2': _leftCountry.iso2,
+      'rightIso2': _rightCountry.iso2,
+      'historie': _historie.map((e) => e.toJson()).toList(),
+    });
   }
 
   void _generiereSeedLaender() {
@@ -59,12 +201,13 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
     _naechsterSeedIdx = 2;
     setState(() {
       _score = 0;
-      _totalPunkte = 0;
       _answered = false;
       _lastCorrect = null;
       _gameOver = false;
       _leftCountry = _seedLaender[0];
       _rightCountry = _seedLaender[1];
+      _historie.clear();
+      _bereit = true;
     });
   }
 
@@ -83,21 +226,6 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
     return pool.first;
   }
 
-  double get _multiplikator {
-    if (_score >= 20) return 3.0;
-    if (_score >= 10) return 2.0;
-    if (_score >= 5) return 1.5;
-    return 1.0;
-  }
-
-  int get _punkteProRichtig => (100 * _multiplikator).round();
-
-  String get _multiplikatorLabel {
-    final m = _multiplikator;
-    if (m > 1) return '×${m.toStringAsFixed(1).replaceAll('.', ',')} Bonus!';
-    return '';
-  }
-
   void _advanceRound() {
     final neuesLand = _naechstesLand();
     setState(() {
@@ -114,34 +242,62 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
     final bool correct = leftVal == rightVal ||
         (guessHigher ? rightVal > leftVal : rightVal < leftVal);
 
+    _historie.add(_HigherLowerRunde(
+      land1Iso: _leftCountry.iso2,
+      land1Name: _leftCountry.name,
+      land2Iso: _rightCountry.iso2,
+      land2Name: _rightCountry.name,
+      wert1: leftVal,
+      wert2: rightVal,
+      wahlHoeher: guessHigher,
+      warRichtig: correct,
+    ));
+
     setState(() {
       _answered = true;
       _lastCorrect = correct;
     });
 
-    Future.delayed(const Duration(milliseconds: 1100), () {
+    Future.delayed(const Duration(milliseconds: 1100), () async {
       if (!mounted) return;
       if (correct) {
         _advanceRound();
         setState(() {
           _score++;
-          _totalPunkte += _punkteProRichtig;
           _answered = false;
           _lastCorrect = null;
         });
+        _zwischenstandSpeichern();
       } else {
-        _speichereErgebnis();
+        final neueAbzeichen = await _speichereErgebnis();
+        if (mounted && neueAbzeichen.isNotEmpty) {
+          await AbzeichenPopup.zeigen(context, neueAbzeichen);
+        }
+        if (!mounted) return;
         setState(() => _gameOver = true);
       }
     });
   }
 
-  Future<void> _speichereErgebnis() async {
-    await ChallengeRekordService.setzeFallsBesser(_kId, _totalPunkte);
-    await ChallengeRekordService.speichereHeutigePunkte(_kId, _totalPunkte);
+  Future<List<Abzeichen>> _speichereErgebnis() async {
+    final neuerRekord = await ChallengeRekordService.setzeFallsBesser(_kId, _score);
+    await ChallengeRekordService.speichereHeutigePunkte(_kId, _score);
+    await ChallengeRekordService.summeErhoehen(_kId, _score.toDouble());
+    await ChallengeErgebnisService.speichern(_kId, {
+      'categoryId': _category.id,
+      'wrongIso2': _rightCountry.iso2,
+      'historie': _historie.map((e) => e.toJson()).toList(),
+    });
     _rekord = await ChallengeRekordService.getRekord(_kId);
     await RanglisteService.ergebnisSpeichern(
-        challengeId: 'higherlower', wert: _totalPunkte);
+        challengeId: 'higherlower', wert: _score);
+    await DailyChallenge.markDone(_kId);
+    await DailyResumeService.loeschen(_kId);
+    // "Perfekt" hat für Higher-or-Lower kein natürliches Maximum (Serie ohne
+    // Deckel) -> hier bewusst nie ausgelöst, nur über Preis/Ranking möglich.
+    return AbzeichenService.pruefeNachChallengeAbschluss(
+      neuerRekordHeute: neuerRekord,
+    );
   }
 
   String _fmt(double v) {
@@ -193,7 +349,9 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F0),
       body: SafeArea(
-        child: _gameOver ? _buildGameOver() : _buildGame(),
+        child: !_bereit
+            ? const Center(child: CircularProgressIndicator())
+            : (_gameOver ? _buildGameOver() : _buildGame()),
       ),
     );
   }
@@ -217,7 +375,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -237,33 +395,13 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                             color: Color(0xFF1A1A1A),
                             fontSize: 16,
                             fontWeight: FontWeight.w800)),
-                    Row(
-                      children: [
-                        Text(_category.label,
-                            style: const TextStyle(
-                                color: Color(0xFF888888),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500)),
-                        if (_multiplikatorLabel.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE53935).withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(_multiplikatorLabel,
-                                style: const TextStyle(
-                                    color: Color(0xFFE53935),
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800)),
-                          ),
-                        ],
-                      ],
-                    ),
+                    Text(_category.label,
+                        style: const TextStyle(
+                            color: Color(0xFF888888),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500)),
                     if (_rekord != null)
-                      Text('Rekord: $_rekord Pkt.',
+                      Text('Rekord: $_rekord',
                           style: const TextStyle(
                               color: Color(0xFFF9A825),
                               fontSize: 9,
@@ -271,7 +409,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                   ],
                 ),
               ),
-              // Score + current points
+              // Score (aktuelle Serie)
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -279,24 +417,15 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                     color:
                         const Color(0xFFF9A825).withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(12)),
-                child: Column(
-                  children: [
-                    Row(children: [
-                      const Text('🏆', style: TextStyle(fontSize: 13)),
-                      const SizedBox(width: 4),
-                      Text('$_score',
-                          style: const TextStyle(
-                              color: Color(0xFFF9A825),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800)),
-                    ]),
-                    Text('$_totalPunkte Pkt.',
-                        style: const TextStyle(
-                            color: Color(0xFFF9A825),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700)),
-                  ],
-                ),
+                child: Row(children: [
+                  const Text('🏆', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 4),
+                  Text('$_score',
+                      style: const TextStyle(
+                          color: Color(0xFFF9A825),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800)),
+                ]),
               ),
             ],
           ),
@@ -317,7 +446,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                       country: _leftCountry,
                       value: leftVal,
                       label: _category.label,
-                      bgColor: const Color(0xFFEAEAE5),
+                      bgColor: const Color(0xFFF5F5F0),
                     ),
                   ),
                 ),
@@ -373,9 +502,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
 
   Widget _buildGameOver() {
     final emoji = _score >= 15 ? '🏆' : _score >= 8 ? '👍' : '📚';
-    final neuerRekord = _totalPunkte > 0 &&
-        _totalPunkte >= (_rekord ?? 0) &&
-        _totalPunkte > 0;
+    final neuerRekord = _score > 0 && _score >= (_rekord ?? 0);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 40, 28, 28),
@@ -412,7 +539,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                           fontSize: 11,
                           fontWeight: FontWeight.w600)),
                   const SizedBox(width: 6),
-                  Text('$_rekord Punkte',
+                  Text('$_rekord Richtige in Folge',
                       style: const TextStyle(
                           color: Color(0xFFF9A825),
                           fontSize: 11,
@@ -424,34 +551,16 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
 
           const SizedBox(height: 20),
 
-          // Score bubble
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-            decoration: BoxDecoration(
-                color: const Color(0xFFF9A825).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                    color: const Color(0xFFF9A825).withValues(alpha: 0.3),
-                    width: 1.5)),
-            child: Column(children: [
-              const Text('Richtige Antworten',
-                  style: TextStyle(
-                      color: Color(0xFF888888),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
-              Text('$_score',
-                  style: const TextStyle(
-                      color: Color(0xFFF9A825),
-                      fontSize: 68,
-                      fontWeight: FontWeight.w900,
-                      height: 1.0)),
-              Text('$_totalPunkte Punkte total',
-                  style: const TextStyle(
-                      color: Color(0xFFF9A825),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800)),
-            ]),
+          RanglisteErgebnisKarte(
+            challengeId: 'higherlower',
+            eigenerWert: _score,
+            punkteLabel: 'Richtige Antworten',
+            farbe: const Color(0xFF4A9E4A),
+            punkteAnzeige: Text('$_score',
+                style: const TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1A1A1A))),
           ),
 
           if (neuerRekord) ...[
@@ -470,59 +579,33 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
             ),
           ],
 
-          const SizedBox(height: 16),
-          // Wrong answer card
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-                color: const Color(0xFFFFEBEE),
-                borderRadius: BorderRadius.circular(16)),
-            child: Row(children: [
-              const Icon(Icons.cancel_rounded,
-                  color: Color(0xFFE57373), size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '${_rightCountry.flagEmoji} ${_rightCountry.name}:  '
-                  '${_fmt(_category.getValue(_rightCountry)!)}',
+          if (_historie.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Verlauf',
                   style: const TextStyle(
-                      color: Color(0xFFC62828),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600),
-                ),
-              ),
-            ]),
-          ),
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800)),
+            ),
+            const SizedBox(height: 8),
+            for (final r in _historie)
+              _HigherLowerRundenKarte(runde: r, format: _fmt),
+          ],
           const SizedBox(height: 28),
           GestureDetector(
-            onTap: _startGame,
+            onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
             child: Container(
               width: double.infinity,
               decoration: BoxDecoration(
                   color: const Color(0xFF4A9E4A),
                   borderRadius: BorderRadius.circular(16)),
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: const Text('Nochmal spielen',
+              child: const Text('Weiter',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700)),
-            ),
-          ),
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                  color: const Color(0xFFEAEAE5),
-                  borderRadius: BorderRadius.circular(16)),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: const Text('Zurück',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: Color(0xFF888888),
                       fontSize: 16,
                       fontWeight: FontWeight.w700)),
             ),
@@ -560,7 +643,11 @@ class _RevealedPanel extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(country.flagEmoji, style: const TextStyle(fontSize: 52)),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: CountryFlag.fromCountryCode(country.iso2,
+                width: 72, height: 48),
+          ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -606,6 +693,148 @@ class _RevealedPanel extends StatelessWidget {
   }
 }
 
+// ── Runden-Karte (Game-Over-Verlauf) ────────────────────────────────────────
+
+class _HigherLowerRundenKarte extends StatelessWidget {
+  final _HigherLowerRunde runde;
+  final String Function(double) format;
+
+  const _HigherLowerRundenKarte({required this.runde, required this.format});
+
+  @override
+  Widget build(BuildContext context) {
+    if (runde.warRichtig) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F8F0),
+          border: Border.all(color: const Color(0xFF4A9E4A), width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle,
+                color: Color(0xFF4A9E4A), size: 18),
+            const SizedBox(width: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: CountryFlag.fromCountryCode(runde.land1Iso,
+                  width: 22, height: 15),
+            ),
+            const SizedBox(width: 4),
+            const Text('vs',
+                style: TextStyle(
+                    color: Color(0xFF888888),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(width: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: CountryFlag.fromCountryCode(runde.land2Iso,
+                  width: 22, height: 15),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('${runde.land1Name} vs ${runde.land2Name}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Der Fehler, der das Spiel beendet hat — deutlich hervorgehoben statt
+    // gleich wie die richtigen Runden dargestellt, damit auf einen Blick
+    // erkennbar ist, WO die Serie endete und WARUM.
+    final deineWahl = runde.wahlHoeher ? 'höher' : 'niedriger';
+    final tatsaechlich = runde.wahlHoeher ? 'niedriger' : 'höher';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 4),
+          child: Text('Hier war der Fehler',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFFE53935),
+                  letterSpacing: 0.5)),
+        ),
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFEBEE),
+            border: Border.all(color: const Color(0xFFE53935), width: 2.5),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                  color: const Color(0xFFE53935).withValues(alpha: 0.2),
+                  blurRadius: 8),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.cancel, color: Color(0xFFE53935), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: CountryFlag.fromCountryCode(runde.land1Iso,
+                              width: 28, height: 19),
+                        ),
+                        const SizedBox(width: 6),
+                        const Text('vs',
+                            style: TextStyle(
+                                color: Color(0xFF888888),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(width: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: CountryFlag.fromCountryCode(runde.land2Iso,
+                              width: 28, height: 19),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                        'Deine Wahl: $deineWahl — Richtig wäre: $tatsaechlich',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFE53935))),
+                    const SizedBox(height: 2),
+                    Text(
+                        '${runde.land1Name}: ${format(runde.wert1)} · '
+                        '${runde.land2Name}: ${format(runde.wert2)}',
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xFF888888))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Hidden panel ──────────────────────────────────────────────────────────────
 
 class _HiddenPanel extends StatelessWidget {
@@ -630,7 +859,11 @@ class _HiddenPanel extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(country.flagEmoji, style: const TextStyle(fontSize: 52)),
+            ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: CountryFlag.fromCountryCode(country.iso2,
+                width: 72, height: 48),
+          ),
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),

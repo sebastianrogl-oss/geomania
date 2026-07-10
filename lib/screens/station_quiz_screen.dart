@@ -4,11 +4,14 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../data/countries.dart';
+import '../data/laender_aliase.dart';
 import '../data/lernpfad_data.dart';
 import '../data/wirtschaftssektoren.dart';
+import '../services/abzeichen_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/skala_service.dart';
 import '../services/station_session_service.dart';
+import '../widgets/abzeichen_popup.dart';
 import '../widgets/flaggen_widget.dart';
 
 // ── Geo-Cache (einmal laden, überall nutzen) ──────────────────────────────────
@@ -40,10 +43,24 @@ Future<Map<String, List<List<Offset>>>> _ladeGeoRings() async {
         rs.add(_ring((poly as List)[0] as List));
       }
     }
-    if (rs.isNotEmpty) rings[iso2] = _filterRings(rs);
+    if (rs.isNotEmpty) rings[iso2] = _nachbearbeiteRinge(iso2, rs);
   }
   _geoCache = rings;
   return rings;
+}
+
+/// Länderspezifische Nachbearbeitung nach dem allgemeinen Flächen-Filter.
+/// Norwegen: Svalbard liegt als eigener Ring weit nördlich vom Festland
+/// getrennt (ca. 74-81°N, Festland bis Nordkapp nur ~71°N) und wird im
+/// Umriss-Quiz bewusst weggelassen — sonst wirkt die Silhouette wie zwei
+/// unzusammenhängende Flecken statt einem erkennbaren Festlands-Umriss.
+List<List<Offset>> _nachbearbeiteRinge(String iso2, List<List<Offset>> rs) {
+  final gefiltert = _filterRings(rs);
+  if (iso2 != 'NO' || gefiltert.length <= 1) return gefiltert;
+  double avgLat(List<Offset> r) =>
+      r.map((p) => p.dy).reduce((a, b) => a + b) / r.length;
+  final ohneSvalbard = gefiltert.where((r) => avgLat(r) < 73.0).toList();
+  return ohneSvalbard.isEmpty ? gefiltert : ohneSvalbard;
 }
 
 /// Schritt 2: Einzeldateien für konkrete Quiz-Länder nachladen (höhere Qualität)
@@ -67,7 +84,7 @@ Future<void> _upgradeRingsMitEinzelDateien(
           rs.add(_ring((poly as List)[0] as List));
         }
       }
-      if (rs.isNotEmpty) rings[iso2] = _filterRings(rs);
+      if (rs.isNotEmpty) rings[iso2] = _nachbearbeiteRinge(iso2, rs);
     } catch (_) {
       // Kein Einzelfile für $iso2 → ne_50m-Fallback bleibt
     }
@@ -187,14 +204,17 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     }
 
     // GeoJSON laden falls Umriss-Modi vorhanden
-    final brauchtGeo = session.aktiveFragen.any((f) =>
-        f.modus == LernModus.umrissBild || f.modus == LernModus.umrissMultiple);
+    bool istUmrissModus(LernModus m) =>
+        m == LernModus.umrissBild ||
+        m == LernModus.umrissMultiple ||
+        m == LernModus.umrissEingabe;
+    final brauchtGeo = session.aktiveFragen.any((f) => istUmrissModus(f.modus));
     if (brauchtGeo) {
       try {
         final rings = await _ladeGeoRings();
         // Hochauflösende Einzeldateien für Quiz-Länder nachladen
         final quizIsos = session.aktiveFragen
-            .where((f) => f.modus == LernModus.umrissBild || f.modus == LernModus.umrissMultiple)
+            .where((f) => istUmrissModus(f.modus))
             .expand((f) => [f.laenderCode, ...f.antwortOptionen])
             .where((s) => s.isNotEmpty && s.length == 2)
             .toSet();
@@ -232,7 +252,9 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         _sliderWert = start.clamp(mn, mx);
         _preisBestaetigt = false;
       });
-    } else if (frage.modus == LernModus.hauptstaedteEingabe) {
+    } else if (frage.modus == LernModus.hauptstaedteEingabe ||
+        frage.modus == LernModus.flaggenQuizEingabe ||
+        frage.modus == LernModus.umrissEingabe) {
       _textCtrl.clear();
       setState(() => _eingabeBestaetigt = false);
     }
@@ -285,7 +307,12 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       _showFeedback = true;
       _feedbackRichtig = richtig;
     });
-    _feedbackTimer = Timer(const Duration(milliseconds: 1200), () {
+    // Grenzketten-Rätsel zeigt zusätzlich die Route + Erklärung an -> mehr
+    // Lesezeit als die kurze Standard-Rückmeldung der übrigen MC-Modi.
+    final dauer = frage.modus == LernModus.grenzkettenRaetsel
+        ? const Duration(milliseconds: 2600)
+        : const Duration(milliseconds: 1200);
+    _feedbackTimer = Timer(dauer, () {
       if (!mounted) return;
       if (richtig) {
         _session!.richtigeAntwortVerarbeiten();
@@ -296,6 +323,13 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     });
   }
 
+  bool _eingabeIstRichtig(String eingabe, String richtigeAntwort, String iso2) {
+    final norm = normalisiereEingabe(eingabe);
+    if (norm == normalisiereEingabe(richtigeAntwort)) return true;
+    final aliase = laenderAliase[iso2] ?? const [];
+    return aliase.any((a) => normalisiereEingabe(a) == norm);
+  }
+
   void _eingabeBestaetigen() {
     if (_eingabeBestaetigt || _session == null) return;
     final frage = _session!.aktuelleFrage;
@@ -303,8 +337,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     final text = _textCtrl.text.trim();
     if (text.isEmpty) return;
     _stopCountdown();
-    final richtig =
-        text.toLowerCase() == frage.richtigeAntwort.toLowerCase();
+    final richtig = _eingabeIstRichtig(text, frage.richtigeAntwort, frage.laenderCode);
     setState(() {
       _eingabeBestaetigt = true;
       _showFeedback = true;
@@ -400,6 +433,12 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     _stopCountdown();
     setState(() => _showFeedback = false);
 
+    // MUSS vor stationAbschliessen() laufen: das schreibt unconditionally
+    // den "letzte Aktivität"-Zeitstempel, den streakAktualisieren() für die
+    // Tagesdifferenz-Berechnung braucht — danach aufgerufen würde die
+    // Streak nie erhöht werden (Differenz wäre immer 0).
+    await FortschrittService.streakAktualisieren();
+
     if (widget.istWiederholungsrunde) {
       await FortschrittService.wiederholungAbschliessen(
           widget.wiederholungsAbschnittId!);
@@ -419,6 +458,15 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       _session!.falscheAntworten,
       falscheFragenJson: _session!.falscheFragenAlsJson(),
     );
+
+    // Kontinent-/Meilenstein-Abzeichen hängen am Lernpfad-Fortschritt, nicht
+    // an Tages-Challenges -> hier prüfen, statt erst beim nächsten Challenge-
+    // Abschluss (sonst würde ein neues Abzeichen erst viel später auffallen).
+    final neueAbzeichen = await AbzeichenService.pruefeNachLernpfadFortschritt();
+    if (mounted && neueAbzeichen.isNotEmpty) {
+      await AbzeichenPopup.zeigen(context, neueAbzeichen);
+    }
+    if (!mounted) return;
 
     if (!FortschrittService.istLetzteStationImAbschnitt(widget.station!.id)) {
       if (mounted) Navigator.pop(context);
@@ -557,13 +605,17 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
           onBestaetigen: _preisBestaetigen,
           onWeiter: _preisWeiter,
         ),
-      LernModus.hauptstaedteEingabe => _EingabeUI(
+      LernModus.hauptstaedteEingabe ||
+      LernModus.flaggenQuizEingabe ||
+      LernModus.umrissEingabe =>
+        _EingabeUI(
           frage: f,
           controller: _textCtrl,
           bestaetigt: _eingabeBestaetigt,
           showFeedback: _showFeedback,
           feedbackRichtig: _feedbackRichtig,
           onBestaetigen: _eingabeBestaetigen,
+          geoRings: _geoRings,
         ),
       LernModus.umrissBild => _UmrissBildUI(
           frage: f,
@@ -576,6 +628,13 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       LernModus.umrissMultiple => _UmrissMultipleUI(
           frage: f,
           geoRings: _geoRings,
+          gewaehlt: _gewahlteAntwort,
+          showFeedback: _showFeedback,
+          feedbackRichtig: _feedbackRichtig,
+          onAntwort: _antwortGewaehlt,
+        ),
+      LernModus.grenzkettenRaetsel => _GrenzkettenUI(
+          frage: f,
           gewaehlt: _gewahlteAntwort,
           showFeedback: _showFeedback,
           feedbackRichtig: _feedbackRichtig,
@@ -629,6 +688,28 @@ class _TimerBar extends StatelessWidget {
 }
 
 // ── Hilfsfunktionen ────────────────────────────────────────────────────────────
+
+const _diakritikaErsatz = {
+  'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss',
+  'á': 'a', 'à': 'a', 'â': 'a', 'ã': 'a',
+  'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+  'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+  'ó': 'o', 'ò': 'o', 'ô': 'o', 'õ': 'o',
+  'ú': 'u', 'ù': 'u', 'û': 'u',
+  'ñ': 'n', 'ç': 'c',
+};
+
+/// Normalisiert Nutzer-Eingaben für die Eingabe-Modi: klein geschrieben,
+/// Umlaute/Akzente auf ASCII abgebildet, Bindestriche/Apostrophe und
+/// Mehrfach-Leerzeichen vereinheitlicht — toleriert also z.B. "Suedafrika"
+/// für "Südafrika" oder "Cote d Ivoire" für "Côte d'Ivoire".
+String normalisiereEingabe(String s) {
+  var t = s.trim().toLowerCase();
+  _diakritikaErsatz.forEach((von, nach) => t = t.replaceAll(von, nach));
+  t = t.replaceAll(RegExp(r"[-'’]"), ' ');
+  t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return t;
+}
 
 Country? _countryByIso2(String iso2) {
   if (iso2.isEmpty) return null;
@@ -773,6 +854,150 @@ class _FlagBildUI extends StatelessWidget {
   }
 }
 
+// ── Grenzketten-Rätsel ──────────────────────────────────────────────────────
+
+class _GrenzkettenUI extends StatelessWidget {
+  final Frage frage;
+  final String? gewaehlt;
+  final bool showFeedback, feedbackRichtig;
+  final void Function(String) onAntwort;
+
+  const _GrenzkettenUI({
+    required this.frage,
+    required this.gewaehlt,
+    required this.showFeedback,
+    required this.feedbackRichtig,
+    required this.onAntwort,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final vonIso = frage.meta['vonIso'] as String? ?? '';
+    final nachIso = frage.meta['nachIso'] as String? ?? '';
+    final von = _countryByIso2(vonIso);
+    final nach = _countryByIso2(nachIso);
+
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                children: [
+                  FlaggenWidget(countryCode: vonIso, width: 56, height: 36, borderRadius: 6),
+                  const SizedBox(height: 6),
+                  Text(von?.name ?? vonIso,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Icon(Icons.arrow_forward_rounded, color: Color(0xFF888888)),
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  FlaggenWidget(countryCode: nachIso, width: 56, height: 36, borderRadius: 6),
+                  const SizedBox(height: 6),
+                  Text(nach?.name ?? nachIso,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Auf dem Landweg von ${von?.name ?? vonIso} nach ${nach?.name ?? nachIso}: '
+          'durch welches dieser Länder MUSST du dabei NICHT fahren?',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 20),
+        ...frage.antwortOptionen.map((iso2) {
+          final land = _countryByIso2(iso2);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: InkWell(
+              onTap: showFeedback ? null : () => onAntwort(iso2),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _optionFarbe(iso2, frage.richtigeAntwort, gewaehlt,
+                      showFeedback, feedbackRichtig),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FlaggenWidget(countryCode: iso2, width: 32, height: 21, borderRadius: 4),
+                    const SizedBox(width: 10),
+                    Text(
+                      land?.name ?? iso2,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _textFarbe(iso2, frage.richtigeAntwort, gewaehlt,
+                            showFeedback, feedbackRichtig),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+        if (showFeedback) ...[
+          const SizedBox(height: 8),
+          _GrenzkettenRoute(frage: frage),
+        ],
+      ],
+    );
+  }
+}
+
+class _GrenzkettenRoute extends StatelessWidget {
+  final Frage frage;
+  const _GrenzkettenRoute({required this.frage});
+
+  @override
+  Widget build(BuildContext context) {
+    final kette = (frage.meta['kette'] as List<dynamic>?)?.cast<String>() ?? const [];
+    final erklaerung = frage.meta['erklaerung'] as String?;
+    final routeText =
+        kette.map((iso2) => _countryByIso2(iso2)?.name ?? iso2).join(' → ');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAEAE5),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Die richtige Route:',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF888888))),
+          const SizedBox(height: 4),
+          Text(routeText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          if (erklaerung != null) ...[
+            const SizedBox(height: 8),
+            Text(erklaerung,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF555555), height: 1.3)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 // ── Flaggen Multiple: Land → Flagge wählen ─────────────────────────────────────
 
 class _FlagMultipleUI extends StatelessWidget {
@@ -911,6 +1136,7 @@ class _EingabeUI extends StatelessWidget {
   final TextEditingController controller;
   final bool bestaetigt, showFeedback, feedbackRichtig;
   final VoidCallback onBestaetigen;
+  final Map<String, List<List<Offset>>> geoRings;
 
   const _EingabeUI({
     required this.frage,
@@ -919,7 +1145,48 @@ class _EingabeUI extends StatelessWidget {
     required this.showFeedback,
     required this.feedbackRichtig,
     required this.onBestaetigen,
+    this.geoRings = const {},
   });
+
+  // Zeigt den Reiz je nach Modus: Hauptstädte fragt nach der Hauptstadt eines
+  // sichtbaren Landes (Flagge+Name verraten hier nichts), Flaggen/Umriss
+  // fragen NACH dem Land selbst -> Name darf hier nicht mit angezeigt werden.
+  Widget _buildReiz() {
+    switch (frage.modus) {
+      case LernModus.flaggenQuizEingabe:
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: FlaggenWidget(
+              countryCode: frage.laenderCode, width: 220, height: 145, borderRadius: 12),
+        );
+      case LernModus.umrissEingabe:
+        final rings = geoRings[frage.laenderCode] ?? [];
+        final geoLoaded = geoRings.isNotEmpty;
+        return Container(
+          width: double.infinity,
+          height: 180,
+          decoration: BoxDecoration(
+            color: const Color(0xFFDFF2E1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: !geoLoaded
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF2E7D32)))
+              : rings.isEmpty
+                  ? const Center(child: Text('🗺️', style: TextStyle(fontSize: 52)))
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: CustomPaint(painter: _UmrissPainter(rings: rings)),
+                    ),
+        );
+      default:
+        return _LandHeader(iso2: frage.laenderCode);
+    }
+  }
+
+  String get _hintText => switch (frage.modus) {
+        LernModus.flaggenQuizEingabe || LernModus.umrissEingabe => 'Land eingeben…',
+        _ => 'Hauptstadt eingeben…',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -932,7 +1199,7 @@ class _EingabeUI extends StatelessWidget {
 
     return Column(
       children: [
-        _LandHeader(iso2: frage.laenderCode),
+        _buildReiz(),
         const SizedBox(height: 20),
         Text(
           frage.frage,
@@ -952,11 +1219,11 @@ class _EingabeUI extends StatelessWidget {
             autofocus: true,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            decoration: const InputDecoration(
-              hintText: 'Hauptstadt eingeben…',
+            decoration: InputDecoration(
+              hintText: _hintText,
               border: InputBorder.none,
               contentPadding:
-                  EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
             onSubmitted: (_) => onBestaetigen(),
           ),
@@ -1061,6 +1328,11 @@ class _SortierListe extends StatelessWidget {
           height: reihenfolge.length * 64.0,
           child: ReorderableListView.builder(
             shrinkWrap: true,
+            // Ganze Kachel soll als Griff dienen (nicht nur ein schmaler
+            // Handle am rechten Rand) -> Standard-Handles aus, stattdessen
+            // den kompletten Container unten in ReorderableDragStartListener
+            // einwickeln.
+            buildDefaultDragHandles: false,
             proxyDecorator: (child, _, _) => Material(
               elevation: 4,
               borderRadius: BorderRadius.circular(12),
@@ -1071,37 +1343,40 @@ class _SortierListe extends StatelessWidget {
             itemBuilder: (ctx, i) {
               final iso2 = reihenfolge[i];
               final co = _countryByIso2(iso2);
-              return Container(
+              return ReorderableDragStartListener(
                 key: ValueKey(iso2),
-                height: 56,
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAEAE5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const SizedBox(width: 12),
-                    Text('${i + 1}.', style: const TextStyle(
-                        fontWeight: FontWeight.w700, color: Color(0xFF666666))),
-                    const SizedBox(width: 10),
-                    FlaggenWidget(
-                        countryCode: iso2,
-                        width: 36,
-                        height: 24,
-                        borderRadius: 4),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        co?.name ?? iso2,
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600),
+                index: i,
+                child: Container(
+                  height: 56,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAEAE5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 12),
+                      Text('${i + 1}.', style: const TextStyle(
+                          fontWeight: FontWeight.w700, color: Color(0xFF666666))),
+                      const SizedBox(width: 10),
+                      FlaggenWidget(
+                          countryCode: iso2,
+                          width: 36,
+                          height: 24,
+                          borderRadius: 4),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          co?.name ?? iso2,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
                       ),
-                    ),
-                    const Icon(Icons.drag_handle,
-                        color: Color(0xFFBBBBBB), size: 20),
-                    const SizedBox(width: 12),
-                  ],
+                      const Icon(Icons.drag_handle,
+                          color: Color(0xFFBBBBBB), size: 20),
+                      const SizedBox(width: 12),
+                    ],
+                  ),
                 ),
               );
             },

@@ -6,6 +6,7 @@ import '../data/country_rankings.dart';
 import '../data/currencies.dart';
 import '../data/laender_fakten.dart';
 import '../data/laender_gebaeude.dart';
+import '../data/laender_grenzketten.dart';
 import '../data/laender_nachbarn.dart';
 import '../data/lernpfad_data.dart';
 import '../data/wirtschaftssektoren.dart';
@@ -212,54 +213,6 @@ class _SpielKategorie {
   const _SpielKategorie(this.id, this.label, this.einheit, this.wert);
 }
 
-// ── Flaggenfarben (nur die wichtigsten Länder — Rest: Modus wird sauber
-// übersprungen, siehe _flaggenFarbeQuiz) ──────────────────────────────────────
-
-const Map<String, String> _flaggenFarben = {
-  // Europa
-  'DE': 'Schwarz-Rot-Gold', 'AT': 'Rot-Weiß-Rot', 'FR': 'Blau-Weiß-Rot',
-  'IT': 'Grün-Weiß-Rot', 'ES': 'Rot-Gelb-Rot', 'NL': 'Rot-Weiß-Blau',
-  'BE': 'Schwarz-Gelb-Rot', 'CH': 'Rot-Weiß', 'SE': 'Blau-Gelb',
-  'NO': 'Rot-Weiß-Blau', 'DK': 'Rot-Weiß', 'FI': 'Weiß-Blau',
-  'PL': 'Weiß-Rot', 'HU': 'Rot-Weiß-Grün', 'GR': 'Blau-Weiß',
-  'RO': 'Blau-Gelb-Rot', 'IE': 'Grün-Weiß-Orange', 'UA': 'Blau-Gelb',
-  'RU': 'Weiß-Blau-Rot', 'LU': 'Rot-Weiß-Hellblau', 'BG': 'Weiß-Grün-Rot',
-  'LT': 'Gelb-Grün-Rot', 'EE': 'Blau-Schwarz-Weiß', 'IS': 'Blau-Weiß-Rot',
-  'CZ': 'Weiß-Rot-Blau', 'SK': 'Weiß-Blau-Rot', 'SI': 'Weiß-Blau-Rot',
-  'HR': 'Rot-Weiß-Blau', 'RS': 'Rot-Blau-Weiß', 'AL': 'Rot-Schwarz',
-  'MT': 'Weiß-Rot',
-  // Amerika
-  'US': 'Rot-Weiß-Blau', 'CA': 'Rot-Weiß-Rot', 'MX': 'Grün-Weiß-Rot',
-  'BR': 'Grün-Gelb-Blau', 'AR': 'Hellblau-Weiß-Hellblau', 'CO': 'Gelb-Blau-Rot',
-  'CL': 'Weiß-Rot-Blau', 'PE': 'Rot-Weiß-Rot', 'VE': 'Gelb-Blau-Rot',
-  'EC': 'Gelb-Blau-Rot', 'BO': 'Rot-Gelb-Grün', 'UY': 'Weiß-Blau',
-  'PY': 'Rot-Weiß-Blau',
-  // Afrika
-  'NG': 'Grün-Weiß-Grün', 'EG': 'Rot-Weiß-Schwarz', 'ZA': 'Bunt',
-  'KE': 'Schwarz-Rot-Grün', 'ET': 'Grün-Gelb-Rot', 'GH': 'Rot-Gelb-Grün',
-  'MA': 'Rot-Grün', 'DZ': 'Grün-Weiß', 'TN': 'Rot', 'CI': 'Orange-Weiß-Grün',
-  'SN': 'Grün-Gelb-Rot', 'CM': 'Grün-Rot-Gelb', 'ML': 'Grün-Gelb-Rot',
-  // Asien
-  'CN': 'Rot-Gelb', 'JP': 'Weiß-Rot', 'IN': 'Orange-Weiß-Grün',
-  'TH': 'Rot-Weiß-Blau', 'VN': 'Rot-Gelb', 'ID': 'Rot-Weiß',
-  'IR': 'Grün-Weiß-Rot', 'PK': 'Weiß-Grün', 'BD': 'Grün-Rot',
-  'SG': 'Rot-Weiß', 'KR': 'Weiß', 'PH': 'Blau-Rot-Weiß',
-  'MY': 'Rot-Weiß-Blau', 'SA': 'Grün', 'AE': 'Rot-Grün-Weiß-Schwarz',
-  // Ozeanien
-  'AU': 'Blau-Rot-Weiß', 'NZ': 'Blau-Rot-Weiß',
-};
-
-// ── Größte Stadt (nur wo abweichend von der Hauptstadt) ───────────────────────
-
-const Map<String, String> _groessteStaedte = {
-  'TR': 'Istanbul', 'AU': 'Sydney', 'US': 'New York City', 'BR': 'São Paulo',
-  'CA': 'Toronto', 'IN': 'Mumbai', 'CH': 'Zürich', 'NG': 'Lagos',
-  'ZA': 'Johannesburg', 'MM': 'Yangon', 'PK': 'Karachi', 'KZ': 'Almaty',
-  'CI': 'Abidjan', 'BJ': 'Cotonou', 'TZ': 'Dar es Salaam', 'NZ': 'Auckland',
-  'VN': 'Ho-Chi-Minh-Stadt', 'EC': 'Guayaquil', 'BO': 'Santa Cruz de la Sierra',
-  'MA': 'Casablanca', 'CM': 'Douala', 'LK': 'Colombo',
-};
-
 // Kehrt _normalisiereKontinent() um: 'europa' → 'Europa' usw. — für den
 // dynamischen Ablenker-Fallback in _zufallsFakt.
 const Map<String, String> _kontinentAnzeigename = {
@@ -302,6 +255,14 @@ class FragenGenerator {
             (c) => c?.iso2 == iso2,
             orElse: () => null,
           );
+
+  // Feingranulare Subregion (z.B. 'westeuropa', 'ostafrika') für plausiblere
+  // Ablenker im Nachbarland-Quiz — countries.dart's Country.region ist nur
+  // der Kontinent, alle_laender.dart's Land.region ist die echte Subregion.
+  static Land? _land(String iso2) => alleLaender.cast<Land?>().firstWhere(
+        (l) => l?.iso == iso2,
+        orElse: () => null,
+      );
 
   static CountryRanking? _ranking(String iso2) =>
       countryRankings.cast<CountryRanking?>().firstWhere(
@@ -368,53 +329,212 @@ class FragenGenerator {
     return result;
   }
 
-  // ── Länder-Round-Robin für Kern-Modi (Flaggen/Hauptstädte/Umriss) ─────────
+  // ── Graduelle Schwierigkeits-Einmischung ──────────────────────────────────
   //
-  // Anders als _pick() zieht diese Variante bevorzugt Länder, die im
-  // jeweiligen Thema dieses Abschnitts noch nicht dran waren — erst wenn
-  // der ganze Länderpool durch ist, darf sich eins wiederholen (und dann
-  // beginnt automatisch eine neue Runde).
+  // Reihenfolge INNERHALB der (unveränderten) Abschnitts-Länderliste: statt
+  // rein zufällig zu ziehen, wird EINMALIG zu Beginn des Round-Robin-Zyklus
+  // eine gewichtete Ziehreihenfolge berechnet und dauerhaft gespeichert
+  // (A-Res-Verfahren) — leichte Länder tendieren an den Anfang dieser festen
+  // Liste, schwere ans Ende. Die Kern-Modi ziehen dann der Reihe nach aus
+  // dieser EINEN feststehenden Liste, statt bei jeder Station neu zu würfeln
+  // — das verhindert das Hin-und-Her-Springen zwischen leicht und schwer
+  // innerhalb eines Abschnitts und ergibt stattdessen einen durchgehenden,
+  // sanften Trend von leicht (Anfang) zu schwer (Ende).
 
-  static Future<List<String>> _pickRoundRobin(List<String> pool, int n,
-      String weltId, String abschnittId, String thema) async {
+  static double _gewichtFuerIso(String iso2, double fortschritt) {
+    final schwierigkeit = landByIso[iso2]?.schwierigkeit ?? 2;
+    final basisGewicht = {
+          1: 1.0 - fortschritt * 0.6,
+          2: 0.3 + fortschritt * 0.5,
+          3: 0.1 + fortschritt * 0.7,
+        }[schwierigkeit] ??
+        0.5;
+    return basisGewicht.clamp(0.05, 1.5);
+  }
+
+  /// Gewichtete Ziehreihenfolge, EINMALIG für den ganzen Pool berechnet:
+  /// die Liste wird Position für Position aufgebaut (A-Res je Position,
+  /// score = u^(1/gewicht)), wobei das Gewicht jeder Position mit ihrem
+  /// eigenen Fortschritt (0.0 = erste Position, nahe 1.0 = letzte) variiert
+  /// — genau wie gewichtFuerLand() es für "wie weit ist der Abschnitt schon
+  /// fortgeschritten" vorsieht, nur dass hier die POSITION IN DER FESTEN
+  /// LISTE die Rolle der Stationsposition übernimmt. Das Ergebnis wird
+  /// einmalig gespeichert (siehe _festeReihenfolge) und danach nur noch der
+  /// Reihe nach abgearbeitet, nie neu gewürfelt.
+  static List<String> _gewichteteReihenfolge(List<String> isos) {
+    final rest = List<String>.from(isos)..shuffle(_rng);
+    final ergebnis = <String>[];
+    final gesamt = isos.length;
+    while (rest.isNotEmpty) {
+      final fortschritt = gesamt <= 1 ? 0.0 : ergebnis.length / gesamt;
+      String? bestIso;
+      double bestScore = -1;
+      for (final iso2 in rest) {
+        final gewicht = _gewichtFuerIso(iso2, fortschritt);
+        final u = _rng.nextDouble().clamp(1e-9, 1.0);
+        final score = pow(u, 1 / gewicht).toDouble();
+        if (score > bestScore) {
+          bestScore = score;
+          bestIso = iso2;
+        }
+      }
+      ergebnis.add(bestIso!);
+      rest.remove(bestIso);
+    }
+    return ergebnis;
+  }
+
+  /// Lädt die feste, gewichtete Ziehreihenfolge für (Welt, Modus) — berechnet
+  /// sie beim allerersten Aufruf bzw. sobald der freigeschaltete Pool wächst
+  /// (Abschnittswechsel) NEU über den dann aktuellen Pool, damit die neu
+  /// hinzugekommenen Länder mit eingewichtet werden. Bleibt sonst über alle
+  /// Stationen DIESES EINEN Modus hinweg gleich, statt bei jeder Station neu
+  /// gewürfelt zu werden.
+  static Future<List<String>> _festeReihenfolge(
+      List<String> eindeutigerPool, String weltId, String key) async {
+    final gespeichert = await FortschrittService.ladeFesteReihenfolge(weltId, key);
+    if (gespeichert != null &&
+        gespeichert.toSet().difference(eindeutigerPool.toSet()).isEmpty &&
+        eindeutigerPool.toSet().difference(gespeichert.toSet()).isEmpty) {
+      return gespeichert;
+    }
+    final neu = _gewichteteReihenfolge(eindeutigerPool);
+    await FortschrittService.speichereFesteReihenfolge(weltId, key, neu);
+    return neu;
+  }
+
+  // ── Länder-Round-Robin, GETRENNT PRO EINZELNEM MODUS, DURCHGÄNGIG ─────────
+  // ÜBER DIE GANZE WELT (kein Reset pro Abschnitt) ───────────────────────────
+  //
+  // [key] ist der exakte Modus-Name (z.B. 'flaggenQuizBild',
+  // 'flaggenQuizMultiple', 'flaggenQuizEingabe', ...) — jeder der 8 Kern-/
+  // Eingabe-Modi hat seinen eigenen, isolierten Zyklus. Das "bereits
+  // gezogen"-Set ist WELT-WEIT und wächst kontinuierlich über alle
+  // Abschnitte hinweg — es wird NICHT beim Abschnittswechsel zurückgesetzt.
+  // [pool] ist der aktuell FREIGESCHALTETE Länderpool (abschnittsabhängig,
+  // wächst mit dem Fortschritt) — davon werden die im Tracker noch nicht
+  // vorkommenden bevorzugt gezogen; reicht das nicht, wird mit bereits
+  // gezogenen aus dem aktuellen Pool aufgefüllt.
+  //
+  // Ein Modus gilt erst als "pensioniert", wenn das WELT-WEITE Tracker-Set
+  // den GRÖSSTEN Länderpool der Welt komplett abdeckt (siehe
+  // _pensionierterErsatz in generiereFragenFuerStation) — bis dahin wächst
+  // das Set einfach weiter, es gibt keinen automatischen Zyklus-Reset mehr.
+  static Future<List<String>> _pickRoundRobin(
+      List<String> pool, int n, String weltId, String key) async {
     final eindeutigerPool = pool.toSet().toList();
-    final bereits =
-        await FortschrittService.rrBereitsAbgefragt(weltId, abschnittId, thema);
+    final bereits = await FortschrittService.rrBereitsAbgefragt(weltId, key);
+    final feste = await _festeReihenfolge(eindeutigerPool, weltId, key);
 
-    final neu = eindeutigerPool.where((c) => !bereits.contains(c)).toList()
-      ..shuffle(_rng);
+    final neu = feste.where((c) => !bereits.contains(c)).toList();
     final gezogen = <String>[...neu.take(n)];
 
     if (gezogen.length < n) {
-      // Zu wenig unverbrauchte Länder übrig -> mit bereits abgefragten
-      // auffüllen (gemischt).
+      // Im aktuell freigeschalteten Pool nicht genug unverbrauchte Länder
+      // übrig -> mit bereits abgefragten (aus DIESEM Pool) auffüllen, OHNE
+      // das Tracker-Set zurückzusetzen (kein Reset mehr pro Abschnitt).
       final schonDa = eindeutigerPool.where((c) => bereits.contains(c)).toList();
       gezogen.addAll(
           _pick(schonDa.isEmpty ? eindeutigerPool : schonDa, n - gezogen.length));
     }
 
     final aktualisiert = {...bereits, ...gezogen};
-    // Ganzer Pool durch -> zurücksetzen, damit die nächste Ziehung eine
-    // frische Runde durch den Kontinent beginnt.
-    final naechsterStand = aktualisiert.length >= eindeutigerPool.length
-        ? <String>{}
-        : aktualisiert;
-    await FortschrittService.rrSpeichern(
-        weltId, abschnittId, thema, naechsterStand);
+    await FortschrittService.rrSpeichern(weltId, key, aktualisiert);
 
     return gezogen;
   }
 
-  /// Ermittelt Welt/Abschnitt/Thema der Station und delegiert an
-  /// _pickRoundRobin(). Fällt auf reines _pick() zurück, falls die Station
-  /// keinem festen Platz im Lernpfad zugeordnet ist (z.B. in Tests).
+  /// Modus-Schlüssel für den Round-Robin-Tracker: bei "Welt" bleibt er
+  /// EXAKT der Modus-Name (welt-weiter, durchgängiger Zyklus über alle
+  /// Abschnitte, siehe _pickRoundRobin). Bei den 6 Block-Kontinenten wird
+  /// die Abschnitt-ID mit eingemischt, weil dort jeder Block bewusst
+  /// disjunkt ist: der Zyklus jedes Kern-/Eingabe-Modus wird an jeder
+  /// Block-Grenze (= Abschnittswechsel) NEU gestartet, statt über den
+  /// ganzen Kontinent hinweg zu laufen.
+  static String _rrModusKey(LernWelt welt, LernAbschnitt abschnitt, LernModus modus) =>
+      welt.id == 'welt' ? modus.name : '${abschnitt.id}_${modus.name}';
+
+  /// Ermittelt Welt/Abschnitt der Station und delegiert an _pickRoundRobin()
+  /// mit dem Round-Robin-Schlüssel aus _rrModusKey() (siehe dort). Fällt auf
+  /// reines _pick() zurück, falls die Station keinem festen Platz im
+  /// Lernpfad zugeordnet ist (z.B. in Tests).
   static Future<List<String>> _pickKern(
       List<String> pool, int n, LernStation station) async {
     final kontext = stationKontext(station.id);
     if (kontext == null) return _pick(pool, n);
     final (welt, abschnitt, _) = kontext;
-    final thema = lernModusThema(station.modus);
-    return _pickRoundRobin(pool, n, welt.id, abschnitt.id, thema);
+    return _pickRoundRobin(pool, n, welt.id, _rrModusKey(welt, abschnitt, station.modus));
+  }
+
+  // ── Pensionierung: Modus fällt aus, sobald er für diese Welt WELT-WEIT ────
+  // (nicht nur im aktuellen Abschnitt) alle Länder des größten Pools dieser
+  // Welt schon einmal gezogen hat. Greift nur zur Spielzeit (bewusst leicht-
+  // gewichtige Lösung, siehe Nutzer-Entscheidung): die Pfad-Karte zeigt
+  // weiterhin den ursprünglich zugewiesenen Modus, nur die tatsächliche
+  // Fragen-Generierung weicht dann auf einen noch aktiven Modus aus.
+
+  static const _kernUndEingabeModi = {
+    LernModus.flaggenQuizBild,
+    LernModus.flaggenQuizMultiple,
+    LernModus.flaggenQuizEingabe,
+    LernModus.umrissBild,
+    LernModus.umrissMultiple,
+    LernModus.umrissEingabe,
+    LernModus.hauptstaedteMultiple,
+    LernModus.hauptstaedteEingabe,
+  };
+
+  static Future<bool> _istPensioniert(String weltId, String modusKey, Set<String> vollerPool) async {
+    if (vollerPool.isEmpty) return false;
+    final bereits = await FortschrittService.rrBereitsAbgefragt(weltId, modusKey);
+    return vollerPool.difference(bereits).isEmpty;
+  }
+
+  /// Liefert einen Ersatz-Modus, falls [modus] für diese Station bereits
+  /// pensioniert ist — sonst null (Original-Modus bleibt gültig). Bei
+  /// "Welt" gilt ein Modus erst als pensioniert, wenn er WELT-WEIT (über
+  /// alle Abschnitte hinweg) den größten Länderpool komplett abgedeckt hat
+  /// (unverändert seit dem letzten Umbau). Bei den 6 Block-Kontinenten
+  /// bezieht sich "pensioniert" dagegen NUR auf den Block/die Länderliste
+  /// DIESES Abschnitts (station.laenderCodes) — passend zum eigenen,
+  /// abschnittsweise zurückgesetzten Zyklus aus _rrModusKey().
+  /// Bevorzugt Unterhaltungs-Modi aus dem Level-Pool dieser Station, dann
+  /// noch nicht pensionierte Kern-/Eingabe-Modi, als letzten Rückfall
+  /// zufallsFakt (nie pensioniert, kein leerer Pool möglich).
+  static Future<LernModus?> _pensionierterErsatz(
+      LernModus modus, LernStation station) async {
+    if (!_kernUndEingabeModi.contains(modus)) return null;
+    final kontext = stationKontext(station.id);
+    if (kontext == null) return null;
+    final (welt, abschnitt, _) = kontext;
+    final vollerPool = welt.id == 'welt'
+        ? welt.laenderCodes.toSet()
+        : station.laenderCodes.toSet();
+
+    if (!await _istPensioniert(
+        welt.id, _rrModusKey(welt, abschnitt, modus), vollerPool)) {
+      return null;
+    }
+
+    final levelPool = modiFuerLevel(station.schwierigkeitsgrad);
+    final unterhaltungsKandidaten =
+        levelPool.where((m) => !_kernUndEingabeModi.contains(m)).toList();
+    if (unterhaltungsKandidaten.isNotEmpty) {
+      return unterhaltungsKandidaten[
+          station.id.hashCode.abs() % unterhaltungsKandidaten.length];
+    }
+
+    for (final kandidat in levelPool) {
+      if (kandidat == modus || !_kernUndEingabeModi.contains(kandidat)) continue;
+      if (!await _istPensioniert(
+          welt.id, _rrModusKey(welt, abschnitt, kandidat), vollerPool)) {
+        return kandidat;
+      }
+    }
+
+    // Alle Kern-/Eingabe-Modi pensioniert UND kein Unterhaltungs-Modus im
+    // Level-Pool (sollte praktisch nie vorkommen) -> fester Rückfall.
+    return LernModus.zufallsFakt;
   }
 
   /// Haupteinstieg: generiert alle Fragen für eine Station.
@@ -425,8 +545,10 @@ class FragenGenerator {
     if (pool.isEmpty) return [];
     final kontinent = _kontinent(station);
     final schwierigkeit = station.schwierigkeitsgrad;
+    final modus =
+        await _pensionierterErsatz(station.modus, station) ?? station.modus;
 
-    switch (station.modus) {
+    switch (modus) {
       case LernModus.flaggenQuizBild:
         return await _flaggenBild(station, pool, kontinent, schwierigkeit);
       case LernModus.flaggenQuizMultiple:
@@ -447,6 +569,10 @@ class FragenGenerator {
         return await _umrissBild(station, pool);
       case LernModus.umrissMultiple:
         return await _umrissMultiple(station, pool);
+      case LernModus.flaggenQuizEingabe:
+        return await _flaggenQuizEingabe(station, pool);
+      case LernModus.umrissEingabe:
+        return await _umrissEingabe(station, pool);
       case LernModus.nachbarland:
         return await _nachbarland(station, pool, kontinent, schwierigkeit);
       case LernModus.bipGesamt:
@@ -457,18 +583,15 @@ class FragenGenerator {
         return _extremFrage(station, pool);
       case LernModus.waehrungZuLand:
         return await _waehrungZuLand(station, pool);
-      case LernModus.hauptstadtZuLand:
-        return await _hauptstadtZuLand(station, pool);
-      case LernModus.groessteStadt:
-        return _groessteStadtQuiz(station, pool);
-      case LernModus.flaggenFarbe:
-        return await _flaggenFarbeQuiz(station, pool, kontinent, schwierigkeit);
       case LernModus.extremFrageLeicht:
         return _extremFrageLeicht(station, pool);
       case LernModus.zufallsFakt:
         return _zufallsFakt(station, kontinent);
       case LernModus.bekanntesGebaeude:
         return _bekanntesGebaeude(station, kontinent);
+      case LernModus.grenzkettenRaetsel:
+        return await _grenzkettenRaetsel(
+            station, pool, kontinent, schwierigkeit);
     }
   }
 
@@ -595,7 +718,9 @@ class FragenGenerator {
   }
 
   // ── Hauptstädte: Texteingabe ────────────────────────────────────────────────
-
+  //
+  // _pickKern() nutzt den EXAKTEN Modus-Namen als Round-Robin-Schlüssel ->
+  // eigener, von hauptstaedteMultiple komplett isolierter Zyklus.
   static Future<List<Frage>> _hauptstaedteEingabe(
       LernStation station, List<String> pool) async {
     final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station);
@@ -608,6 +733,50 @@ class FragenGenerator {
         richtigeAntwort: co.capital,
         antwortOptionen: const [],
         modus: LernModus.hauptstaedteEingabe,
+        laenderCode: iso2,
+        meta: {'eingabe': true},
+      );
+    }).toList();
+  }
+
+  // ── Flaggen: Texteingabe ────────────────────────────────────────────────────
+  //
+  // Eigener, von flaggenQuizBild/flaggenQuizMultiple komplett isolierter
+  // Round-Robin-Zyklus (siehe Kommentar bei _hauptstaedteEingabe).
+  static Future<List<Frage>> _flaggenQuizEingabe(
+      LernStation station, List<String> pool) async {
+    final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station);
+    return ausgewaehlt.asMap().entries.map((e) {
+      final iso2 = e.value;
+      final co = _country(iso2)!;
+      return Frage(
+        id: '${station.id}_fe_${e.key}',
+        frage: 'Welchem Land gehört diese Flagge?',
+        richtigeAntwort: co.name,
+        antwortOptionen: const [],
+        modus: LernModus.flaggenQuizEingabe,
+        laenderCode: iso2,
+        meta: {'eingabe': true},
+      );
+    }).toList();
+  }
+
+  // ── Umriss: Texteingabe ─────────────────────────────────────────────────────
+  //
+  // Eigener, von umrissBild/umrissMultiple komplett isolierter Round-Robin-
+  // Zyklus (siehe Kommentar bei _hauptstaedteEingabe).
+  static Future<List<Frage>> _umrissEingabe(
+      LernStation station, List<String> pool) async {
+    final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station);
+    return ausgewaehlt.asMap().entries.map((e) {
+      final iso2 = e.value;
+      final co = _country(iso2);
+      return Frage(
+        id: '${station.id}_ue_${e.key}',
+        frage: 'Welchem Land gehört dieser Umriss?',
+        richtigeAntwort: co?.name ?? landByIso[iso2]?.name ?? iso2,
+        antwortOptionen: const [],
+        modus: LernModus.umrissEingabe,
         laenderCode: iso2,
         meta: {'eingabe': true},
       );
@@ -860,16 +1029,10 @@ class FragenGenerator {
       final richtig = echteNachbarn[_rng.nextInt(echteNachbarn.length)];
       final richtigName = _country(richtig)?.name ?? richtig;
 
-      final distraktorKandidaten = countries
-          .where((c) =>
-              c.iso2 != iso2 &&
-              c.iso2 != richtig &&
-              !echteNachbarn.contains(c.iso2))
-          .toList()
-        ..shuffle(_rng);
+      final ablenker = _ablenkerNachbarland(iso2, echteNachbarn);
       final optionen = [
         richtigName,
-        ...distraktorKandidaten.take(3).map((c) => c.name),
+        ...ablenker.map((c) => c.name),
       ]..shuffle(_rng);
 
       return Frage(
@@ -881,6 +1044,65 @@ class FragenGenerator {
         laenderCode: iso2,
       );
     }).toList();
+  }
+
+  /// Zieht 3 plausible Ablenker für das Nachbarland-Quiz — bevorzugt
+  /// "Nachbarn der Nachbarn" (grenzen an einen echten Nachbarn, sind aber
+  /// selbst keiner -> "fast richtig"), dann übrige Länder derselben
+  /// Subregion (z.B. 'westeuropa'), dann Fallback auf den ganzen Kontinent,
+  /// und zuletzt (praktisch nie nötig) den gesamten Länder-Pool.
+  static List<Country> _ablenkerNachbarland(
+      String iso2, List<String> echteNachbarn) {
+    final land = _land(iso2);
+
+    final nachbarnDerNachbarn = <String>{};
+    for (final n in echteNachbarn) {
+      nachbarnDerNachbarn.addAll(nachbarn[n] ?? const []);
+    }
+    nachbarnDerNachbarn.removeAll(echteNachbarn);
+    nachbarnDerNachbarn.remove(iso2);
+
+    final ergebnis = <String>[...nachbarnDerNachbarn]..shuffle(_rng);
+
+    if (ergebnis.length < 3 && land != null) {
+      final selbeRegion = alleLaender
+          .where((l) =>
+              l.region == land.region &&
+              l.iso != iso2 &&
+              !echteNachbarn.contains(l.iso) &&
+              !ergebnis.contains(l.iso))
+          .map((l) => l.iso)
+          .toList()
+        ..shuffle(_rng);
+      ergebnis.addAll(selbeRegion);
+    }
+
+    if (ergebnis.length < 3 && land != null) {
+      final selberKontinent = alleLaender
+          .where((l) =>
+              l.kontinent == land.kontinent &&
+              l.iso != iso2 &&
+              !echteNachbarn.contains(l.iso) &&
+              !ergebnis.contains(l.iso))
+          .map((l) => l.iso)
+          .toList()
+        ..shuffle(_rng);
+      ergebnis.addAll(selberKontinent);
+    }
+
+    if (ergebnis.length < 3) {
+      final rest = countries
+          .where((c) =>
+              c.iso2 != iso2 &&
+              !echteNachbarn.contains(c.iso2) &&
+              !ergebnis.contains(c.iso2))
+          .map((c) => c.iso2)
+          .toList()
+        ..shuffle(_rng);
+      ergebnis.addAll(rest);
+    }
+
+    return ergebnis.take(3).map((i) => _country(i)!).toList();
   }
 
   // ── Gesamt-BIP ─────────────────────────────────────────────────────────────
@@ -1001,25 +1223,71 @@ class FragenGenerator {
   }
 
   // ── Extremfrage (Superlativ) ─────────────────────────────────────────────
+  //
+  // Frage-Text passend zur Kategorie UND Richtung (größte/meiste vs.
+  // kleinste/wenigste) — dieselbe Zuordnung wird von _extremFrage() und
+  // _extremFrageLeicht() genutzt, damit beide Varianten konsistent klingen.
+  static String _extremFrageText(String katId, bool kleinstes) => switch (katId) {
+        'bevoelkerung' => kleinstes
+            ? 'Welches dieser Länder hat die wenigsten Einwohner?'
+            : 'Welches dieser Länder hat die meisten Einwohner?',
+        'flaeche' => kleinstes
+            ? 'Welches dieser Länder ist am kleinsten (Fläche)?'
+            : 'Welches dieser Länder ist am größten (Fläche)?',
+        'bipGesamt' => kleinstes
+            ? 'Welches dieser Länder hat die kleinste Wirtschaft (BIP)?'
+            : 'Welches dieser Länder hat die größte Wirtschaft (BIP)?',
+        'bipProKopf' => kleinstes
+            ? 'Welches dieser Länder hat das niedrigste BIP pro Kopf?'
+            : 'Welches dieser Länder hat das höchste BIP pro Kopf?',
+        'lebenserwartung' => kleinstes
+            ? 'Welches dieser Länder hat die niedrigste Lebenserwartung?'
+            : 'Welches dieser Länder hat die höchste Lebenserwartung?',
+        'kuestenlange' => kleinstes
+            ? 'Welches dieser Länder hat die kürzeste Küste?'
+            : 'Welches dieser Länder hat die längste Küste?',
+        'mindestlohn' => kleinstes
+            ? 'Welches dieser Länder hat den niedrigsten Mindestlohn?'
+            : 'Welches dieser Länder hat den höchsten Mindestlohn?',
+        _ => 'Welches dieser Länder hat die meisten Einwohner?',
+      };
+
+  // Rotiert reihum durch alle 7 Vergleichs-Kategorien (statt nur "meiste/
+  // wenigste Einwohner" + "BIP") und fragt abwechselnd nach dem größten UND
+  // dem kleinsten Wert, damit die Fragen abwechslungsreicher werden.
+  static const _extremKategorienProfi = [
+    'bevoelkerung', 'flaeche', 'bipGesamt', 'bipProKopf',
+    'lebenserwartung', 'kuestenlange', 'mindestlohn',
+  ];
 
   static List<Frage> _extremFrage(LernStation station, List<String> pool) {
-    const typen = ['meiste', 'wenigste', 'bip'];
     final fragen = <Frage>[];
     for (int i = 0; i < station.fragenAnzahl; i++) {
-      final vier = _pick(pool, 4).map((iso2) => _country(iso2)!).toList();
-      final typ = typen[i % typen.length];
+      final katId = _extremKategorienProfi[i % _extremKategorienProfi.length];
+      final kategorie = _spielKategorien.firstWhere((k) => k.id == katId);
+      // Bei jedem zweiten Durchlauf durch alle Kategorien nach dem
+      // kleinsten statt dem größten Wert fragen (analog zur bisherigen
+      // "meiste/wenigste Einwohner"-Abwechslung, jetzt für jede Kategorie).
+      final kleinstes = (i ~/ _extremKategorienProfi.length).isOdd;
+
+      final mitDaten = pool.where((c) => kategorie.wert(c) != null).toList();
+      final vierIso2 =
+          mitDaten.length >= 4 ? _pick(mitDaten, 4) : _pick(pool, 4);
+      final nutzbar = vierIso2.every((c) => kategorie.wert(c) != null);
+      final vier = vierIso2.map((iso2) => _country(iso2)!).toList();
+
       late Country extrem;
       late String frageText;
-      switch (typ) {
-        case 'meiste':
-          extrem = vier.reduce((a, b) => a.population > b.population ? a : b);
-          frageText = 'Welches dieser Länder hat die meisten Einwohner?';
-        case 'wenigste':
-          extrem = vier.reduce((a, b) => a.population < b.population ? a : b);
-          frageText = 'Welches dieser Länder hat die wenigsten Einwohner?';
-        default:
-          extrem = vier.reduce((a, b) => a.gdp > b.gdp ? a : b);
-          frageText = 'Welches dieser Länder hat die größte Wirtschaft (BIP)?';
+      if (nutzbar) {
+        extrem = kleinstes
+            ? vier.reduce((a, b) =>
+                kategorie.wert(a.iso2)! < kategorie.wert(b.iso2)! ? a : b)
+            : vier.reduce((a, b) =>
+                kategorie.wert(a.iso2)! > kategorie.wert(b.iso2)! ? a : b);
+        frageText = _extremFrageText(katId, kleinstes);
+      } else {
+        extrem = vier.reduce((a, b) => a.population > b.population ? a : b);
+        frageText = _extremFrageText('bevoelkerung', false);
       }
 
       fragen.add(Frage(
@@ -1034,117 +1302,14 @@ class FragenGenerator {
     return fragen;
   }
 
-  // ── Hauptstadt → Land (umgekehrtes Hauptstädte-Quiz) ─────────────────────
-
-  static Future<List<Frage>> _hauptstadtZuLand(LernStation station, List<String> pool) async {
-    // Nur Länder deren Hauptstadt innerhalb des Pools eindeutig ist.
-    final eindeutig = pool.where((iso2) {
-      final cap = _country(iso2)?.capital;
-      if (cap == null) return false;
-      return pool.where((c) => _country(c)?.capital == cap).length == 1;
-    }).toList();
-    if (eindeutig.isEmpty) {
-      return await _hauptstaedteMultiple(
-          station, pool, 'Welt', station.schwierigkeitsgrad);
-    }
-
-    final ausgewaehlt = await _pickKern(eindeutig, station.fragenAnzahl, station);
-    return ausgewaehlt.asMap().entries.map((e) {
-      final iso2 = e.value;
-      final co = _country(iso2)!;
-      final distrIso2 = AntwortGenerator.generiereOptionenAusListe(
-              iso2, eindeutig, anzahlOptionen: 4)
-          .where((c) => c != iso2)
-          .take(3)
-          .toList();
-      final optionen = [
-        co.name,
-        ...distrIso2.map((c) => _country(c)?.name ?? c),
-      ]..shuffle(_rng);
-
-      return Frage(
-        id: '${station.id}_hzl_${e.key}',
-        frage: 'Welches Land hat die Hauptstadt ${co.capital}?',
-        richtigeAntwort: co.name,
-        antwortOptionen: optionen,
-        modus: LernModus.hauptstadtZuLand,
-        // Absichtlich leer: würde sonst per Landkopf die Antwort verraten.
-        laenderCode: '',
-      );
-    }).toList();
-  }
-
-  // ── Größte Stadt ───────────────────────────────────────────────────────
-
-  static String _stadtFuer(Country co) => _groessteStaedte[co.iso2] ?? co.capital;
-
-  static List<Frage> _groessteStadtQuiz(LernStation station, List<String> pool) {
-    final ausgewaehlt = _pick(pool, station.fragenAnzahl);
-    return ausgewaehlt.asMap().entries.map((e) {
-      final iso2 = e.value;
-      final co = _country(iso2)!;
-      final richtig = _stadtFuer(co);
-      final distrIso2 = AntwortGenerator.generiereOptionenAusListe(
-              iso2, pool, anzahlOptionen: 4)
-          .where((c) => c != iso2)
-          .take(3)
-          .toList();
-      final optionen = [
-        richtig,
-        ...distrIso2.map((c) {
-          final dc = _country(c);
-          return dc == null ? c : _stadtFuer(dc);
-        }),
-      ]..shuffle(_rng);
-
-      return Frage(
-        id: '${station.id}_gs_${e.key}',
-        frage: 'Was ist die größte Stadt von ${co.name}?',
-        richtigeAntwort: richtig,
-        antwortOptionen: optionen,
-        modus: LernModus.groessteStadt,
-        laenderCode: iso2,
-      );
-    }).toList();
-  }
-
-  // ── Flaggenfarben ──────────────────────────────────────────────────────
-
-  static Future<List<Frage>> _flaggenFarbeQuiz(
-      LernStation station, List<String> pool, String kontinent, int schw) async {
-    final mitFarben = pool.where((c) => _flaggenFarben.containsKey(c)).toList();
-    // Nur Länder deren Farbkombination innerhalb des Pools eindeutig ist
-    // (manche Flaggen sind sich sehr ähnlich, z.B. Slowenien/Slowakei).
-    final eindeutig = mitFarben.where((iso2) {
-      final farbe = _flaggenFarben[iso2]!;
-      return mitFarben.where((c) => _flaggenFarben[c] == farbe).length == 1;
-    }).toList();
-    if (eindeutig.isEmpty) return await _flaggenBild(station, pool, kontinent, schw);
-
-    final ausgewaehlt = _pick(eindeutig, station.fragenAnzahl);
-    return ausgewaehlt.asMap().entries.map((e) {
-      final iso2 = e.value;
-      final co = _country(iso2)!;
-      final richtig = _flaggenFarben[iso2]!;
-      final distrKandidaten = eindeutig.where((c) => c != iso2).toList()
-        ..shuffle(_rng);
-      final optionen = [
-        richtig,
-        ...distrKandidaten.take(3).map((c) => _flaggenFarben[c]!),
-      ]..shuffle(_rng);
-
-      return Frage(
-        id: '${station.id}_ff_${e.key}',
-        frage: 'Welche Farben hat die Flagge von ${co.name}?',
-        richtigeAntwort: richtig,
-        antwortOptionen: optionen,
-        modus: LernModus.flaggenFarbe,
-        laenderCode: iso2,
-      );
-    }).toList();
-  }
-
   // ── Extremfrage leicht (nur sehr bekannte Länder) ─────────────────────────
+  //
+  // Nur die vier intuitivsten Kategorien (keine "kleinste/wenigste"-Variante
+  // — das bleibt der Profi-Variante vorbehalten, damit Einsteiger-Fragen
+  // einfach zu verstehen bleiben).
+  static const _extremKategorienLeicht = [
+    'bevoelkerung', 'flaeche', 'bipGesamt', 'lebenserwartung',
+  ];
 
   static List<Frage> _extremFrageLeicht(LernStation station, List<String> pool) {
     // Nur die bevölkerungsreichsten (= bekanntesten) Länder des Pools als
@@ -1157,25 +1322,25 @@ class FragenGenerator {
 
     final fragen = <Frage>[];
     for (int i = 0; i < station.fragenAnzahl; i++) {
-      final nachFlaeche = i.isEven;
-      final mitFlaeche =
-          kandidatenPool.where((c) => _ranking(c)?.area != null).toList();
-      final vierIso2 = (nachFlaeche && mitFlaeche.length >= 4)
-          ? _pick(mitFlaeche, 4)
+      final katId = _extremKategorienLeicht[i % _extremKategorienLeicht.length];
+      final kategorie = _spielKategorien.firstWhere((k) => k.id == katId);
+      final mitDaten =
+          kandidatenPool.where((c) => kategorie.wert(c) != null).toList();
+      final vierIso2 = mitDaten.length >= 4
+          ? _pick(mitDaten, 4)
           : _pick(kandidatenPool, 4);
-      final benutzeFlaeche =
-          nachFlaeche && vierIso2.every((c) => _ranking(c)?.area != null);
+      final nutzbar = vierIso2.every((c) => kategorie.wert(c) != null);
       final vier = vierIso2.map((iso2) => _country(iso2)!).toList();
 
       late Country extrem;
       late String frageText;
-      if (benutzeFlaeche) {
+      if (nutzbar) {
         extrem = vier.reduce((a, b) =>
-            _ranking(a.iso2)!.area! > _ranking(b.iso2)!.area! ? a : b);
-        frageText = 'Welches dieser Länder ist am größten (Fläche)?';
+            kategorie.wert(a.iso2)! > kategorie.wert(b.iso2)! ? a : b);
+        frageText = _extremFrageText(katId, false);
       } else {
         extrem = vier.reduce((a, b) => a.population > b.population ? a : b);
-        frageText = 'Welches dieser Länder hat die meisten Einwohner?';
+        frageText = _extremFrageText('bevoelkerung', false);
       }
 
       fragen.add(Frage(
@@ -1292,5 +1457,73 @@ class FragenGenerator {
         laenderCode: '',
       );
     }).toList();
+  }
+
+  // ── Grenzketten-Rätsel ─────────────────────────────────────────────────
+
+  static Future<List<Frage>> _grenzkettenRaetsel(
+      LernStation station, List<String> pool, String kontinent, int schw) async {
+    final kontId = _normalisiereKontinent(kontinent);
+    final gefiltert = kontinent == 'Welt'
+        ? grenzkettenRaetsel
+        : grenzkettenRaetsel.where((r) => r.kontinent == kontId).toList();
+    if (gefiltert.isEmpty) {
+      // Kein kuratierter Eintrag für diesen Kontinent (z.B. Südamerika,
+      // strukturell keine eindeutige Kette möglich) -> Modus für diese
+      // Station überspringen, kein Crash, keine leere Frage.
+      return await _flaggenBild(station, pool, kontinent, schw);
+    }
+
+    final ausgewaehlt =
+        await _pickGrenzketten(gefiltert, station.fragenAnzahl, station);
+    return ausgewaehlt.asMap().entries.map((e) {
+      final r = e.value;
+      final von = _country(r.vonLandIso)?.name ?? r.vonLandIso;
+      final nach = _country(r.nachLandIso)?.name ?? r.nachLandIso;
+      final optionen = [r.keinTransitIso, ...r.mussDurchIso]..shuffle(_rng);
+      final kette = [r.vonLandIso, ...r.mussDurchIso, r.nachLandIso];
+
+      return Frage(
+        id: '${station.id}_gk_${e.key}',
+        frage: 'Auf dem Landweg von $von nach $nach: durch welches dieser '
+            'Länder MUSST du dabei NICHT fahren?',
+        richtigeAntwort: r.keinTransitIso,
+        antwortOptionen: optionen,
+        modus: LernModus.grenzkettenRaetsel,
+        // Absichtlich leer: die Antwort ist eine ISO-Option, kein Landkopf.
+        laenderCode: '',
+        meta: {
+          'vonIso': r.vonLandIso,
+          'nachIso': r.nachLandIso,
+          'kette': kette,
+          if (r.erklaerung != null) 'erklaerung': r.erklaerung,
+        },
+      );
+    }).toList();
+  }
+
+  /// Anti-Wiederholung für Grenzketten-Einträge innerhalb eines Abschnitts,
+  /// über dieselbe Round-Robin-Persistenz wie die Länder-Kern-Modi (nur mit
+  /// Rätsel-IDs statt ISO-Codes und einem eigenen Thema-Schlüssel).
+  static Future<List<GrenzkettenRaetsel>> _pickGrenzketten(
+      List<GrenzkettenRaetsel> pool, int n, LernStation station) async {
+    final byId = {for (final r in pool) r.id: r};
+    final ids = pool.map((r) => r.id).toList();
+    final kontext = stationKontext(station.id);
+    final List<String> gezogen;
+    if (kontext == null) {
+      gezogen = _pick(ids, n);
+    } else {
+      final (welt, abschnitt, _) = kontext;
+      // Grenzketten-IDs sind keine ISO-Codes -> die Schwierigkeits-Gewichtung
+      // (landByIso-Lookup) greift hier ohnehin nicht und fällt neutral auf
+      // schwierigkeit=2 zurück, die feste Reihenfolge bleibt effektiv nah am
+      // Zufall — unproblematisch, da Grenzketten kein Kern-Modus ist. Anders
+      // als die Kern-/Eingabe-Modi bleibt Grenzketten bewusst PRO ABSCHNITT
+      // gescoped (Abschnitt-ID Teil des Schlüssels) — kein welt-weiter
+      // Zyklus/keine Pensionierung dafür verlangt.
+      gezogen = await _pickRoundRobin(ids, n, welt.id, 'grenzketten_${abschnitt.id}');
+    }
+    return gezogen.map((id) => byId[id]!).toList();
   }
 }

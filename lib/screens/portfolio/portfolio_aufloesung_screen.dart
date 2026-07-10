@@ -1,10 +1,12 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../data/portfolio_daten.dart';
+import '../../services/challenge_panel_signal.dart';
 import '../../services/portfolio_engine.dart';
 import '../../services/portfolio_service.dart';
 import '../../utils/portfolio_format.dart';
 import '../../widgets/portfolio_land_karte.dart';
+import '../../widgets/rangliste_ergebnis_karte.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WELTPORTFOLIO — Screen 3: Auflösung (Phase 6/7)
@@ -13,11 +15,16 @@ import '../../widgets/portfolio_land_karte.dart';
 class PortfolioAufloesungScreen extends StatefulWidget {
   final PortfolioTagesErgebnis ergebnis;
   final PortfolioStatus status;
+  /// Wenn true: wird direkt aus dem Start-Screen ("Ergebnisse ansehen")
+  /// geöffnet, ohne den normalen Marktbriefing/Investieren-Stack darunter —
+  /// "Depot ansehen" muss dann nur diesen einen Screen schließen.
+  final bool nurAnsicht;
 
   const PortfolioAufloesungScreen({
     super.key,
     required this.ergebnis,
     required this.status,
+    this.nurAnsicht = false,
   });
 
   @override
@@ -34,10 +41,9 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
 
   String? get _lernNudge {
     if (_verlust) return 'Breiter streuen senkt solche Ausschläge.';
-    final trend = status.trend;
-    final restTage = trend.dauerTage - status.trendTag;
-    if (!_trendGenutzt && restTage > 0) {
-      return 'Der ${trend.name}-Trend läuft noch $restTage Tage — im Blick behalten.';
+    if (!_trendGenutzt) {
+      return 'Der ${status.trend.name}-Trend war heute nicht in deinem '
+          'Depot — beim nächsten Mal im Blick behalten.';
     }
     return null;
   }
@@ -110,19 +116,10 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
   }
 
   void _zurueckZumDepot(BuildContext context) {
-    var restlichePops = 3; // Auflösung, Investieren, Marktbriefing
-    Navigator.of(context).popUntil((route) {
-      if (restlichePops <= 0) return true;
-      restlichePops--;
-      return false;
-    });
-  }
-
-  void _zurRangliste(BuildContext context) {
-    // Kein Backend vorhanden — bewusst kein erfundenes Mitspieler-Ranking.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Noch keine Mitspieler in der Rangliste.')),
-    );
+    // Springt IMMER direkt zurück zum Challenge-Panel (statt einer festen
+    // Pop-Anzahl, die je nach Aufruf-Pfad — frisch gespielt vs. nurAnsicht —
+    // unterschiedlich tief wäre und sonst leicht am falschen Screen landet).
+    ChallengePanelSignal.zurueckZumPanel(context);
   }
 
   @override
@@ -154,6 +151,24 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildKapitalHero(positiv),
+                    const SizedBox(height: 16),
+                    RanglisteErgebnisKarte(
+                      challengeId: 'portfolio',
+                      eigenerWert:
+                          (ergebnis.neuesKapital - ergebnis.altesKapital).round(),
+                      punkteLabel: 'Tagesgewinn',
+                      farbe: const Color(0xFF4A90D9),
+                      formatWert: (w) => fmtKapital(w.toDouble()),
+                      punkteAnzeige: Text(
+                        fmtKapital(
+                            (ergebnis.neuesKapital - ergebnis.altesKapital),
+                            mitVorzeichen: true),
+                        style: const TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1A1A1A)),
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     ...ergebnis.beitraege
                         .map((b) => PortfolioLandKarte(beitrag: b)),
@@ -161,6 +176,25 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                       const SizedBox(height: 4),
                       _buildBonusZeile(
                           'Kontinents-Synergie', ergebnis.kontinentsBonus.toDouble()),
+                      const SizedBox(height: 4),
+                    ],
+                    // Allianz-Bonus: eigener, vom Kontinents-Bonus oben
+                    // unabhängiger Mechanismus — eine Zeile pro tatsächlich
+                    // erfüllter Allianz-News (mehrere können sich addieren).
+                    for (final allianz in ergebnis.erfuellteAllianzen) ...[
+                      const SizedBox(height: 4),
+                      _buildBonusZeile(
+                          'Allianz-Bonus (${allianz.allianzKontinente!.map(kontinentNameFuerId).join("+")})',
+                          allianz.allianzBonus!),
+                      const SizedBox(height: 4),
+                    ],
+                    // Sektor-Kombi-Bonus: ebenfalls eigenständig, wirkt wenn
+                    // tatsächlich in beide genannten Sektoren investiert wurde.
+                    for (final kombo in ergebnis.erfuellteSektorKombos) ...[
+                      const SizedBox(height: 4),
+                      _buildBonusZeile(
+                          'Sektor-Kombi-Bonus (${kombo.sektorKombo!.map((s) => portfolioSektoren.firstWhere((p) => p.id == s).name).join("+")})',
+                          kombo.sektorKomboBonus!),
                       const SizedBox(height: 4),
                     ],
                     const Divider(height: 24),
@@ -175,45 +209,28 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _zurueckZumDepot(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A1A1A),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: const [
-                            BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4)),
-                          ],
-                        ),
-                        child: const Text('Depot ansehen',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white, fontSize: 14,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                    ),
+              // Genau EIN Button statt der bisherigen "Depot ansehen"/
+              // "Rangliste"-Buttons — führt zurück zum Challenge-Panel,
+              // identisch zum etablierten Navigationsverhalten der anderen
+              // 3 Challenges.
+              child: GestureDetector(
+                onTap: () => _zurueckZumDepot(context),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4A9E4A),
+                    borderRadius: BorderRadius.circular(50),
+                    border: Border.all(color: const Color(0xFF1A1A1A), width: 2.5),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4), blurRadius: 0),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _zurRangliste(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEAEAE5),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Text('Rangliste',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Color(0xFF1A1A1A), fontSize: 14,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ),
-                ],
+                  child: const Text('Fertig',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
+                          color: Colors.white)),
+                ),
               ),
             ),
           ],
@@ -269,13 +286,25 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(children: [
-            const Icon(Icons.add_circle_outline, color: Color(0xFF4A9E4A), size: 14),
-            const SizedBox(width: 6),
-            Text(label,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                    color: Color(0xFF2E7D32))),
-          ]),
+          // Expanded + ellipsis statt fixer Row-Breite: lange Labels wie
+          // "Sektor-Kombi-Bonus (Technologie+Finanzen)" liefen im Hochformat
+          // auf schmalen Handybreiten rechts über den Kartenrand hinaus
+          // (RenderFlex-Overflow), da die äußere Row die Prozentzahl daneben
+          // nicht mehr unterbringen konnte.
+          Expanded(
+            child: Row(children: [
+              const Icon(Icons.add_circle_outline, color: Color(0xFF4A9E4A), size: 14),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                        color: Color(0xFF2E7D32))),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 8),
           Text(fmtProzent(wert),
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800,
                   color: Color(0xFF4A9E4A))),
@@ -288,8 +317,13 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text('Depot-Rendite gesamt',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+        const Expanded(
+          child: Text('Depot-Rendite gesamt',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+        ),
+        const SizedBox(width: 8),
         Text(fmtProzent(ergebnis.depotRenditeGesamt),
             style: TextStyle(
                 fontSize: 18, fontWeight: FontWeight.w900,

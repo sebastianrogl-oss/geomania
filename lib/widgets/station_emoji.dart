@@ -57,7 +57,10 @@ String modusEmoji(LernModus modus) {
       return '🏭';
     case LernModus.umrissBild:
     case LernModus.umrissMultiple:
+    case LernModus.umrissEingabe:
       return '🗺️';
+    case LernModus.flaggenQuizEingabe:
+      return '🚩';
     case LernModus.nachbarland:
       return '🧭';
     case LernModus.bipGesamt:
@@ -68,18 +71,14 @@ String modusEmoji(LernModus modus) {
       return '🏆';
     case LernModus.waehrungZuLand:
       return '💱';
-    case LernModus.hauptstadtZuLand:
-      return '🏛️';
-    case LernModus.groessteStadt:
-      return '🌆';
-    case LernModus.flaggenFarbe:
-      return '🎨';
     case LernModus.extremFrageLeicht:
       return '🏆';
     case LernModus.zufallsFakt:
       return '💡';
     case LernModus.bekanntesGebaeude:
       return '🗿';
+    case LernModus.grenzkettenRaetsel:
+      return '🛂';
   }
 }
 

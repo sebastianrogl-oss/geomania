@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../widgets/maskottchen_animation.dart';
 
 class AnzeigenameScreen extends StatefulWidget {
   final VoidCallback onFertig;
@@ -39,12 +40,7 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(
-                'assets/icons/deko/coin_winken.png',
-                width: 100,
-                height: 100,
-                errorBuilder: (c, e, s) => const SizedBox.shrink(),
-              ),
+              const MaskottchenAnimation(groesse: 200),
               const SizedBox(height: 24),
               const Text(
                 'Willkommen bei GeoMania!',

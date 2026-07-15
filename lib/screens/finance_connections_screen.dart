@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/countries.dart';
 import '../data/connections_puzzles.dart';
+import '../l10n/uebersetzungen.dart';
 
 class FinanceConnectionsScreen extends StatefulWidget {
   const FinanceConnectionsScreen({super.key});
@@ -101,9 +102,9 @@ class _FinanceConnectionsScreenState extends State<FinanceConnectionsScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Column(children: [
-          Text('Connections', style: TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.w800, fontSize: 18)),
-          Text('Finanz-Edition', style: TextStyle(color: Color(0xFF888888), fontSize: 11, fontWeight: FontWeight.w500)),
+        title: Column(children: [
+          const Text('Connections', style: TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.w800, fontSize: 18)),
+          Text(t('Finanz-Edition'), style: const TextStyle(color: Color(0xFF888888), fontSize: 11, fontWeight: FontWeight.w500)),
         ]),
         centerTitle: true,
       ),
@@ -115,7 +116,7 @@ class _FinanceConnectionsScreenState extends State<FinanceConnectionsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Versuche übrig: ', style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+                Text(t('Versuche übrig: '), style: const TextStyle(color: Color(0xFF888888), fontSize: 13)),
                 ...List.generate(_maxWrong, (i) => Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 3),
                   child: Icon(Icons.circle, size: 14,
@@ -136,10 +137,10 @@ class _FinanceConnectionsScreenState extends State<FinanceConnectionsScreen> {
 
             // Status messages
             if (_victory)
-              _StatusCard(emoji: '🎉', title: 'Glückwunsch!', sub: 'Alle Gruppen gefunden!',
+              _StatusCard(emoji: '🎉', title: t('Glückwunsch!'), sub: t('Alle Gruppen gefunden!'),
                   color: const Color(0xFFE8F5E9), textColor: const Color(0xFF2E7D32))
             else if (_gameOver)
-              _StatusCard(emoji: '💡', title: 'Game Over', sub: 'Nicht schlimm – du hast es gelernt!',
+              _StatusCard(emoji: '💡', title: 'Game Over', sub: t('Nicht schlimm – du hast es gelernt!'),
                   color: const Color(0xFFFFEBEE), textColor: const Color(0xFFC62828)),
 
             // Check button
@@ -154,7 +155,7 @@ class _FinanceConnectionsScreenState extends State<FinanceConnectionsScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       side: const BorderSide(color: Color(0xFFD0D0CB)),
                     ),
-                    child: const Text('Auswahl löschen', style: TextStyle(color: Color(0xFF888888), fontWeight: FontWeight.w700)),
+                    child: Text(t('Auswahl löschen'), style: const TextStyle(color: Color(0xFF888888), fontWeight: FontWeight.w700)),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -168,7 +169,7 @@ class _FinanceConnectionsScreenState extends State<FinanceConnectionsScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 0,
                     ),
-                    child: const Text('Prüfen', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                    child: Text(t('Prüfen'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                   ),
                 ),
               ]),
@@ -185,15 +186,15 @@ class _FinanceConnectionsScreenState extends State<FinanceConnectionsScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
-                  child: const Text('Nochmal spielen', style: TextStyle(fontWeight: FontWeight.w800)),
+                  child: Text(t('Nochmal spielen'), style: const TextStyle(fontWeight: FontWeight.w800)),
                 ),
               ),
             ],
 
             const SizedBox(height: 8),
-            const Text('Täglich neues Rätsel · Wähle 4 zusammengehörende Länder',
+            Text(t('Täglich neues Rätsel · Wähle 4 zusammengehörende Länder'),
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFFBBBBBB), fontSize: 11)),
+                style: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 11)),
           ],
         ),
       ),
@@ -276,7 +277,7 @@ class _SolvedBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(group.label,
+          Text(t(group.label),
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
                   color: group.color == const Color(0xFFF9C74F) ? const Color(0xFF7B5800) : group.color)),
           const SizedBox(height: 6),

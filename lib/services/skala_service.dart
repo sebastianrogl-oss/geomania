@@ -1,4 +1,23 @@
 import 'dart:math';
+import 'locale_service.dart';
+
+// Dezimal-Trennzeichen ist im Deutschen ein Komma, im Englischen ein Punkt
+// (den Dart's toStringAsFixed() bereits liefert) — daher hier zentral statt
+// verstreuter .replaceAll('.', ',')-Aufrufe.
+String _dec(double v, int decimals) {
+  final s = v.toStringAsFixed(decimals);
+  return LocaleService.istEnglisch ? s : s.replaceAll('.', ',');
+}
+
+// Ganzzahlige Rundung würde bei sehr kleinen Werten (z.B. Tourismuseinnahmen
+// oder Militärausgaben winziger Länder) fälschlich "0" anzeigen, obwohl der
+// Wert ungleich null ist — dann fest auf 2 Nachkommastellen ausweichen,
+// sonst ganzzahlig runden wie gewohnt.
+String _fmtGerundetOderZweiDezimal(double v, String einheit) {
+  if (v == 0) return '0 $einheit';
+  if (v.round() == 0) return '${_dec(v, 2)} $einheit';
+  return '${v.round()} $einheit';
+}
 
 class SkalaErgebnis {
   final double min;
@@ -119,7 +138,7 @@ class SkalaService {
     if (realVal < 20) {
       return SkalaErgebnis(
         min: 0, max: 60, schritt: 1,
-        format: (v) => '\$ ${v.round()}/Monat');
+        format: (v) => '\$ ${v.round()}/${LocaleService.istEnglisch ? 'mo' : 'Monat'}');
     }
     final loRoh = (realVal * 0.2).clamp(0.0, realVal * 0.5);
     final hiRoh = _hiMitHeadroom(realVal, 3.0, 1.5, 7000.0);
@@ -129,7 +148,7 @@ class SkalaService {
       min: _roundDown(lo, s),
       max: _roundUp(hi, s),
       schritt: s,
-      format: (v) => '\$ ${v.round()}/Monat',
+      format: (v) => '\$ ${v.round()}/${LocaleService.istEnglisch ? 'mo' : 'Monat'}',
     );
   }
 
@@ -177,7 +196,8 @@ class SkalaService {
       min: 40.0,
       max: 90.0,
       schritt: 0.5,
-      format: (v) => '${v.toStringAsFixed(1).replaceAll('.', ',')} J.',
+      format: (v) =>
+          '${_dec(v, 1)} ${LocaleService.istEnglisch ? 'yrs' : 'J.'}',
     );
   }
 
@@ -199,27 +219,34 @@ class SkalaService {
   // ── Glücksindex (0-10) ───────────────────────────────────────────────────────
   static SkalaErgebnis gluecksIndex(double _) => SkalaErgebnis(
         min: 0, max: 10, schritt: 0.1,
-        format: (v) => v.toStringAsFixed(2).replaceAll('.', ','));
+        format: (v) => _dec(v, 2));
 
   // ── Tourismuseinnahmen (Mrd. USD) ────────────────────────────────────────────
   static SkalaErgebnis tourismusEinnahmen(double _) => SkalaErgebnis(
         min: 0, max: 250, schritt: 1,
-        format: (v) => '${v.round()} Mrd. \$');
+        format: (v) => _fmtGerundetOderZweiDezimal(
+            v, '${LocaleService.istEnglisch ? 'B' : 'Mrd.'} \$'));
 
   // ── Militärausgaben (Mrd. USD) ───────────────────────────────────────────────
   static SkalaErgebnis militaerAusgaben(double _) => SkalaErgebnis(
         min: 0, max: 900, schritt: 1,
-        format: (v) => '${v.round()} Mrd. \$');
+        format: (v) => _fmtGerundetOderZweiDezimal(
+            v, '${LocaleService.istEnglisch ? 'B' : 'Mrd.'} \$'));
 
   // ── Geburtenrate (Kinder pro Frau) ──────────────────────────────────────────
   static SkalaErgebnis geburtenrate(double _) => SkalaErgebnis(
         min: 0.5, max: 7.5, schritt: 0.1,
-        format: (v) => '${v.toStringAsFixed(1).replaceAll('.', ',')} Kinder/Frau');
+        format: (v) =>
+            '${_dec(v, 1)} ${LocaleService.istEnglisch ? 'children/woman' : 'Kinder/Frau'}');
 
   // ── Waldanteil (%) ───────────────────────────────────────────────────────────
+  // Einige Länder haben einen echten, aber sehr kleinen Waldanteil (z.B.
+  // Ägypten 0.1%, Mauretanien/Dschibuti 0.2%) — ganzzahlige Rundung würde das
+  // fälschlich als "0 %" (=kein Wald) anzeigen, obwohl der Wert ungleich null
+  // ist. Ein echtes "0 %" (z.B. Katar, Oman, Nauru) bleibt unverändert "0".
   static SkalaErgebnis waldanteil(double _) => SkalaErgebnis(
         min: 0, max: 100, schritt: 1,
-        format: (v) => '${v.round()} %');
+        format: (v) => _fmtGerundetOderZweiDezimal(v, '%'));
 
   // ── Küstenlinie (km) ─────────────────────────────────────────────────────────
   static SkalaErgebnis kuestenlinie(double realVal, [int? seed]) {
@@ -243,14 +270,16 @@ class SkalaService {
   // ── Alkoholkonsum (Liter/Kopf) ────────────────────────────────────────────────
   static SkalaErgebnis alkoholkonsum(double _) => SkalaErgebnis(
         min: 0, max: 15, schritt: 0.1,
-        format: (v) => '${v.toStringAsFixed(1).replaceAll('.', ',')} L/Kopf');
+        format: (v) =>
+            '${_dec(v, 1)} ${LocaleService.istEnglisch ? 'L/capita' : 'L/Kopf'}');
 
   // ── Olympia-Medaillen (Anzahl gesamt) ─────────────────────────────────────────
   static SkalaErgebnis olympiaMedaillen(double realVal, [int? seed]) {
     if (realVal < 10) {
       return SkalaErgebnis(
           min: 0, max: (realVal * 6).clamp(5.0, 50.0), schritt: 1,
-          format: (v) => '${v.round()} Medaillen');
+          format: (v) =>
+              '${v.round()} ${LocaleService.istEnglisch ? 'medals' : 'Medaillen'}');
     }
     final loRoh = (realVal * 0.15).clamp(1.0, realVal * 0.45);
     final hiRoh = _hiMitHeadroom(realVal, 4.0, 2.0, 3000.0);
@@ -260,7 +289,8 @@ class SkalaService {
       min: _roundDown(lo, s),
       max: _roundUp(hi, s),
       schritt: s,
-      format: (v) => '${v.round()} Medaillen',
+      format: (v) =>
+          '${v.round()} ${LocaleService.istEnglisch ? 'medals' : 'Medaillen'}',
     );
   }
 
@@ -274,7 +304,7 @@ class SkalaService {
     if (realVal < 10) {
       return SkalaErgebnis(
           min: 0, max: (realVal * 6).clamp(5.0, 40.0), schritt: 0.1,
-          format: (v) => '${v.toStringAsFixed(1).replaceAll('.', ',')} %');
+          format: (v) => '${_dec(v, 1)} %');
     }
     final hiRoh = _hiMitHeadroom(realVal, 3.0, 1.5, 450.0);
     // min ist hier fest bei 0 (Inflation ist naturgemäß >=0 begrenzt) — die
@@ -293,14 +323,110 @@ class SkalaService {
       min: 0,
       max: _roundUp(hi, s),
       schritt: s,
-      format: (v) => '${v.toStringAsFixed(1).replaceAll('.', ',')} %',
+      format: (v) => '${_dec(v, 1)} %',
     );
   }
 
   // ── Staatsschulden (% des BIP) ─────────────────────────────────────────────────
   static SkalaErgebnis staatsschulden(double _) => SkalaErgebnis(
         min: 0, max: 300, schritt: 1,
-        format: (v) => '${v.round()} % BIP');
+        format: (v) => '${v.round()} % ${LocaleService.istEnglisch ? 'GDP' : 'BIP'}');
+
+  // ── Rundenskala (EINMAL pro Tages-Runde, nicht pro Frage) ────────────────
+  //
+  // fuerRankingId()/fuerKategorie() oben liefern eine ADAPTIVE Skala pro
+  // einzelnem realVal — richtig für den Lernpfad-Preisschätzen-Modus
+  // (station_session_service.dart), aber falsch für die "Das große
+  // Schätzen"-Tages-Challenge: dort soll der Slider innerhalb EINER Runde
+  // (8 Fragen derselben Kategorie) immer dieselbe Skala zeigen, damit der
+  // Spieler ein Gefühl für "hoch/niedrig in dieser Kategorie" entwickeln
+  // kann. ausRundenWerten() berechnet dafür GENAU EINMAL (aus den echten
+  // Werten der tatsächlich gezogenen Länder dieser Runde) eine feste Skala.
+
+  /// Kategorien mit fester 0-100-Skala (Prozent/Index-Punkte): die
+  /// Rundenskala darf hier nie über die natürlichen Grenzen hinaus gepuffert
+  /// werden. Auch von preis_schaetzen_screen.dart für die Punkteberechnung
+  /// genutzt (absolute statt relative Abweichung) — eine Stelle, damit beide
+  /// Verwendungen nie auseinanderlaufen.
+  static bool istProzentKategorie(String rankingId) => const {
+        'forest',
+        'corruption',
+        'press_freedom',
+        'inflation',
+      }.contains(rankingId);
+
+  /// Formatierfunktion für eine RankingCategory-ID, unabhängig vom
+  /// tatsächlichen Wert. Ruft die jeweilige adaptive Funktion oben einmal
+  /// mit einem großen Platzhalter-Wert auf (1e12 liegt über JEDER
+  /// Mikrostaat-Sonderfall-Schwelle, siehe z.B. bipProKopf/flaeche/
+  /// mindestlohn/kuestenlinie/olympiaMedaillen/inflationsrate) — landet so
+  /// zuverlässig im "normalen" Zweig, dessen Format-Funktion (anders als
+  /// z.B. bei flaeche() der Mikrostaat-Zweig) für JEDEN späteren Wert
+  /// passt, weil sie selbst wertabhängig abkürzt (_fmtArea/_fmtPop/…).
+  static String Function(double) _formatFuerRankingId(String id) =>
+      switch (id) {
+        'gdpPerCapita' => bipProKopf(1e12).format,
+        'population' => bevoelkerung(1e12).format,
+        'area' => flaeche(1e12).format,
+        'lifeExpectancy' => lebenserwartung(1e12).format,
+        'minimumWage' => mindestlohn(1e12).format,
+        'coastline' => kuestenlinie(1e12).format,
+        'gdpTotal' => bipGesamt(1e12).format,
+        'internet' => internetGeschwindigkeit(1e12).format,
+        'corruption' => korruptionsIndex(1e12).format,
+        'press_freedom' => pressefreiheit(1e12).format,
+        'happiness' => gluecksIndex(1e12).format,
+        'tourism' => tourismusEinnahmen(1e12).format,
+        'military' => militaerAusgaben(1e12).format,
+        'birth_rate' => geburtenrate(1e12).format,
+        'forest' => waldanteil(1e12).format,
+        'alcohol' => alkoholkonsum(1e12).format,
+        'olympics' => olympiaMedaillen(1e12).format,
+        'highest_point' => hoechsterPunkt(1e12).format,
+        'inflation' => inflationsrate(1e12).format,
+        'debt' => staatsschulden(1e12).format,
+        _ => (v) => v.round().toString(),
+      };
+
+  /// Berechnet EINE feste Skala aus den ECHTEN Werten [werteDieserRunde]
+  /// (z.B. die 8 für den heutigen "Das große Schätzen"-Tag tatsächlich
+  /// gezogenen Länder dieser Kategorie) — 15% Puffer auf beiden Seiten der
+  /// Spanne, damit die Extremwerte nicht exakt am Rand des Sliders kleben.
+  /// Bleibt unverändert für alle Fragen dieser Runde; ändert sich nur beim
+  /// nächsten Tag (andere Länder/ggf. andere Kategorie).
+  static SkalaErgebnis ausRundenWerten(
+      String rankingId, List<double> werteDieserRunde) {
+    final format = _formatFuerRankingId(rankingId);
+    if (werteDieserRunde.isEmpty) {
+      return SkalaErgebnis(min: 0, max: 100, schritt: 1, format: format);
+    }
+    final echtesMin = werteDieserRunde.reduce(min);
+    final echtesMax = werteDieserRunde.reduce(max);
+    final spanne = echtesMax - echtesMin;
+    // Falls alle gezogenen Länder zufällig denselben Wert haben (spanne=0):
+    // Puffer relativ zum Wert selbst statt zur (dann nutzlosen) Spanne.
+    final puffer = spanne > 0
+        ? spanne * 0.15
+        : (echtesMax.abs() * 0.15).clamp(1.0, double.infinity);
+    var lo = echtesMin - puffer;
+    var hi = echtesMax + puffer;
+    if (istProzentKategorie(rankingId)) {
+      lo = lo.clamp(0.0, 100.0);
+      hi = hi.clamp(0.0, 100.0);
+    } else {
+      lo = lo.clamp(0.0, double.infinity);
+    }
+    // Sicherheits-Fallback: extremer Randfall bei dem der Prozent-Clamp
+    // oben lo/hi auf denselben Wert zusammenzieht.
+    if (hi <= lo) hi = lo + 1;
+    final s = _niceStep(hi - lo);
+    return SkalaErgebnis(
+      min: _roundDown(lo, s),
+      max: _roundUp(hi, s),
+      schritt: s,
+      format: format,
+    );
+  }
 
   /// Dispatcher: passende adaptive Skala für eine [RankingCategory]-ID (siehe
   /// country_rankings.dart) — deckt alle 20 dort definierten Kategorien ab,
@@ -353,31 +479,35 @@ class SkalaService {
 
   static String _fmtInt(int n) {
     if (n <= 0) return '0';
+    final sep = LocaleService.istEnglisch ? ',' : '.';
     final s = n.toString();
     final buf = StringBuffer();
     for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write(sep);
       buf.write(s[i]);
     }
     return buf.toString();
   }
 
   static String _fmtPop(double v) {
-    if (v >= 1e9) return '${(v / 1e9).toStringAsFixed(2).replaceAll('.', ',')} Mrd.';
-    if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(1).replaceAll('.', ',')} Mio.';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(0)} Tsd.';
-    return '${v.toInt()} Pers.';
+    final en = LocaleService.istEnglisch;
+    if (v >= 1e9) return '${_dec(v / 1e9, 2)} ${en ? 'B' : 'Mrd.'}';
+    if (v >= 1e6) return '${_dec(v / 1e6, 1)} ${en ? 'M' : 'Mio.'}';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(0)} ${en ? 'K' : 'Tsd.'}';
+    return '${v.toInt()} ${en ? 'people' : 'Pers.'}';
   }
 
   static String _fmtGross(double v) {
-    if (v >= 1e12) return '${(v / 1e12).toStringAsFixed(2).replaceAll('.', ',')} Bio.';
-    if (v >= 1e9) return '${(v / 1e9).toStringAsFixed(1).replaceAll('.', ',')} Mrd.';
-    if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(0)} Mio.';
+    final en = LocaleService.istEnglisch;
+    if (v >= 1e12) return '${_dec(v / 1e12, 2)} ${en ? 'T' : 'Bio.'}';
+    if (v >= 1e9) return '${_dec(v / 1e9, 1)} ${en ? 'B' : 'Mrd.'}';
+    if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(0)} ${en ? 'M' : 'Mio.'}';
     return _fmtInt(v.round());
   }
 
   static String _fmtArea(double v) {
-    if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(2).replaceAll('.', ',')} Mio. km²';
+    final en = LocaleService.istEnglisch;
+    if (v >= 1e6) return '${_dec(v / 1e6, 2)} ${en ? 'M' : 'Mio.'} km²';
     if (v >= 1000) return '${_fmtInt(v.round())} km²';
     return '${v.toStringAsFixed(0)} km²';
   }

@@ -1,16 +1,29 @@
 import 'package:flutter/material.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/challenge_panel_signal.dart';
+import '../services/locale_service.dart';
 
 /// Tag, an dem die Tages-Challenges eingeführt wurden — Ausgabe #1 für alle 4.
-final kChallengesStartDatum = DateTime(2026, 7, 4);
+/// Vor Release auf das tatsächliche Launch-/Testdatum zurückgesetzt, damit
+/// die erste ab jetzt gespielte Runde wieder korrekt als "Ausgabe #1" zählt,
+/// statt einer aus der Testphase bereits hochgezählten Nummer.
+final kChallengesStartDatum = DateTime(2026, 7, 15);
 
-const _kMonatsnamen = [
+const _kMonatsnamenDe = [
   'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
 ];
+const _kMonatsnamenEn = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
-String formatiertesDatum(DateTime d) =>
-    '${d.day}. ${_kMonatsnamen[d.month - 1]} ${d.year}';
+String formatiertesDatum(DateTime d) {
+  final monate = LocaleService.istEnglisch ? _kMonatsnamenEn : _kMonatsnamenDe;
+  return LocaleService.istEnglisch
+      ? '${monate[d.month - 1]} ${d.day}, ${d.year}'
+      : '${d.day}. ${monate[d.month - 1]} ${d.year}';
+}
 
 int ausgabeNummer(DateTime startDatum) {
   final heute = DateTime.now();
@@ -107,7 +120,7 @@ class _ChallengeStartScreenState extends State<ChallengeStartScreen> {
                 style: const TextStyle(
                     fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
             const SizedBox(height: 6),
-            Text('Ausgabe #$nummer',
+            Text(t('Ausgabe #{n}', {'n': '$nummer'}),
                 style: const TextStyle(
                     fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
             const SizedBox(height: 4),
@@ -123,7 +136,7 @@ class _ChallengeStartScreenState extends State<ChallengeStartScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: _WeisserButton(
-                  text: 'Spielen',
+                  text: t('Spielen'),
                   farbe: widget.farbe,
                   onTap: _spielen,
                 ),
@@ -133,22 +146,22 @@ class _ChallengeStartScreenState extends State<ChallengeStartScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                     color: Colors.white24, borderRadius: BorderRadius.circular(20)),
-                child: const Text('Heute bereits gespielt',
-                    style: TextStyle(
+                child: Text(t('Heute bereits gespielt'),
+                    style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
               ),
               const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: _WeisserButton(
-                  text: 'Ergebnisse',
+                  text: t('Ergebnisse'),
                   farbe: widget.farbe,
                   onTap: () => Navigator.push(
                       context, MaterialPageRoute(builder: widget.ergebnisScreenBuilder)),
                 ),
               ),
               const SizedBox(height: 12),
-              Text('Komm morgen für Ausgabe #${nummer + 1} wieder',
+              Text(t('Komm morgen für Ausgabe #{n} wieder', {'n': '${nummer + 1}'}),
                   style: const TextStyle(fontSize: 12, color: Colors.white70)),
             ],
             const SizedBox(height: 40),

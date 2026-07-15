@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/daily_challenge.dart';
 import '../services/fortschritt_service.dart';
 import 'preis_schaetzen_screen.dart';
@@ -104,7 +105,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
 
   String _countdown() {
     final d = DailyChallenge.untilMidnight();
-    return 'Reset in ${d.inHours}h ${d.inMinutes % 60}m';
+    return t('Reset in {h}h {m}m', {'h': '${d.inHours}', 'm': '${d.inMinutes % 60}'});
   }
 
   Future<void> _start(String id) async {
@@ -141,9 +142,9 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                   const Text('⚡',
                       style: TextStyle(fontSize: 22)),
                   const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text('Tägliche Challenges',
-                        style: TextStyle(
+                  Expanded(
+                    child: Text(t('Tägliche Challenges'),
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.w800)),
@@ -168,7 +169,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
               child: Row(
                 children: [
                   Text(
-                    '$doneCount/4 heute erledigt',
+                    t('{n}/4 heute erledigt', {'n': '$doneCount'}),
                     style: const TextStyle(
                         color: Color(0xFFA8D5A2),
                         fontSize: 13,
@@ -231,10 +232,10 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                           color: const Color(0xFF4A9E4A),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Text(
-                          'Alle spielen →',
+                        child: Text(
+                          t('Alle spielen →'),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                               color: Colors.white,
                               fontSize: 15,
                               fontWeight: FontWeight.w800),
@@ -248,10 +249,10 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                         color: const Color(0xFFEAEAE5),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Text(
-                        '🎉 Alle Challenges erledigt!',
+                      child: Text(
+                        t('🎉 Alle Challenges erledigt!'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                             color: Color(0xFF4A9E4A),
                             fontSize: 15,
                             fontWeight: FontWeight.w800),
@@ -308,7 +309,7 @@ class _ChallengeKarte extends StatelessWidget {
 
             // Titel
             Text(
-              info.title,
+              t(info.title),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -328,7 +329,7 @@ class _ChallengeKarte extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                isDone ? 'Erledigt ✅' : 'Spielen →',
+                isDone ? t('Erledigt ✅') : t('Spielen →'),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,

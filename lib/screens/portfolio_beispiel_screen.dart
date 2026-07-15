@@ -1,6 +1,7 @@
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/portfolio_daten.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/portfolio_engine.dart';
 import '../utils/portfolio_format.dart';
 import '../widgets/portfolio_land_karte.dart';
@@ -69,8 +70,8 @@ class PortfolioBeispielScreen extends StatelessWidget {
         backgroundColor: const Color(0xFF4A9E4A),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text("So funktioniert's",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        title: Text(t("So funktioniert's"),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
       ),
       body: SafeArea(
         child: Column(
@@ -83,60 +84,60 @@ class PortfolioBeispielScreen extends StatelessWidget {
                   children: [
                     _abschnitt1DasPrinzip(),
                     const SizedBox(height: 28),
-                    _sectionTitle('EIN TAG IM BEISPIEL'),
+                    _sectionTitle(t('EIN TAG IM BEISPIEL')),
                     const SizedBox(height: 10),
                     _trendBanner(),
                     const SizedBox(height: 12),
                     _newsKarte(
-                      titel: 'Notenbank senkt Zinsen',
-                      klartext: 'Billiges Geld beflügelt Wachstumsmärkte.',
+                      titel: t('Notenbank senkt Zinsen'),
+                      klartext: t('Billiges Geld beflügelt Wachstumsmärkte.'),
                       flaggen: const ['IN', 'BR', 'ID'],
                       positiv: true,
                     ),
                     _newsKarte(
-                      titel: 'Lieferketten-Störung in Asien',
-                      klartext: 'Produktion stockt kurzfristig.',
+                      titel: t('Lieferketten-Störung in Asien'),
+                      klartext: t('Produktion stockt kurzfristig.'),
                       flaggen: const ['CN', 'VN', 'DE'],
                       positiv: false,
                     ),
                     _newsKarte(
-                      titel: 'Rekord-Ernte in Südamerika',
-                      klartext: 'Agrar-Exporteure verdienen mit.',
+                      titel: t('Rekord-Ernte in Südamerika'),
+                      klartext: t('Agrar-Exporteure verdienen mit.'),
                       flaggen: const ['BR', 'AR'],
                       positiv: true,
                     ),
                     const SizedBox(height: 16),
-                    _sectionTitle('ZWEI WEGE — BEIDE GÜLTIG'),
+                    _sectionTitle(t('ZWEI WEGE — BEIDE GÜLTIG')),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Es gibt kein Richtig oder Falsch — nur unterschiedlichen '
-                      'Umgang mit Risiko.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF888888)),
+                    Text(
+                      t('Es gibt kein Richtig oder Falsch — nur unterschiedlichen '
+                      'Umgang mit Risiko.'),
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
                     ),
                     const SizedBox(height: 12),
                     _stilKarte(
                       emoji: '🛡️',
-                      titel: 'Der Sichere',
+                      titel: t('Der Sichere'),
                       borderColor: const Color(0xFF1565C0),
                       beitraege: _stilASicher,
-                      risikoLabel: 'niedrig', risikoEmoji: '🟢',
+                      risikoLabel: t('niedrig'), risikoEmoji: '🟢',
                       risikoFarbe: const Color(0xFF4A9E4A),
                       tagGesamt: _kSicherGesamt,
                       kapitalAlt: 1000, kapitalNeu: 1030,
-                      fazit: 'Ruhig und stetig — kleine Schwankungen, kaum '
-                          'Verlusttage.',
+                      fazit: t('Ruhig und stetig — kleine Schwankungen, kaum '
+                          'Verlusttage.'),
                     ),
                     _stilKarte(
                       emoji: '🦅',
-                      titel: 'Der Jäger',
+                      titel: t('Der Jäger'),
                       borderColor: const Color(0xFFF9A825),
                       beitraege: _stilBJaeger,
-                      risikoLabel: 'hoch', risikoEmoji: '🔴',
+                      risikoLabel: t('hoch'), risikoEmoji: '🔴',
                       risikoFarbe: const Color(0xFFE53935),
                       tagGesamt: _kJaegerGesamt,
                       kapitalAlt: 1000, kapitalNeu: 1051,
-                      fazit: 'Große Sprünge — heute top, morgen vielleicht '
-                          'Verlust. Der Jäger lebt mit der Schwankung.',
+                      fazit: t('Große Sprünge — heute top, morgen vielleicht '
+                          'Verlust. Der Jäger lebt mit der Schwankung.'),
                     ),
                     const SizedBox(height: 16),
                     _abschnitt4Lehre(),
@@ -160,7 +161,7 @@ class PortfolioBeispielScreen extends StatelessWidget {
                       BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4)),
                     ],
                   ),
-                  child: const Text("Los geht's →",
+                  child: Text(t("Los geht's →"),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white, fontSize: 17,
                           fontWeight: FontWeight.w800)),
@@ -180,16 +181,16 @@ class PortfolioBeispielScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Dein Depot',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900,
+          Text(t('Dein Depot'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900,
                   color: Color(0xFF1A1A1A))),
           const SizedBox(height: 8),
-          const Text(
-            'Du startest mit 1.000 \$ und vermehrst dein Kapital Tag für Tag. '
+          Text(
+            t('Du startest mit 1.000 \$ und vermehrst dein Kapital Tag für Tag. '
             'Jeden Tag EIN Investment-Zug — dein Kapital bleibt gespeichert und '
             'wächst weiter. Je klüger du investierst, desto schneller steigt '
-            'dein Vermögen.',
-            style: TextStyle(fontSize: 13, color: Color(0xFF555555), height: 1.5),
+            'dein Vermögen.'),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF555555), height: 1.5),
           ),
           const SizedBox(height: 14),
           const Text('1.000 \$ → 1.087 \$ → 1.152 \$ → …',
@@ -216,24 +217,24 @@ class PortfolioBeispielScreen extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text('📈 Makro-Trend: ',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
+              Text(t('📈 Makro-Trend: '),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
                       color: Color(0xFF1A1A1A))),
               Expanded(
-                child: Text('KI-Revolution',
+                child: Text(t('KI-Revolution'),
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
                         color: Color(0xFFC68A00))),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          const Text('Tag 3 von 7 — Technologie profitiert mehrere Tage lang',
-              style: TextStyle(fontSize: 12, color: Color(0xFF7A5C00))),
+          Text(t('Tag 3 von 7 — Technologie profitiert mehrere Tage lang'),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF7A5C00))),
           const SizedBox(height: 8),
-          const Text(
-            'Trends laufen über mehrere Tage. Wer früh dabei ist und dranbleibt '
-            'sammelt Vorteil.',
-            style: TextStyle(fontSize: 11, color: Color(0xFF8A7000),
+          Text(
+            t('Trends laufen über mehrere Tage. Wer früh dabei ist und dranbleibt '
+            'sammelt Vorteil.'),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF8A7000),
                 fontStyle: FontStyle.italic),
           ),
         ],
@@ -353,7 +354,7 @@ class PortfolioBeispielScreen extends StatelessWidget {
             children: [
               Text(risikoEmoji, style: const TextStyle(fontSize: 14)),
               const SizedBox(width: 6),
-              Text('Depot-Risiko: $risikoLabel',
+              Text(t('Depot-Risiko: {label}', {'label': risikoLabel}),
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
                       color: risikoFarbe)),
             ],
@@ -367,8 +368,8 @@ class PortfolioBeispielScreen extends StatelessWidget {
               color: const Color(0xFFF5F0E8),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Text('Kontinents-Bonus: keiner (verschiedene Kontinente)',
-                style: TextStyle(fontSize: 11, color: Color(0xFF888888))),
+            child: Text(t('Kontinents-Bonus: keiner (verschiedene Kontinente)'),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
           ),
           const SizedBox(height: 10),
           const Divider(height: 1),
@@ -376,8 +377,8 @@ class PortfolioBeispielScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Tag gesamt',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              Text(t('Tag gesamt'),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
               Text(fmtProzent(tagGesamt),
                   style: TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w900,
@@ -414,12 +415,12 @@ class PortfolioBeispielScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Es gibt keine perfekte Wahl',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900,
+          Text(t('Es gibt keine perfekte Wahl'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900,
                   color: Color(0xFF1A1A1A))),
           const SizedBox(height: 10),
-          const Text(
-            'Jedes Land hat eine erwartete Rendite — aber auch eine zufällige '
+          Text(
+            t('Jedes Land hat eine erwartete Rendite — aber auch eine zufällige '
             'Tagesschwankung 🎲, die du VORHER nicht siehst. Länder mit hohem '
             'Risiko schlagen stärker aus: mal nach oben, mal nach unten.\n\n'
             'Im Beispiel hat Brasilien trotz guter News einen schlechten '
@@ -430,17 +431,17 @@ class PortfolioBeispielScreen extends StatelessWidget {
             '• dein Risiko bewusst zu steuern (breit streuen = ruhiger, '
             'konzentrieren = riskanter)\n\n'
             'Finde deinen eigenen Stil. Nach ein paar Tagen zeigt dir das Spiel '
-            'welcher Investor-Typ du bist.',
-            style: TextStyle(fontSize: 13, color: Color(0xFF1A1A1A), height: 1.5),
+            'welcher Investor-Typ du bist.'),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A1A), height: 1.5),
           ),
           const SizedBox(height: 14),
-          const Wrap(
+          Wrap(
             spacing: 14, runSpacing: 8,
             children: [
-              Text('🛡️ Der Sichere', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-              Text('🦅 Der Jäger', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-              Text('🎯 Der Spezialist', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-              Text('🎰 Der Zocker', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              Text(t('🛡️ Der Sichere'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              Text(t('🦅 Der Jäger'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              Text(t('🎯 Der Spezialist'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              Text(t('🎰 Der Zocker'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
             ],
           ),
         ],

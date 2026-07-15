@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/country_rankings.dart';
+import '../l10n/uebersetzungen.dart';
 
 enum _Phase { placing, result }
 
@@ -160,8 +161,8 @@ class _CategoryMatchScreenState extends State<CategoryMatchScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        const Text('Kategorie-Match',
-            style: TextStyle(
+        Text(t('Kategorie-Match'),
+            style: const TextStyle(
                 color: Color(0xFF1A1A1A),
                 fontSize: 16,
                 fontWeight: FontWeight.w800)),
@@ -181,7 +182,7 @@ class _CategoryMatchScreenState extends State<CategoryMatchScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
           child: Row(children: [
-            Text('Land ${_countryIndex + 1} von $_groupSize',
+            Text(t('Land {n} von {total}', {'n': '${_countryIndex + 1}', 'total': '$_groupSize'}),
                 style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 11,
@@ -341,7 +342,7 @@ class _CategoryMatchScreenState extends State<CategoryMatchScreen> {
                               height: 1.0)),
                       Padding(
                         padding: const EdgeInsets.only(bottom: 4, left: 6),
-                        child: Text('/ $_maxPoints Pkt möglich',
+                        child: Text(t('/ {n} Pkt möglich', {'n': '$_maxPoints'}),
                             style: const TextStyle(
                                 color: Colors.white54,
                                 fontSize: 13,
@@ -380,9 +381,9 @@ class _CategoryMatchScreenState extends State<CategoryMatchScreen> {
                       color: const Color(0xFF4A9E4A),
                       borderRadius: BorderRadius.circular(14)),
                   padding: const EdgeInsets.symmetric(vertical: 15),
-                  child: const Text('Nochmal spielen',
+                  child: Text(t('Nochmal spielen'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                           color: Colors.white,
                           fontSize: 15,
                           fontWeight: FontWeight.w700)),
@@ -397,7 +398,7 @@ class _CategoryMatchScreenState extends State<CategoryMatchScreen> {
                       color: const Color(0xFFEAEAE5),
                       borderRadius: BorderRadius.circular(14)),
                   padding: const EdgeInsets.symmetric(vertical: 15),
-                  child: const Text('Zurück',
+                  child: Text(t('Zurück'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           color: Color(0xFF888888),
@@ -453,8 +454,8 @@ class _CategoryMatchScreenState extends State<CategoryMatchScreen> {
                   _rankLine(playerC, playerRank, const Color(0xFFC62828)),
                   const SizedBox(height: 2),
                   Row(children: [
-                    const Text('Ideale Wahl: ',
-                        style: TextStyle(
+                    Text(t('Ideale Wahl: '),
+                        style: const TextStyle(
                             color: Color(0xFFAAAAAA),
                             fontSize: 10,
                             fontWeight: FontWeight.w500)),

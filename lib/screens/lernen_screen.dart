@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/countries.dart';
 import '../data/lernen_fakten.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/stats_service.dart';
 import 'quiz_screen.dart';
 import 'flag_quiz_screen.dart';
@@ -108,14 +109,14 @@ class _LernenScreenState extends State<LernenScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header ────────────────────────────────────────────────────────
-            const Text('Lernen',
-                style: TextStyle(
+            Text(t('Lernen'),
+                style: const TextStyle(
                     color: Color(0xFF1A1A1A),
                     fontSize: 22,
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            const Text('Was möchtest du heute lernen?',
-                style: TextStyle(
+            Text(t('Was möchtest du heute lernen?'),
+                style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 12,
                     fontWeight: FontWeight.w600)),
@@ -148,14 +149,14 @@ class _LernenScreenState extends State<LernenScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('FAKT DES TAGES',
-                            style: TextStyle(
+                        Text(t('FAKT DES TAGES'),
+                            style: const TextStyle(
                                 color: Color(0xFF4A9E4A),
                                 fontSize: 9,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 1.5)),
                         const SizedBox(height: 5),
-                        Text(_getDailyFact(),
+                        Text(t(_getDailyFact()),
                             style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -170,8 +171,8 @@ class _LernenScreenState extends State<LernenScreen> {
             const SizedBox(height: 24),
 
             // ── DEIN FORTSCHRITT ──────────────────────────────────────────────
-            const Text('DEIN FORTSCHRITT',
-                style: TextStyle(
+            Text(t('DEIN FORTSCHRITT'),
+                style: const TextStyle(
                     color: Color(0xFF999999),
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -182,7 +183,7 @@ class _LernenScreenState extends State<LernenScreen> {
                 Expanded(
                   child: _FortschrittPill(
                     value: '$_streak',
-                    label: 'Streak',
+                    label: t('Streak'),
                     valueColor: const Color(0xFF4A9E4A),
                     barColor: const Color(0xFF4A9E4A),
                     progress: (_streak / 7).clamp(0.0, 1.0),
@@ -192,7 +193,7 @@ class _LernenScreenState extends State<LernenScreen> {
                 Expanded(
                   child: _FortschrittPill(
                     value: '$totalSeen',
-                    label: 'Gelernt',
+                    label: t('Gelernt'),
                     valueColor: const Color(0xFF1A1A1A),
                     barColor: const Color(0xFF4A9E4A),
                     progress: (totalSeen / 195).clamp(0.0, 1.0),
@@ -202,7 +203,7 @@ class _LernenScreenState extends State<LernenScreen> {
                 Expanded(
                   child: _FortschrittPill(
                     value: '0',
-                    label: 'Abzeichen',
+                    label: t('Abzeichen'),
                     valueColor: const Color(0xFFF9A825),
                     barColor: const Color(0xFFF9A825),
                     progress: 0.0,
@@ -213,8 +214,8 @@ class _LernenScreenState extends State<LernenScreen> {
             const SizedBox(height: 24),
 
             // ── KATEGORIEN ────────────────────────────────────────────────────
-            const Text('KATEGORIEN',
-                style: TextStyle(
+            Text(t('KATEGORIEN'),
+                style: const TextStyle(
                     color: Color(0xFF999999),
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -234,8 +235,8 @@ class _LernenScreenState extends State<LernenScreen> {
               itemBuilder: (context, i) {
                 return [
                   _KategorieTile(
-                    title: '🏳️ Flaggen',
-                    sub: '195 Länder',
+                    title: t('🏳️ Flaggen'),
+                    sub: t('195 Länder'),
                     badge: '195 Flags',
                     bg: const Color(0xFFEBF3FF),
                     titleColor: const Color(0xFF1A3A6B),
@@ -252,9 +253,9 @@ class _LernenScreenState extends State<LernenScreen> {
                     },
                   ),
                   _KategorieTile(
-                    title: '🏛️ Hauptstädte',
-                    sub: '195 Städte',
-                    badge: 'Quiz',
+                    title: t('🏛️ Hauptstädte'),
+                    sub: t('195 Städte'),
+                    badge: t('Quiz'),
                     bg: const Color(0xFFF3EEFF),
                     titleColor: const Color(0xFF3B1A6B),
                     subColor: const Color(0xFF7C3AED),
@@ -270,9 +271,9 @@ class _LernenScreenState extends State<LernenScreen> {
                     },
                   ),
                   _KategorieTile(
-                    title: '🔲 Umrisse',
-                    sub: 'Erkenne Länder',
-                    badge: 'Quiz',
+                    title: t('🔲 Umrisse'),
+                    sub: t('Erkenne Länder'),
+                    badge: t('Quiz'),
                     bg: const Color(0xFFEDF7ED),
                     titleColor: const Color(0xFF1A3D1A),
                     subColor: const Color(0xFF4A9E4A),
@@ -287,9 +288,9 @@ class _LernenScreenState extends State<LernenScreen> {
                     },
                   ),
                   _KategorieTile(
-                    title: '📈 BIP & Wirtschaft',
-                    sub: 'Zahlen & Fakten',
-                    badge: '6 Kapitel',
+                    title: t('📈 BIP & Wirtschaft'),
+                    sub: t('Zahlen & Fakten'),
+                    badge: t('6 Kapitel'),
                     bg: const Color(0xFFFFF8E7),
                     titleColor: const Color(0xFF5A3D00),
                     subColor: const Color(0xFFC68A00),
@@ -305,9 +306,9 @@ class _LernenScreenState extends State<LernenScreen> {
                     },
                   ),
                   _KategorieTile(
-                    title: '💱 Währungen',
-                    sub: 'Welche Währung wohin?',
-                    badge: 'Quiz',
+                    title: t('💱 Währungen'),
+                    sub: t('Welche Währung wohin?'),
+                    badge: t('Quiz'),
                     bg: const Color(0xFFFFF0F5),
                     titleColor: const Color(0xFF6B1A3A),
                     subColor: const Color(0xFFC0185A),
@@ -316,9 +317,9 @@ class _LernenScreenState extends State<LernenScreen> {
                     onTap: () => _push(const WaehrungenScreen()),
                   ),
                   _KategorieTile(
-                    title: '🏭 Wirtschaftssektoren',
-                    sub: 'Welches Land lebt wovon?',
-                    badge: 'Neu',
+                    title: t('🏭 Wirtschaftssektoren'),
+                    sub: t('Welches Land lebt wovon?'),
+                    badge: t('Neu'),
                     bg: const Color(0xFFF0F4FF),
                     titleColor: const Color(0xFF1A1A6B),
                     subColor: const Color(0xFF4A4AD9),
@@ -332,8 +333,8 @@ class _LernenScreenState extends State<LernenScreen> {
             const SizedBox(height: 24),
 
             // ── SPIELE ────────────────────────────────────────────────────────
-            const Text('SPIELE',
-                style: TextStyle(
+            Text(t('SPIELE'),
+                style: const TextStyle(
                     color: Color(0xFF999999),
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -341,8 +342,8 @@ class _LernenScreenState extends State<LernenScreen> {
             const SizedBox(height: 10),
             _SpielCard(
               emoji: '🔀',
-              title: 'Sortier-Spiel',
-              sub: 'Bringe Länder in Reihenfolge',
+              title: t('Sortier-Spiel'),
+              sub: t('Bringe Länder in Reihenfolge'),
               bg: const Color(0xFFEDF7ED),
               iconBg: const Color(0xFFD4EED4),
               titleColor: const Color(0xFF1A3D1A),
@@ -351,8 +352,8 @@ class _LernenScreenState extends State<LernenScreen> {
             const SizedBox(height: 8),
             _SpielCard(
               emoji: '🎯',
-              title: 'Kategorie-Match',
-              sub: 'Welches Land gewinnt welche Kategorie?',
+              title: t('Kategorie-Match'),
+              sub: t('Welches Land gewinnt welche Kategorie?'),
               bg: const Color(0xFFFFF8E7),
               iconBg: const Color(0xFFFFEFC0),
               titleColor: const Color(0xFF5A3D00),
@@ -612,15 +613,15 @@ class _ContinentPicker extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text('Welchen Kontinent?',
-                    style: TextStyle(
+                Text(t('Welchen Kontinent?'),
+                    style: const TextStyle(
                         color: Color(0xFF1A1A1A),
                         fontSize: 18,
                         fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
-                const Text('Wähle einen Bereich zum Lernen',
+                Text(t('Wähle einen Bereich zum Lernen'),
                     style:
-                        TextStyle(color: Color(0xFF888888), fontSize: 13)),
+                        const TextStyle(color: Color(0xFF888888), fontSize: 13)),
                 const SizedBox(height: 16),
               ],
             ),
@@ -684,7 +685,7 @@ class _ContinentOption extends StatelessWidget {
                 Text(emoji, style: const TextStyle(fontSize: 20)),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(name,
+                  child: Text(t(name),
                       style: const TextStyle(
                           color: Color(0xFF1A1A1A),
                           fontSize: 15,
@@ -697,7 +698,7 @@ class _ContinentOption extends StatelessWidget {
                           fontSize: 12,
                           fontWeight: FontWeight.w700))
                 else
-                  Text('$count Länder',
+                  Text(t('{n} Länder', {'n': '$count'}),
                       style: const TextStyle(
                           color: Color(0xFF888888),
                           fontSize: 12,
@@ -768,28 +769,28 @@ class _CountPicker extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          const Text('Wie viele Länder?',
-              style: TextStyle(
+          Text(t('Wie viele Länder?'),
+              style: const TextStyle(
                   color: Color(0xFF1A1A1A),
                   fontSize: 18,
                   fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
-          const Text('Wähle den Umfang deiner Lernrunde',
-              style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+          Text(t('Wähle den Umfang deiner Lernrunde'),
+              style: const TextStyle(color: Color(0xFF888888), fontSize: 13)),
           const SizedBox(height: 16),
           if (total >= 10) ...[
             _CountOption(
-                label: '10 Länder', sub: 'Kurze Runde', count: 10),
+                label: t('{n} Länder', {'n': '10'}), sub: t('Kurze Runde'), count: 10),
             const SizedBox(height: 8),
           ],
           if (total >= 25) ...[
             _CountOption(
-                label: '25 Länder', sub: 'Mittlere Runde', count: 25),
+                label: t('{n} Länder', {'n': '25'}), sub: t('Mittlere Runde'), count: 25),
             const SizedBox(height: 8),
           ],
           _CountOption(
-              label: 'Alle Länder',
-              sub: '$total Fragen · Vollständige Runde',
+              label: t('Alle Länder'),
+              sub: t('{n} Fragen · Vollständige Runde', {'n': '$total'}),
               count: total),
         ],
       ),

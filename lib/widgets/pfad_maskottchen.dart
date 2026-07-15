@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'pfad_deko_layer.dart' show pfadIconAbstandVonMitte;
 
 const _coinVarianten = [
   'coin_normal',
@@ -20,17 +21,26 @@ List<Widget> _maskottchenOverlays({
   required List<String> varianten,
   required String fehlerLabel,
   double size = 315.0,
+  double abstandOffset = 0.0,
 }) {
   final overlays = <Widget>[];
-  const buttonHalf = 45.0;
-  const gap = 50.0;
   final mitte = screenWidth / 2;
+  final abstand = pfadIconAbstandVonMitte + abstandOffset;
 
   for (final a in abschnitte) {
     final variant = varianten[(a.stufe - 1).clamp(0, varianten.length - 1)];
-    final left = a.pos.dx > mitte
-        ? (a.pos.dx - buttonHalf - gap - size).clamp(0.0, screenWidth - size)
-        : (a.pos.dx + buttonHalf + gap).clamp(0.0, screenWidth - size);
+    // Seite (links/rechts) weiterhin von der zugehörigen Stationsposition
+    // abgeleitet, die DISTANZ von der Mitte bis zur Icon-Innenkante ist aber
+    // jetzt ein fixer, mit den Wahrzeichen-Icons geteilter Wert (siehe
+    // pfadIconAbstandVonMitte in pfad_deko_layer.dart) statt eines
+    // stationsrelativen Gaps — das war zuvor der Grund, warum Coin/Globus
+    // optisch näher an der Mitte saßen als die Wahrzeichen. abstandOffset
+    // erlaubt einen bewussten Versatz gegenüber diesem gemeinsamen Basiswert
+    // (z.B. Coins etwas weiter außen als Wahrzeichen).
+    final links = a.pos.dx > mitte;
+    final left = links
+        ? (mitte - abstand - size).clamp(0.0, screenWidth - size)
+        : (mitte + abstand).clamp(0.0, screenWidth - size);
     overlays.add(Positioned(
       left: left,
       top: a.pos.dy - size / 2,
@@ -63,6 +73,7 @@ List<Widget> pfadMaskottchenOverlays({
       varianten: _coinVarianten,
       fehlerLabel: 'MÜNZE',
       size: 264.6,
+      abstandOffset: 60.0,
     );
 
 /// Gibt einen Globus pro Sektion zurück, neben der Anker-Position.

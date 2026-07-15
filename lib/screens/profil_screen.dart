@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../data/lernpfad_data.dart';
+import '../l10n/uebersetzungen.dart';
+import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
+import '../services/auth_service.dart';
 import '../services/challenge_rekord_service.dart';
 import '../services/daily_challenge.dart';
 import '../services/fortschritt_service.dart';
@@ -184,14 +187,17 @@ class _ProfilScreenState extends State<ProfilScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Profil',
-                    style: TextStyle(
+                Text(t('Profil'),
+                    style: const TextStyle(
                         color: Color(0xFF1A1A1A),
                         fontSize: 22,
                         fontWeight: FontWeight.w800)),
                 GestureDetector(
                   onTap: () => Navigator.push(
-                      context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+                      context, MaterialPageRoute(builder: (_) => const SettingsScreen()))
+                      .then((_) {
+                    if (mounted) setState(() {});
+                  }),
                   child: Container(
                     width: 36,
                     height: 36,
@@ -255,14 +261,14 @@ class _ProfilScreenState extends State<ProfilScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text('Sebastian',
-                      style: TextStyle(
+                  Text(AuthService.anzeigename ?? t('Spieler'),
+                      style: const TextStyle(
                           color: Color(0xFF1A1A1A),
                           fontSize: 20,
                           fontWeight: FontWeight.w800)),
                   const SizedBox(height: 3),
-                  const Text('Geo-Anfänger 🌍',
-                      style: TextStyle(
+                  Text(t('Geo-Anfänger 🌍'),
+                      style: const TextStyle(
                           color: Color(0xFF4A9E4A),
                           fontSize: 12,
                           fontWeight: FontWeight.w700)),
@@ -273,7 +279,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                       const Text('🔥',
                           style: TextStyle(fontSize: 14)),
                       const SizedBox(width: 4),
-                      Text('$_streak Tage Streak',
+                      Text(t('{n} Tage Streak', {'n': '$_streak'}),
                           style: const TextStyle(
                               color: Color(0xFFF9A825),
                               fontSize: 13,
@@ -290,25 +296,25 @@ class _ProfilScreenState extends State<ProfilScreen> {
               children: [
                 _StatCard(
                     value: '$_totalChallenges',
-                    label: 'Challenges',
+                    label: t('Challenges'),
                     valueColor: const Color(0xFF4A9E4A)),
                 const SizedBox(width: 8),
                 _StatCard(
                     value: '$_totalSeen',
-                    label: 'Stationen',
+                    label: t('Stationen'),
                     valueColor: const Color(0xFF1A1A1A)),
                 const SizedBox(width: 8),
-                const _StatCard(
-                    value: '0',
-                    label: 'Abzeichen',
-                    valueColor: Color(0xFFF9A825)),
+                _StatCard(
+                    value: '${_freigeschalteteAbzeichen.length}',
+                    label: t('Abzeichen'),
+                    valueColor: const Color(0xFFF9A825)),
               ],
             ),
             const SizedBox(height: 24),
 
             // ── HEUTE ────────────────────────────────────────────────────────
-            const Text('HEUTE',
-                style: TextStyle(
+            Text(t('HEUTE'),
+                style: const TextStyle(
                     color: Color(0xFF999999),
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -317,15 +323,16 @@ class _ProfilScreenState extends State<ProfilScreen> {
             _ChallengeRow(
               logoAsset: 'assets/icons/challenge_preis.png',
               fallbackIcon: Icons.sell,
-              title: 'Das große Schätzen',
+              title: t('Das große Schätzen'),
               bg: const Color(0xFFFFF8E7),
               titleColor: const Color(0xFF5A3D00),
               streak: _challengeStreaks['preis'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['preis'] ?? 0,
               statWert1: _avgPunkteText('preis'),
-              statLabel1: 'Ø Punkte',
+              statLabel1: t('Ø Punkte'),
               statWert2: _rekordText('preis'),
               spieltage: _spieltage['preis'] ?? const {},
+              titelVersatz: -3,
             ),
             const SizedBox(height: 8),
             _ChallengeRow(
@@ -337,7 +344,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
               streak: _challengeStreaks['higher_lower'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['higher_lower'] ?? 0,
               statWert1: _avgPunkteText('higher_lower'),
-              statLabel1: 'Ø geschafft',
+              statLabel1: t('Ø geschafft'),
               statWert2: _rekordText('higher_lower'),
               spieltage: _spieltage['higher_lower'] ?? const {},
             ),
@@ -345,13 +352,13 @@ class _ProfilScreenState extends State<ProfilScreen> {
             _ChallengeRow(
               logoAsset: 'assets/icons/challenge_ranking.png',
               fallbackIcon: Icons.military_tech,
-              title: 'Ranking-Quiz',
+              title: t('Ranking-Quiz'),
               bg: const Color(0xFFF3EEFF),
               titleColor: const Color(0xFF3B1A6B),
               streak: _challengeStreaks['ranking_game'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['ranking_game'] ?? 0,
               statWert1: _avgPunkteText('ranking_game'),
-              statLabel1: 'Ø Punkte',
+              statLabel1: t('Ø Punkte'),
               statWert2: _rekordText('ranking_game'),
               spieltage: _spieltage['ranking_game'] ?? const {},
             ),
@@ -359,22 +366,23 @@ class _ProfilScreenState extends State<ProfilScreen> {
             _ChallengeRow(
               logoAsset: 'assets/icons/challenge_portfolio.png',
               fallbackIcon: Icons.business_center,
-              title: 'Portfolio des Tages',
+              title: t('Portfolio des Tages'),
               bg: const Color(0xFFEBF3FF),
               titleColor: const Color(0xFF1A3A6B),
               streak: _challengeStreaks['portfolio'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['portfolio'] ?? 0,
               statWert1: _avgRenditeText('portfolio'),
-              statLabel1: 'Ø Rendite',
+              statLabel1: t('Ø Rendite'),
               statWert2: _rekordText('portfolio'),
               spieltage: _spieltage['portfolio'] ?? const {},
+              titelVersatz: -3,
             ),
             const SizedBox(height: 24),
 
             // ── SPIELSTIL (Weltportfolio) ────────────────────────────────────
             if (_spielstil != null) ...[
-              const Text('DEIN INVESTOR-STIL',
-                  style: TextStyle(
+              Text(t('DEIN INVESTOR-STIL'),
+                  style: const TextStyle(
                       color: Color(0xFF999999),
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -399,10 +407,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Dein Stil',
-                              style: TextStyle(fontSize: 11, color: Color(0xFF888888),
+                          Text(t('Dein Stil'),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF888888),
                                   fontWeight: FontWeight.w600)),
-                          Text(_spielstil!.titel,
+                          Text(t(_spielstil!.titel),
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
                                   color: Color(0xFF1A1A1A))),
                         ],
@@ -415,8 +423,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
             ],
 
             // ── LERN-FORTSCHRITT ─────────────────────────────────────────────
-            const Text('LERN-FORTSCHRITT',
-                style: TextStyle(
+            Text(t('LERN-FORTSCHRITT'),
+                style: const TextStyle(
                     color: Color(0xFF999999),
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -424,49 +432,49 @@ class _ProfilScreenState extends State<ProfilScreen> {
             const SizedBox(height: 10),
             _ProgressRow(
               modus: LernModus.flaggenQuizBild,
-              label: 'Flaggen',
+              label: t('Flaggen'),
               barColor: const Color(0xFF4A90D9),
               fraction: _kategorieFortschritt(_kategorieFlaggen),
             ),
             const SizedBox(height: 8),
             _ProgressRow(
               modus: LernModus.hauptstaedteMultiple,
-              label: 'Hauptstädte',
+              label: t('Hauptstädte'),
               barColor: const Color(0xFF7C3AED),
               fraction: _kategorieFortschritt(_kategorieHauptstaedte),
             ),
             const SizedBox(height: 8),
             _ProgressRow(
               modus: LernModus.umrissBild,
-              label: 'Umrisse',
+              label: t('Umrisse'),
               barColor: const Color(0xFF4A9E4A),
               fraction: _kategorieFortschritt(_kategorieUmrisse),
             ),
             const SizedBox(height: 8),
             _ProgressRow(
               modus: LernModus.preisSchaetzen,
-              label: 'Länder-Daten & Rekorde',
+              label: t('Länder-Daten & Rekorde'),
               barColor: const Color(0xFFF9A825),
               fraction: _kategorieFortschritt(_kategorieLaenderDaten),
             ),
             const SizedBox(height: 8),
             _ProgressRow(
               modus: LernModus.nachbarland,
-              label: 'Nachbarn & Grenzen',
+              label: t('Nachbarn & Grenzen'),
               barColor: const Color(0xFF00897B),
               fraction: _kategorieFortschritt(_kategorieNachbarn),
             ),
             const SizedBox(height: 8),
             _ProgressRow(
               modus: LernModus.zufallsFakt,
-              label: 'Wissen & Wahrzeichen',
+              label: t('Wissen & Wahrzeichen'),
               barColor: const Color(0xFFC0185A),
               fraction: _kategorieFortschritt(_kategorieWissen),
             ),
             const SizedBox(height: 8),
             _ProgressRow(
               modus: LernModus.sortierSpiel,
-              label: 'Sortierspiel',
+              label: t('Sortierspiel'),
               barColor: const Color(0xFF1565C0),
               fraction: _kategorieFortschritt(_kategorieSortieren),
             ),
@@ -504,6 +512,10 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
   late String _gewaehlt;
   int _seite = 0;
   bool _hinweisSichtbar = false;
+  // Pfade der per Werbung bereits freigeschalteten Bilder (Coin/Globus sind
+  // separat immer frei, siehe ProfilbildService.istImmerKostenlos, und
+  // stehen NICHT in diesem Set).
+  Set<String> _freigeschaltet = {};
 
   @override
   void initState() {
@@ -511,6 +523,17 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
     _pageController = PageController();
     _gewaehlt = widget.aktuellesProfilbild;
     _pruefeSwipeHinweis();
+    _ladeFreigeschaltet();
+  }
+
+  Future<void> _ladeFreigeschaltet() async {
+    final freigeschaltet = <String>{};
+    for (final pfad in ProfilbildService.verfuegbareBilder) {
+      if (await ProfilbildService.istFreigeschaltet(pfad)) {
+        freigeschaltet.add(pfad);
+      }
+    }
+    if (mounted) setState(() => _freigeschaltet = freigeschaltet);
   }
 
   Future<void> _pruefeSwipeHinweis() async {
@@ -598,9 +621,9 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                     child: AnimatedOpacity(
                       opacity: _hinweisSichtbar ? 1 : 0,
                       duration: const Duration(milliseconds: 400),
-                      child: const Center(
+                      child: Center(
                         child: Text(
-                          '← Wische für dein Münzalbum',
+                          t('← Wische für dein Münzalbum'),
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           softWrap: true,
@@ -637,50 +660,91 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                   itemBuilder: (_, i) {
                     final pfad = ProfilbildService.verfuegbareBilder[i];
                     final ausgewaehlt = pfad == _gewaehlt;
+                    final frei = ProfilbildService.istImmerKostenlos(pfad) ||
+                        _freigeschaltet.contains(pfad);
                     return GestureDetector(
-                      onTap: () => _waehle(pfad),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: ausgewaehlt
-                                ? const Color(0xFF4A9E4A)
-                                : const Color(0xFFD0CEC8),
-                            width: ausgewaehlt ? 3 : 1.5,
-                          ),
-                        ),
-                        child: ClipOval(
-                          child: ProfilbildService.istWeitformat(pfad)
-                              // Alle Globus-/Coin-Illustrationen (677x369,
-                              // Bildinhalt füllt nur einen mittleren
-                              // Streifen) einheitlich mit Faktor 1.5
-                              // vergrößern -> geprüft dass bei allen 7
-                              // übrigen Varianten der Bildinhalt erst ab
-                              // Skalierung ~1.95-2.15 anschneiden würde,
-                              // 1.5 bleibt also überall unbeschnitten
-                              // (bei "winken" liegt die Schwelle wegen der
-                              // asymmetrisch ausgestreckten Hand niedriger,
-                              // bei ~1.59 — 1.5 bleibt auch dort knapp
-                              // darunter).
-                              ? Transform.scale(
-                                  scale: 1.5,
-                                  child: Image.asset(pfad, fit: BoxFit.contain),
-                                )
-                              : Padding(
-                                  // Deutlich mehr Innenabstand als die
-                                  // Globus-/Coin-Icons, damit die restlichen
-                                  // (bereits randfüllenden) Tier-/Deko-Icons
-                                  // nicht mehr unverhältnismäßig größer
-                                  // wirken als die neu vereinheitlichten
-                                  // Globus-/Coin-Optionen.
-                                  padding: const EdgeInsets.all(14),
-                                  child: Transform.scale(
-                                    scale: 0.8,
-                                    child: Image.asset(pfad, fit: BoxFit.contain),
-                                  ),
+                      onTap: frei
+                          ? () => _waehle(pfad)
+                          : () => showModalBottomSheet(
+                                context: context,
+                                backgroundColor: Colors.transparent,
+                                isScrollControlled: true,
+                                builder: (_) => _ProfilbildFreischaltenDialog(
+                                  onFreigeschaltet: () async {
+                                    await ProfilbildService.schalteFrei(pfad);
+                                    if (mounted) {
+                                      setState(
+                                          () => _freigeschaltet.add(pfad));
+                                    }
+                                    _waehle(pfad);
+                                  },
                                 ),
-                        ),
+                              ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: ausgewaehlt
+                                    ? const Color(0xFF4A9E4A)
+                                    : const Color(0xFFD0CEC8),
+                                width: ausgewaehlt ? 3 : 1.5,
+                              ),
+                            ),
+                            child: ClipOval(
+                              child: Opacity(
+                                opacity: frei ? 1.0 : 0.4,
+                                child: ProfilbildService.istWeitformat(pfad)
+                                    // Alle Globus-/Coin-Illustrationen (677x369,
+                                    // Bildinhalt füllt nur einen mittleren
+                                    // Streifen) einheitlich mit Faktor 1.25
+                                    // vergrößern -> geprüft dass bei allen 7
+                                    // übrigen Varianten der Bildinhalt erst ab
+                                    // Skalierung ~1.95-2.15 anschneiden würde,
+                                    // 1.25 bleibt also überall unbeschnitten
+                                    // (bei "winken" liegt die Schwelle wegen der
+                                    // asymmetrisch ausgestreckten Hand niedriger,
+                                    // bei ~1.59 — 1.25 bleibt auch dort deutlich
+                                    // darunter).
+                                    ? Transform.scale(
+                                        scale: 1.25,
+                                        child: Image.asset(pfad, fit: BoxFit.contain),
+                                      )
+                                    : Padding(
+                                        // Deutlich mehr Innenabstand als die
+                                        // Globus-/Coin-Icons, damit die restlichen
+                                        // (bereits randfüllenden) Tier-/Deko-Icons
+                                        // nicht mehr unverhältnismäßig größer
+                                        // wirken als die neu vereinheitlichten
+                                        // Globus-/Coin-Optionen.
+                                        padding: const EdgeInsets.all(14),
+                                        child: Transform.scale(
+                                          scale: 0.8,
+                                          child: Image.asset(pfad, fit: BoxFit.contain),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ),
+                          if (!frei)
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF1A1A1A),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.lock_rounded,
+                                    color: Colors.white, size: 12),
+                              ),
+                            ),
+                        ],
                       ),
                     );
                   },
@@ -694,6 +758,108 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Profilbild per Werbung freischalten ─────────────────────────────────────
+
+class _ProfilbildFreischaltenDialog extends StatefulWidget {
+  final Future<void> Function() onFreigeschaltet;
+  const _ProfilbildFreischaltenDialog({required this.onFreigeschaltet});
+
+  @override
+  State<_ProfilbildFreischaltenDialog> createState() =>
+      _ProfilbildFreischaltenDialogState();
+}
+
+class _ProfilbildFreischaltenDialogState
+    extends State<_ProfilbildFreischaltenDialog> {
+  bool _ladeAd = false;
+  bool _nichtVerfuegbar = false;
+
+  Future<void> _werbungAnsehen() async {
+    setState(() {
+      _ladeAd = true;
+      _nichtVerfuegbar = false;
+    });
+
+    final belohnt = await AdService.zeigeRewardedAd(onBelohnt: () {});
+    if (!mounted) return;
+
+    if (!belohnt) {
+      setState(() {
+        _ladeAd = false;
+        _nichtVerfuegbar = true;
+      });
+      return;
+    }
+
+    Navigator.pop(context);
+    await widget.onFreigeschaltet();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, MediaQuery.paddingOf(context).bottom + 24),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F4F0),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Text(t('Dieses Profilbild freischalten'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(
+            t('Schau eine kurze Werbung an, um dieses Bild dauerhaft freizuschalten'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
+          ),
+          if (_nichtVerfuegbar) ...[
+            const SizedBox(height: 12),
+            Text(
+              t('Werbung aktuell nicht verfügbar, versuch es später erneut'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: Color(0xFFC62828)),
+            ),
+          ],
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _ladeAd ? null : _werbungAnsehen,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A9E4A),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+            child: _ladeAd
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  )
+                : Text(t('Werbung ansehen'),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -753,6 +919,10 @@ class _ChallengeRow extends StatelessWidget {
   final String statWert1;
   final String statLabel1;
   final String statWert2;
+  // Feinjustierung der Titel-Position (negativ = nach oben) — bei "Das
+  // große Schätzen"/"Portfolio des Tages" sitzt der Titel sonst spürbar
+  // tiefer als bei den kürzeren Titeln der anderen beiden Challenges.
+  final double titelVersatz;
 
   const _ChallengeRow({
     required this.logoAsset,
@@ -766,6 +936,7 @@ class _ChallengeRow extends StatelessWidget {
     required this.statWert1,
     required this.statLabel1,
     required this.statWert2,
+    this.titelVersatz = 0,
   });
 
   Widget _statFeld(String zahl, String label) {
@@ -777,7 +948,7 @@ class _ChallengeRow extends StatelessWidget {
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(zahl,
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: titleColor)),
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: titleColor)),
         ),
         const SizedBox(height: 2),
         Text(label,
@@ -827,14 +998,17 @@ class _ChallengeRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w800, color: titleColor)),
+                    Transform.translate(
+                      offset: Offset(0, titelVersatz),
+                      child: Text(title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w800, color: titleColor)),
+                    ),
                     const SizedBox(height: 4),
                     Text(
-                      streak > 0 ? '🔥 $streak Tage in Folge' : 'Noch keine Serie',
+                      streak > 0 ? t('🔥 {n} Tage in Folge', {'n': '$streak'}) : t('Noch keine Serie'),
                       style: const TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF888888)),
                     ),
@@ -850,11 +1024,11 @@ class _ChallengeRow extends StatelessWidget {
               ? Row(
                   children: [
                     Expanded(child: _statFeld(statWert1, statLabel1)),
-                    Expanded(child: _statFeld(statWert2, 'Rekord')),
+                    Expanded(child: _statFeld(statWert2, t('Rekord'))),
                   ],
                 )
-              : const Text('Noch nicht gespielt',
-                  style: TextStyle(
+              : Text(t('Noch nicht gespielt'),
+                  style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF888888))),
         ],
       ),
@@ -954,14 +1128,14 @@ class _ProgressRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 6),
               SizedBox(
                 width: 30,
                 child: Text('$pct%',
                     textAlign: TextAlign.right,
                     style: const TextStyle(
                         color: Color(0xFF888888),
-                        fontSize: 11,
+                        fontSize: 9,
                         fontWeight: FontWeight.w800)),
               ),
             ],

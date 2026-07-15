@@ -1,6 +1,7 @@
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../../data/portfolio_daten.dart';
+import '../../l10n/uebersetzungen.dart';
 import '../../services/abzeichen_service.dart';
 import '../../services/challenge_ergebnis_service.dart';
 import '../../services/challenge_panel_signal.dart';
@@ -13,6 +14,7 @@ import '../../services/portfolio_service.dart';
 import '../../services/tages_seed_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/rangliste_service.dart';
+import '../../utils/responsive.dart';
 import '../../widgets/abzeichen_popup.dart';
 import '../../widgets/portfolio_flagge.dart';
 import 'portfolio_aufloesung_screen.dart';
@@ -59,6 +61,15 @@ class _PortfolioInvestierenScreenState
   bool _gewichtungPhase = false;
   bool _wirdAbgeschlossen = false;
   Map<String, int> _gewichte = {};
+
+  // Steuert PopScope.canPop (siehe build()): während der aktiven Phasen 1-3
+  // bewusst false, damit Wisch-/Hardware-Zurück nicht mitten in der Runde
+  // Fortschritt verwirft. Nach erfolgreichem Abschluss (Navigation zum
+  // Auflösungs-Screen) auf true — sonst blockiert PopScope auch den
+  // PROGRAMMATISCHEN Navigator.popUntil() aus dem "Fertig"-Button dort oben
+  // im Stack: der Nutzer landete wieder auf der (bereits abgeschlossenen,
+  // also nicht mehr reagierenden) Gewichtungsseite statt beim Challenge-Panel.
+  bool _rundeAbgeschlossen = false;
 
   @override
   void initState() {
@@ -211,9 +222,9 @@ class _PortfolioInvestierenScreenState
   }
 
   (String, Color, String) _risikoAmpel(double risiko) {
-    if (risiko < 0.35) return ('niedrig', const Color(0xFF4A9E4A), '🟢');
-    if (risiko < 0.65) return ('mittel', const Color(0xFFF9A825), '🟡');
-    return ('hoch', const Color(0xFFE53935), '🔴');
+    if (risiko < 0.35) return (t('niedrig'), const Color(0xFF4A9E4A), '🟢');
+    if (risiko < 0.65) return (t('mittel'), const Color(0xFFF9A825), '🟡');
+    return (t('hoch'), const Color(0xFFE53935), '🔴');
   }
 
   Future<void> _investierenUndAbschliessen() async {
@@ -296,7 +307,7 @@ class _PortfolioInvestierenScreenState
 
     if (AuthService.uid != null) {
       await RanglisteService.portfolioKapitalSpeichern(neuerStatus.kapital);
-      await RanglisteService.ergebnisSpeichern(
+      await RanglisteService.ergebnisSpeichernMitBereinigung(
         challengeId: 'portfolio',
         wert: gewinnHeuteAbsolut.round(),
         renditeProzent: tagesRenditeProzent,
@@ -315,6 +326,7 @@ class _PortfolioInvestierenScreenState
     }
 
     if (!mounted) return;
+    setState(() => _rundeAbgeschlossen = true);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -333,8 +345,12 @@ class _PortfolioInvestierenScreenState
     // Phasen 1-3 sind ein durchgehender Flow ohne Rückwärts-Navigation
     // (siehe auch _buildHeader ohne Zurück-Pfeil und _buildGewichtung ohne
     // "Auswahl ändern"-Link) — einziger Ausstieg ist der Auflösungs-Screen.
+    // canPop erst nach erfolgreichem Abschluss true (siehe
+    // _rundeAbgeschlossen): sonst blockiert PopScope auch das
+    // programmatische Navigator.popUntil() aus dem "Fertig"-Button auf dem
+    // darüberliegenden Auflösungs-Screen.
     return PopScope(
-      canPop: false,
+      canPop: _rundeAbgeschlossen,
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F0E8),
         body: SafeArea(
@@ -374,7 +390,9 @@ class _PortfolioInvestierenScreenState
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              _gewichtungPhase ? 'Kapital verteilen' : 'Wähle $_kAuswahlAnzahl Länder',
+              _gewichtungPhase
+                  ? t('Kapital verteilen')
+                  : t('Wähle {n} Länder', {'n': '$_kAuswahlAnzahl'}),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
                   color: Color(0xFF1A1A1A)),
             ),
@@ -418,17 +436,28 @@ class _PortfolioInvestierenScreenState
                 builder: (context, constraints) {
                   const kPadding = 12.0;
                   const kSpacing = 10.0;
-                  const kCols = 4;
+                  const kCols = 2;
                   final kartenBreite = (constraints.maxWidth -
                           kPadding * 2 -
                           kSpacing * (kCols - 1)) /
                       kCols;
-                  final kartenHoehe = 159.0 + kartenBreite * 0.61 + 20.0;
+                  // Annähernd quadratisch statt der früheren schmalen
+                  // 4-Spalten-Karten: bei 2 Spalten sind die Karten fast
+                  // doppelt so breit, wodurch auch Kategorie-/Sektor-Chips
+                  // ohne Abschneiden lesbar sind (siehe kleinerer
+                  // Flaggen-Breitenanteil unten, damit die Flagge bei der
+                  // größeren Kartenbreite nicht unproportional dominiert).
+                  // Faktor 1.25 statt 1.05: der volle Karteninhalt (Flagge +
+                  // Name + Kontinent-Chip + 2 volle Sektor-Chips) brauchte
+                  // bei reinem 1.05-Verhältnis 31px mehr Höhe als vorhanden
+                  // (per Geräte-Test gemessener RenderFlex-Overflow).
+                  final kartenHoehe = kartenBreite * 1.25;
                   return GridView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: kPadding),
-                    // Feste 4 Spalten statt MaxCrossAxisExtent: bei genau 16
-                    // Ländern ergeben sich damit immer exakt 4 volle Reihen zu
-                    // je 4 Karten, unabhängig von der Fensterbreite.
+                    // Feste 2 Spalten statt MaxCrossAxisExtent: bei genau 16
+                    // Ländern ergeben sich damit immer exakt 8 volle Reihen zu
+                    // je 2 Karten (scrollbar), unabhängig von der
+                    // Fensterbreite.
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: kCols,
                       crossAxisSpacing: kSpacing,
@@ -469,9 +498,9 @@ class _PortfolioInvestierenScreenState
                         BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4)),
                       ],
                     ),
-                    child: const Text('Weiter →',
+                    child: Text(t('Weiter →'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white, fontSize: 16,
+                        style: const TextStyle(color: Colors.white, fontSize: 16,
                             fontWeight: FontWeight.w700)),
                   ),
                 ),
@@ -572,8 +601,9 @@ class _PortfolioInvestierenScreenState
                   topLeft: Radius.circular(16), topRight: Radius.circular(16)),
               child: SizedBox(
                 width: double.infinity,
-                height: 60,
-                child: CountryFlag.fromCountryCode(iso, width: double.infinity, height: 60),
+                height: 60.rpx(context),
+                child: CountryFlag.fromCountryCode(iso,
+                    width: double.infinity, height: 60.rpx(context)),
               ),
             )
           else
@@ -590,7 +620,12 @@ class _PortfolioInvestierenScreenState
               child: Center(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final breite = constraints.maxWidth * 0.88;
+                    // Kleinerer Breitenanteil als zuvor (0.88): bei den jetzt
+                    // ~doppelt so breiten 2-Spalten-Karten würde die Flagge
+                    // sonst unproportional dominieren und dem restlichen
+                    // Karteninhalt (Name, Kategorie-/Sektor-Chips) den Platz
+                    // nehmen, den es gerade für dessen volle Lesbarkeit braucht.
+                    final breite = constraints.maxWidth * 0.55;
                     return PortfolioFlagge(
                         iso: iso, width: breite, height: breite * 36 / 52);
                   },
@@ -599,28 +634,30 @@ class _PortfolioInvestierenScreenState
             ),
           Padding(
             padding: EdgeInsets.symmetric(
-                horizontal: gross ? 10 : 8, vertical: gross ? 8 : 6),
+                horizontal: (gross ? 10 : 8).rpx(context),
+                vertical: (gross ? 8 : 6).rpx(context)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(landName(iso),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: gross ? 14 : 12,
+                    style: TextStyle(fontSize: (gross ? 14 : 12).rsp(context),
                         fontWeight: FontWeight.w800, color: const Color(0xFF1A1A1A))),
-                SizedBox(height: gross ? 5 : 3),
+                SizedBox(height: (gross ? 5 : 3).rpx(context)),
                 Container(
                   padding: EdgeInsets.symmetric(
-                      horizontal: gross ? 7 : 5, vertical: gross ? 2 : 1),
+                      horizontal: (gross ? 7 : 5).rpx(context),
+                      vertical: (gross ? 2 : 1).rpx(context)),
                   decoration: BoxDecoration(
                     color: _kontinentFarbe(iso),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(kontinentName(iso),
-                      style: TextStyle(fontSize: gross ? 9 : 7,
+                      style: TextStyle(fontSize: (gross ? 9 : 7).rsp(context),
                           fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
-                SizedBox(height: gross ? 8 : 5),
+                SizedBox(height: (gross ? 8 : 5).rpx(context)),
                 if (gross) ...[
                   // Gestapelt statt nebeneinander: die "gross"-Karte steckt in
                   // der 3-Slots-Leiste beim Auswählen (nur ~1/3 Bildschirm-
@@ -644,10 +681,10 @@ class _PortfolioInvestierenScreenState
                   // vorhanden): Chance = normalisiertes basisWachstum,
                   // Stabilität = 1 - risiko.
                   const SizedBox(height: 6),
-                  _statusChip('Chance', Icons.trending_up, _chanceWert(iso),
+                  _statusChip(t('Chance'), Icons.trending_up, _chanceWert(iso),
                       const Color(0xFF4A9E4A)),
                   const SizedBox(height: 4),
-                  _statusChip('Stabilität', Icons.shield, _stabilitaetWert(iso),
+                  _statusChip(t('Stabilität'), Icons.shield, _stabilitaetWert(iso),
                       const Color(0xFF4A90D9)),
                 ],
               ],
@@ -675,7 +712,8 @@ class _PortfolioInvestierenScreenState
     final ranking = (staerke0bis1 * 5).round().clamp(1, 5);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      padding: EdgeInsets.symmetric(
+          horizontal: 5.rpx(context), vertical: 2.rpx(context)),
       decoration: BoxDecoration(
         color: farbe.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
@@ -683,20 +721,20 @@ class _PortfolioInvestierenScreenState
       ),
       child: Row(
         children: [
-          Icon(icon, size: 9, color: farbe),
-          const SizedBox(width: 2),
+          Icon(icon, size: 9.rpx(context), color: farbe),
+          SizedBox(width: 2.rpx(context)),
           Expanded(
             child: Text(label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.w700, color: farbe)),
+                style: TextStyle(fontSize: 7.5.rsp(context), fontWeight: FontWeight.w700, color: farbe)),
           ),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: List.generate(5, (i) => Container(
-              margin: const EdgeInsets.only(left: 0.75),
-              width: 3.5,
-              height: 3.5,
+              margin: EdgeInsets.only(left: 0.75.rpx(context)),
+              width: 3.5.rpx(context),
+              height: 3.5.rpx(context),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: i < ranking ? farbe : farbe.withValues(alpha: 0.2),
@@ -721,7 +759,8 @@ class _PortfolioInvestierenScreenState
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
-          horizontal: gross ? 8 : 5, vertical: gross ? 4 : 2),
+          horizontal: (gross ? 8 : 5).rpx(context),
+          vertical: (gross ? 4 : 2).rpx(context)),
       decoration: BoxDecoration(
         color: farbe.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
@@ -729,21 +768,21 @@ class _PortfolioInvestierenScreenState
       ),
       child: Row(
         children: [
-          Text(sektor.emoji, style: TextStyle(fontSize: gross ? 11 : 9)),
-          SizedBox(width: gross ? 3 : 2),
+          Text(sektor.emoji, style: TextStyle(fontSize: (gross ? 11 : 9).rsp(context))),
+          SizedBox(width: (gross ? 3 : 2).rpx(context)),
           Expanded(
             child: Text(sektor.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: gross ? 11 : 7.5,
+                style: TextStyle(fontSize: (gross ? 11 : 7.5).rsp(context),
                     fontWeight: FontWeight.w700, color: farbe)),
           ),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: List.generate(5, (i) => Container(
-              margin: EdgeInsets.only(left: gross ? 1.2 : 0.75),
-              width: gross ? 4 : 3.5,
-              height: gross ? 4 : 3.5,
+              margin: EdgeInsets.only(left: (gross ? 1.2 : 0.75).rpx(context)),
+              width: (gross ? 4 : 3.5).rpx(context),
+              height: (gross ? 4 : 3.5).rpx(context),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: i < ranking ? farbe : farbe.withValues(alpha: 0.2),
@@ -767,7 +806,7 @@ class _PortfolioInvestierenScreenState
       child: Row(children: [
         const Icon(Icons.add_circle_outline, color: Color(0xFF4A9E4A), size: 16),
         const SizedBox(width: 8),
-        Text('Kontinents-Synergie: +$bonus%',
+        Text(t('Kontinents-Synergie: +{n}%', {'n': '$bonus'}),
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
                 color: Color(0xFF4A9E4A))),
       ]),
@@ -803,7 +842,7 @@ class _PortfolioInvestierenScreenState
       ),
       child: iso == null
           ? Center(
-              child: Text('Slot ${index + 1}',
+              child: Text(t('Slot {n}', {'n': '${index + 1}'}),
                   style: const TextStyle(fontSize: 11,
                       fontWeight: FontWeight.w700, color: Color(0xFF999999))),
             )
@@ -837,8 +876,8 @@ class _PortfolioInvestierenScreenState
         children: [
           // Kein "Auswahl ändern"-Link mehr: Phasen 1-3 sind ein
           // durchgehender Flow ohne Rückwärts-Navigation.
-          const Text('DEINE GEWICHTUNG',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+          Text(t('DEINE GEWICHTUNG'),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                   color: Color(0xFF888888), letterSpacing: 1.2)),
           const SizedBox(height: 8),
           ..._gewaehlt.map(_buildGewichtZeile),
@@ -857,7 +896,7 @@ class _PortfolioInvestierenScreenState
             child: Row(children: [
               Text(risikoEmoji, style: const TextStyle(fontSize: 16)),
               const SizedBox(width: 8),
-              Text('Depot-Risiko: $risikoLabel',
+              Text(t('Depot-Risiko: {r}', {'r': risikoLabel}),
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
                       color: risikoFarbe)),
             ]),
@@ -868,7 +907,10 @@ class _PortfolioInvestierenScreenState
           // ob der Investieren-Button aktiv ist.
           Center(
             child: Text(
-              'Summe: $_gewichtungSumme% ${_gewichtungGueltig ? '✓' : '(muss 100% sein)'}',
+              t('Summe: {n}% {status}', {
+                'n': '$_gewichtungSumme',
+                'status': _gewichtungGueltig ? '✓' : t('(muss 100% sein)'),
+              }),
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
@@ -907,9 +949,9 @@ class _PortfolioInvestierenScreenState
                         ),
                       ),
                     )
-                  : const Text('Investieren & Tag abschließen',
+                  : Text(t('Investieren & Tag abschließen'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white, fontSize: 16,
+                      style: const TextStyle(color: Colors.white, fontSize: 16,
                           fontWeight: FontWeight.w700)),
             ),
           ),

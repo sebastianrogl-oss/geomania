@@ -1,3 +1,6 @@
+import '../l10n/abzeichen_uebersetzungen_en.dart';
+import '../services/locale_service.dart';
+
 /// Alle Daten, die zur Auswertung der 30 Abzeichen-Bedingungen nötig sind —
 /// wird einmalig frisch aus den bestehenden Datenquellen (Streak/Spieltage,
 /// Lernpfad-Streak, Kontinent-/Stationsfortschritt, Challenge-Rekorde)
@@ -42,8 +45,8 @@ enum AbzeichenKategorie { serien, kontinente, meilensteine, challenges }
 
 class Abzeichen {
   final String id;
-  final String name;
-  final String beschreibung;
+  final String nameDe;
+  final String beschreibungDe;
   final String emoji;
   final AbzeichenTier tier;
   final AbzeichenKategorie kategorie;
@@ -51,13 +54,22 @@ class Abzeichen {
 
   const Abzeichen({
     required this.id,
-    required this.name,
-    required this.beschreibung,
+    required this.nameDe,
+    required this.beschreibungDe,
     required this.emoji,
     required this.tier,
     required this.kategorie,
     required this.istErreicht,
   });
+
+  // Computed statt gespeichertes Feld: gleiches Muster wie CountryRanking.name
+  // (country_rankings.dart) — jede bestehende `.name`/`.beschreibung`-Stelle
+  // bleibt unverändert funktionsfähig und wird automatisch lokalisiert.
+  String get name =>
+      LocaleService.istEnglisch ? (abzeichenNamenEn[id] ?? nameDe) : nameDe;
+  String get beschreibung => LocaleService.istEnglisch
+      ? (abzeichenBeschreibungenEn[id] ?? beschreibungDe)
+      : beschreibungDe;
 }
 
 // ── Serien & Erfolge ───────────────────────────────────────────────────────────
@@ -99,8 +111,8 @@ const List<Abzeichen> alleAbzeichen = [
   // ── Serien & Erfolge (7) ──────────────────────────────────────────────────
   Abzeichen(
     id: 'streak_3',
-    name: 'Drei Tage dran',
-    beschreibung: 'Du hast 3 Tage in Folge eine Tages-Challenge gespielt',
+    nameDe: 'Drei Tage dran',
+    beschreibungDe: 'Du hast 3 Tage in Folge eine Tages-Challenge gespielt',
     emoji: '🔥',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.serien,
@@ -108,8 +120,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'streak_7',
-    name: 'Eine Woche dabei',
-    beschreibung: 'Du hast 7 Tage in Folge eine Tages-Challenge gespielt',
+    nameDe: 'Eine Woche dabei',
+    beschreibungDe: 'Du hast 7 Tage in Folge eine Tages-Challenge gespielt',
     emoji: '🔥🔥',
     tier: AbzeichenTier.silber,
     kategorie: AbzeichenKategorie.serien,
@@ -117,8 +129,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'streak_30',
-    name: 'Ein Monat Ausdauer',
-    beschreibung: 'Du hast 30 Tage in Folge eine Tages-Challenge gespielt',
+    nameDe: 'Ein Monat Ausdauer',
+    beschreibungDe: 'Du hast 30 Tage in Folge eine Tages-Challenge gespielt',
     emoji: '🔥🔥🔥',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.serien,
@@ -126,8 +138,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'perfekt',
-    name: 'Volle Punktzahl',
-    beschreibung: 'Du hast an einem Tag die Maximalpunktzahl in einer Tages-Challenge erreicht',
+    nameDe: 'Volle Punktzahl',
+    beschreibungDe: 'Du hast an einem Tag die Maximalpunktzahl in einer Tages-Challenge erreicht',
     emoji: '🎯',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.serien,
@@ -135,8 +147,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'neuer_rekord',
-    name: 'Persönliche Bestleistung',
-    beschreibung: 'Du hast einen persönlichen Bestwert in einer der Tages-Challenges aufgestellt',
+    nameDe: 'Persönliche Bestleistung',
+    beschreibungDe: 'Du hast einen persönlichen Bestwert in einer der Tages-Challenges aufgestellt',
     emoji: '💪',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.serien,
@@ -144,8 +156,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'alle_challenges',
-    name: 'Kompletter Tag',
-    beschreibung: 'Du hast an einem Tag alle 4 Tages-Challenges gespielt',
+    nameDe: 'Kompletter Tag',
+    beschreibungDe: 'Du hast an einem Tag alle 4 Tages-Challenges gespielt',
     emoji: '🏅',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.serien,
@@ -153,8 +165,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'streak_app_30',
-    name: 'Treuer Spieler',
-    beschreibung: 'Du hast 30 Tage in Folge die App genutzt',
+    nameDe: 'Treuer Spieler',
+    beschreibungDe: 'Du hast 30 Tage in Folge die App genutzt',
     emoji: '👑',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.serien,
@@ -164,8 +176,8 @@ const List<Abzeichen> alleAbzeichen = [
   // ── Kontinente (7) ────────────────────────────────────────────────────────
   Abzeichen(
     id: 'kontinent_europa',
-    name: 'Europa-Meister',
-    beschreibung: 'Du hast alle Stationen in Europa abgeschlossen',
+    nameDe: 'Europa-Meister',
+    beschreibungDe: 'Du hast alle Stationen in Europa abgeschlossen',
     emoji: '🏰',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.kontinente,
@@ -173,8 +185,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'kontinent_suedamerika',
-    name: 'Südamerika-Meister',
-    beschreibung: 'Du hast alle Stationen in Südamerika abgeschlossen',
+    nameDe: 'Südamerika-Meister',
+    beschreibungDe: 'Du hast alle Stationen in Südamerika abgeschlossen',
     emoji: '🦜',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.kontinente,
@@ -182,8 +194,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'kontinent_nordamerika',
-    name: 'Nordamerika-Meister',
-    beschreibung: 'Du hast alle Stationen in Nordamerika abgeschlossen',
+    nameDe: 'Nordamerika-Meister',
+    beschreibungDe: 'Du hast alle Stationen in Nordamerika abgeschlossen',
     emoji: '🦅',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.kontinente,
@@ -191,8 +203,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'kontinent_afrika',
-    name: 'Afrika-Meister',
-    beschreibung: 'Du hast alle Stationen in Afrika abgeschlossen',
+    nameDe: 'Afrika-Meister',
+    beschreibungDe: 'Du hast alle Stationen in Afrika abgeschlossen',
     emoji: '🦁',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.kontinente,
@@ -200,8 +212,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'kontinent_asien',
-    name: 'Asien-Meister',
-    beschreibung: 'Du hast alle Stationen in Asien abgeschlossen',
+    nameDe: 'Asien-Meister',
+    beschreibungDe: 'Du hast alle Stationen in Asien abgeschlossen',
     emoji: '🐼',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.kontinente,
@@ -209,8 +221,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'kontinent_ozeanien',
-    name: 'Ozeanien-Meister',
-    beschreibung: 'Du hast alle Stationen in Ozeanien abgeschlossen',
+    nameDe: 'Ozeanien-Meister',
+    beschreibungDe: 'Du hast alle Stationen in Ozeanien abgeschlossen',
     emoji: '🦘',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.kontinente,
@@ -218,8 +230,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'kontinent_welt',
-    name: 'Weltmeister',
-    beschreibung: 'Du hast die abschließende Welt "Die Welt" komplett gemeistert',
+    nameDe: 'Weltmeister',
+    beschreibungDe: 'Du hast die abschließende Welt "Die Welt" komplett gemeistert',
     emoji: '🌍',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.kontinente,
@@ -229,8 +241,8 @@ const List<Abzeichen> alleAbzeichen = [
   // ── Meilensteine (4) ──────────────────────────────────────────────────────
   Abzeichen(
     id: 'stationen_25',
-    name: 'Erste Schritte',
-    beschreibung: 'Du hast 25 Stationen im Lernpfad abgeschlossen',
+    nameDe: 'Erste Schritte',
+    beschreibungDe: 'Du hast 25 Stationen im Lernpfad abgeschlossen',
     emoji: '📍',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.meilensteine,
@@ -238,8 +250,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'stationen_50',
-    name: 'Auf gutem Weg',
-    beschreibung: 'Du hast 50 Stationen im Lernpfad abgeschlossen',
+    nameDe: 'Auf gutem Weg',
+    beschreibungDe: 'Du hast 50 Stationen im Lernpfad abgeschlossen',
     emoji: '🗺️',
     tier: AbzeichenTier.silber,
     kategorie: AbzeichenKategorie.meilensteine,
@@ -247,8 +259,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'stationen_100',
-    name: 'Kartograph',
-    beschreibung: 'Du hast 100 Stationen im Lernpfad abgeschlossen',
+    nameDe: 'Kartograph',
+    beschreibungDe: 'Du hast 100 Stationen im Lernpfad abgeschlossen',
     emoji: '🧭',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.meilensteine,
@@ -256,8 +268,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'stationen_alle',
-    name: 'Lernpfad-Champion',
-    beschreibung: 'Du hast ALLE Stationen im Lernpfad abgeschlossen',
+    nameDe: 'Lernpfad-Champion',
+    beschreibungDe: 'Du hast ALLE Stationen im Lernpfad abgeschlossen',
     emoji: '💎',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.meilensteine,
@@ -267,8 +279,8 @@ const List<Abzeichen> alleAbzeichen = [
   // ── Tages-Challenges: Punkte-Stufen (12) ──────────────────────────────────
   Abzeichen(
     id: 'punkte_preis_bronze',
-    name: 'Schätz-Talent',
-    beschreibung: 'Du hast in "Das große Schätzen" mind. 400 Punkte in einer Runde erreicht',
+    nameDe: 'Schätz-Talent',
+    beschreibungDe: 'Du hast in "Das große Schätzen" mind. 400 Punkte in einer Runde erreicht',
     emoji: '🥉',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.challenges,
@@ -276,8 +288,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_preis_silber',
-    name: 'Schätz-Profi',
-    beschreibung: 'Du hast in "Das große Schätzen" mind. 600 Punkte in einer Runde erreicht',
+    nameDe: 'Schätz-Profi',
+    beschreibungDe: 'Du hast in "Das große Schätzen" mind. 600 Punkte in einer Runde erreicht',
     emoji: '🥈',
     tier: AbzeichenTier.silber,
     kategorie: AbzeichenKategorie.challenges,
@@ -285,8 +297,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_preis_gold',
-    name: 'Schätz-Meister',
-    beschreibung: 'Du hast in "Das große Schätzen" mind. 780 Punkte in einer Runde erreicht',
+    nameDe: 'Schätz-Meister',
+    beschreibungDe: 'Du hast in "Das große Schätzen" mind. 780 Punkte in einer Runde erreicht',
     emoji: '🥇',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.challenges,
@@ -294,8 +306,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_higher_lower_bronze',
-    name: 'Serien-Talent',
-    beschreibung: 'Du hast bei "Higher or Lower" mind. 10 Richtige in Folge geschafft',
+    nameDe: 'Serien-Talent',
+    beschreibungDe: 'Du hast bei "Higher or Lower" mind. 10 Richtige in Folge geschafft',
     emoji: '🥉',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.challenges,
@@ -303,8 +315,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_higher_lower_silber',
-    name: 'Serien-Profi',
-    beschreibung: 'Du hast bei "Higher or Lower" mind. 20 Richtige in Folge geschafft',
+    nameDe: 'Serien-Profi',
+    beschreibungDe: 'Du hast bei "Higher or Lower" mind. 20 Richtige in Folge geschafft',
     emoji: '🥈',
     tier: AbzeichenTier.silber,
     kategorie: AbzeichenKategorie.challenges,
@@ -312,8 +324,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_higher_lower_gold',
-    name: 'Serien-Meister',
-    beschreibung: 'Du hast bei "Higher or Lower" mind. 35 Richtige in Folge geschafft',
+    nameDe: 'Serien-Meister',
+    beschreibungDe: 'Du hast bei "Higher or Lower" mind. 35 Richtige in Folge geschafft',
     emoji: '🥇',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.challenges,
@@ -321,8 +333,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_ranking_game_bronze',
-    name: 'Rang-Talent',
-    beschreibung: 'Du hast im Ranking Game mind. 400 Punkte in einer Runde erreicht',
+    nameDe: 'Rang-Talent',
+    beschreibungDe: 'Du hast im Ranking Game mind. 400 Punkte in einer Runde erreicht',
     emoji: '🥉',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.challenges,
@@ -330,8 +342,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_ranking_game_silber',
-    name: 'Rang-Profi',
-    beschreibung: 'Du hast im Ranking Game mind. 600 Punkte in einer Runde erreicht',
+    nameDe: 'Rang-Profi',
+    beschreibungDe: 'Du hast im Ranking Game mind. 600 Punkte in einer Runde erreicht',
     emoji: '🥈',
     tier: AbzeichenTier.silber,
     kategorie: AbzeichenKategorie.challenges,
@@ -339,8 +351,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_ranking_game_gold',
-    name: 'Rang-Meister',
-    beschreibung: 'Du hast im Ranking Game mind. 780 Punkte in einer Runde erreicht',
+    nameDe: 'Rang-Meister',
+    beschreibungDe: 'Du hast im Ranking Game mind. 780 Punkte in einer Runde erreicht',
     emoji: '🥇',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.challenges,
@@ -348,8 +360,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_portfolio_bronze',
-    name: 'Investment-Talent',
-    beschreibung: 'Du hast beim Portfolio mind. 50\$ Gewinn an einem Tag erreicht',
+    nameDe: 'Investment-Talent',
+    beschreibungDe: 'Du hast beim Portfolio mind. 50\$ Gewinn an einem Tag erreicht',
     emoji: '🥉',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.challenges,
@@ -357,8 +369,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_portfolio_silber',
-    name: 'Investment-Profi',
-    beschreibung: 'Du hast beim Portfolio mind. 150\$ Gewinn an einem Tag erreicht',
+    nameDe: 'Investment-Profi',
+    beschreibungDe: 'Du hast beim Portfolio mind. 150\$ Gewinn an einem Tag erreicht',
     emoji: '🥈',
     tier: AbzeichenTier.silber,
     kategorie: AbzeichenKategorie.challenges,
@@ -366,8 +378,8 @@ const List<Abzeichen> alleAbzeichen = [
   ),
   Abzeichen(
     id: 'punkte_portfolio_gold',
-    name: 'Investment-Meister',
-    beschreibung: 'Du hast beim Portfolio mind. 300\$ Gewinn an einem Tag erreicht',
+    nameDe: 'Investment-Meister',
+    beschreibungDe: 'Du hast beim Portfolio mind. 300\$ Gewinn an einem Tag erreicht',
     emoji: '🥇',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.challenges,

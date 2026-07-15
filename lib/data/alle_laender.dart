@@ -234,16 +234,33 @@ final Map<String, Land> landByIso = {
 List<Land> laenderDesKontinents(String kontinent) =>
     alleLaender.where((l) => l.kontinent == kontinent).toList();
 
+/// Länder, die im Umriss-Quiz (umrissBild/umrissMultiple/umrissEingabe) nie
+/// als gefragtes Land oder als Ablenker-Option erscheinen sollen: zu klein
+/// bzw. zu unmarkant, um bei der Kartengröße des Quiz einen erkennbaren,
+/// fairen Umriss zu ergeben (Zwergstaaten, viele Inselstaaten, sehr kleine
+/// Golfstaaten).
+const Set<String> kUmrissAusschluss = {
+  'VA', 'SM', 'MC', 'LI', 'AD', 'MT',
+  'MV', 'NR', 'TV', 'KI', 'PW', 'MH',
+  'FM', 'WS', 'TO', 'BB', 'AG', 'DM',
+  'GD', 'KN', 'LC', 'VC', 'BN', 'SG',
+  'BH', 'QA', 'KW',
+};
+
+bool kannAlsUmrissErscheinen(String iso) => !kUmrissAusschluss.contains(iso);
+
 /// 3 falsche Optionen aus gleichem Kontinent, ähnlicher Schwierigkeit
 List<String> generiereUmrissOptionen(String richtigesIso, String kontinent) {
   final richtig = landByIso[richtigesIso];
   final schw = richtig?.schwierigkeit ?? 2;
 
-  // Kandidaten: gleicher Kontinent, Schwierigkeit ±1, nicht das richtige Land
+  // Kandidaten: gleicher Kontinent, Schwierigkeit ±1, nicht das richtige Land,
+  // kein für den Umriss-Modus ausgeschlossenes Zwerg-/Inselland als Ablenker
   var kandidaten = alleLaender
       .where((l) =>
           l.iso != richtigesIso &&
           l.kontinent == kontinent &&
+          kannAlsUmrissErscheinen(l.iso) &&
           (l.schwierigkeit - schw).abs() <= 1)
       .toList()
     ..shuffle();
@@ -251,14 +268,19 @@ List<String> generiereUmrissOptionen(String richtigesIso, String kontinent) {
   // Fallback: ganzer Kontinent ohne Schwierigkeits-Filter
   if (kandidaten.length < 3) {
     kandidaten = alleLaender
-        .where((l) => l.iso != richtigesIso && l.kontinent == kontinent)
+        .where((l) =>
+            l.iso != richtigesIso &&
+            l.kontinent == kontinent &&
+            kannAlsUmrissErscheinen(l.iso))
         .toList()
       ..shuffle();
   }
 
   // Letzter Fallback: weltweit
   if (kandidaten.length < 3) {
-    kandidaten = alleLaender.where((l) => l.iso != richtigesIso).toList()
+    kandidaten = alleLaender
+        .where((l) => l.iso != richtigesIso && kannAlsUmrissErscheinen(l.iso))
+        .toList()
       ..shuffle();
   }
 

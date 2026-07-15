@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/countries.dart';
 import '../data/economic_blocks.dart';
+import '../l10n/uebersetzungen.dart';
 
 class EconomicBlocksScreen extends StatefulWidget {
   const EconomicBlocksScreen({super.key});
@@ -77,8 +78,8 @@ class _EconomicBlocksScreenState extends State<EconomicBlocksScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Wirtschaftsblöcke',
-            style: TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.w800)),
+        title: Text(t('Wirtschaftsblöcke'),
+            style: const TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: !_started ? _buildStart() : _done ? _buildResult() : _buildQuestion(),
@@ -87,12 +88,12 @@ class _EconomicBlocksScreenState extends State<EconomicBlocksScreen> {
 
   Widget _buildStart() {
     final blockInfo = [
-      ('🇪🇺', 'EU', '27 Länder'),
-      ('🤝', 'G7', 'Führende Industriestaaten'),
-      ('🌐', 'G20', '19 Länder + EU'),
-      ('🛢️', 'OPEC', '12 Ölförderländer'),
-      ('🌍', 'BRICS', '5 Schwellenländer'),
-      ('🌏', 'ASEAN', '10 Südostasien-Länder'),
+      ('🇪🇺', 'EU', t('27 Länder')),
+      ('🤝', 'G7', t('Führende Industriestaaten')),
+      ('🌐', 'G20', t('19 Länder + EU')),
+      ('🛢️', 'OPEC', t('12 Ölförderländer')),
+      ('🌍', 'BRICS', t('5 Schwellenländer')),
+      ('🌏', 'ASEAN', t('10 Südostasien-Länder')),
     ];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
@@ -100,16 +101,16 @@ class _EconomicBlocksScreenState extends State<EconomicBlocksScreen> {
         children: [
           const Text('🤝', style: TextStyle(fontSize: 64)),
           const SizedBox(height: 16),
-          const Text('Wirtschaftsblöcke',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
+          Text(t('Wirtschaftsblöcke'),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
           const SizedBox(height: 8),
-          const Text('Welchem Wirtschaftsblock gehört das Land?\n10 Fragen · Multiple Choice',
+          Text(t('Welchem Wirtschaftsblock gehört das Land?\n10 Fragen · Multiple Choice'),
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+              style: const TextStyle(color: Color(0xFF888888), fontSize: 13)),
           const SizedBox(height: 28),
-          const Align(alignment: Alignment.centerLeft,
-            child: Text('DIE BLÖCKE',
-                style: TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2))),
+          Align(alignment: Alignment.centerLeft,
+            child: Text(t('DIE BLÖCKE'),
+                style: const TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2))),
           const SizedBox(height: 10),
           ...blockInfo.map((b) => Container(
             margin: const EdgeInsets.only(bottom: 8),
@@ -135,7 +136,7 @@ class _EconomicBlocksScreenState extends State<EconomicBlocksScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              child: const Text('Starten', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+              child: Text(t('Starten'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
             ),
           ),
         ],
@@ -166,7 +167,7 @@ class _EconomicBlocksScreenState extends State<EconomicBlocksScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            Text('$_score Pkt', style: const TextStyle(color: Color(0xFF4A90D9), fontWeight: FontWeight.w700, fontSize: 13)),
+            Text(t('{n} Pkt', {'n': '$_score'}), style: const TextStyle(color: Color(0xFF4A90D9), fontWeight: FontWeight.w700, fontSize: 13)),
           ]),
           const SizedBox(height: 24),
 
@@ -186,7 +187,7 @@ class _EconomicBlocksScreenState extends State<EconomicBlocksScreen> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
               const SizedBox(height: 6),
-              const Text('Zu welchem Wirtschaftsblock gehört dieses Land?',
+              Text(t('Zu welchem Wirtschaftsblock gehört dieses Land?'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
             ]),
@@ -217,7 +218,7 @@ class _EconomicBlocksScreenState extends State<EconomicBlocksScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${q.country.name} gehört zu: ${q.correct}',
+                    t('{land} gehört zu: {block}', {'land': q.country.name, 'block': q.correct}),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -288,7 +289,7 @@ class _EconomicBlocksScreenState extends State<EconomicBlocksScreen> {
             Text('$_score / $_questionsPerRound',
                 style: const TextStyle(fontSize: 52, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
             const SizedBox(height: 8),
-            Text('$pct % richtig',
+            Text(t('{pct} % richtig', {'pct': '$pct'}),
                 style: const TextStyle(fontSize: 16, color: Color(0xFF888888), fontWeight: FontWeight.w600)),
             const SizedBox(height: 32),
             SizedBox(width: double.infinity,
@@ -299,12 +300,12 @@ class _EconomicBlocksScreenState extends State<EconomicBlocksScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0,
                 ),
-                child: const Text('Nochmal spielen', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                child: Text(t('Nochmal spielen'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               ),
             ),
             const SizedBox(height: 12),
             TextButton(onPressed: () => Navigator.pop(context),
-                child: const Text('Zurück', style: TextStyle(color: Color(0xFF888888)))),
+                child: Text(t('Zurück'), style: const TextStyle(color: Color(0xFF888888)))),
           ],
         ),
       ),

@@ -18,7 +18,6 @@ const Map<String, String> uebersetzungenSettings = {
   'LERNFORTSCHRITT': 'LEARNING PROGRESS',
   'ÜBER DIE APP': 'ABOUT THE APP',
   'Feedback geben': 'Send feedback',
-  'ENTWICKLER-OPTIONEN': 'DEVELOPER OPTIONS',
 
   'Fortschritt zurücksetzen': 'Reset progress',
   'Was soll zurückgesetzt werden?': 'What should be reset?',
@@ -27,18 +26,16 @@ const Map<String, String> uebersetzungenSettings = {
   'Alles zurücksetzen': 'Reset everything',
   'der gesamte Fortschritt': 'all progress',
   'Bist du sicher?': 'Are you sure?',
-  '{b} wird zurückgesetzt. Das kann nicht rückgängig gemacht werden.':
-      '{b} will be reset. This cannot be undone.',
+  'Das setzt deinen Lernpfad-Fortschritt zurück (Stationen, Kontinente). Deine Tages-Challenge-Ergebnisse und Ranglisten bleiben davon unberührt.':
+      'This resets your learning path progress (stations, continents). Your daily challenge results and leaderboards remain unaffected.',
   'Zurücksetzen': 'Reset',
   '✅ Fortschritt wurde zurückgesetzt': '✅ Progress has been reset',
 
-  'Kein Mail-Programm gefunden': 'No mail app found',
+  'Werbeeinstellungen verwalten': 'Manage ad settings',
+  'Aktuell keine Werbeeinstellungen verfügbar':
+      'No ad settings available right now',
 
-  'Alles freischalten (Test-Modus)': 'Unlock everything (test mode)',
-  'Alle Stationen sofort spiel- & wiederholbar':
-      'All stations instantly playable & replayable',
-  '🔓 Alle Abschnitte & Stationen freigeschaltet':
-      '🔓 All sections & stations unlocked',
+  'Kein Mail-Programm gefunden': 'No mail app found',
 
   'Einstellungen': 'Settings',
 };

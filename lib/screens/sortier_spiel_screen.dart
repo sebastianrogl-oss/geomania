@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/country_rankings.dart';
+import '../l10n/uebersetzungen.dart';
+import '../services/locale_service.dart';
 
 // ── Category definition ───────────────────────────────────────────────────────
 
@@ -69,29 +71,39 @@ class _Round {
 String _fmtValue(_SortCat cat, CountryRanking c) {
   final v = cat.getValue(c);
   if (v == null) return '–';
+  final en = LocaleService.istEnglisch;
   switch (cat.id) {
     case 'gdp':
       return '\$ ${_fmtN(v.round())}';
     case 'pop':
-      if (v >= 1e9) return '${(v / 1e9).toStringAsFixed(2).replaceAll('.', ',')} Mrd.';
-      if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(1).replaceAll('.', ',')} Mio.';
+      if (v >= 1e9) {
+        final s = (v / 1e9).toStringAsFixed(2);
+        return '${en ? s : s.replaceAll('.', ',')} ${en ? 'B' : 'Mrd.'}';
+      }
+      if (v >= 1e6) {
+        final s = (v / 1e6).toStringAsFixed(1);
+        return '${en ? s : s.replaceAll('.', ',')} ${en ? 'M' : 'Mio.'}';
+      }
       return _fmtN(v.round());
     case 'area':
       return '${_fmtN(v.round())} km²';
     case 'life':
-      return '${v.toStringAsFixed(1).replaceAll('.', ',')} J.';
+      final s = v.toStringAsFixed(1);
+      return '${en ? s : s.replaceAll('.', ',')} ${en ? 'yrs' : 'J.'}';
     case 'growth':
-      return '${v >= 0 ? '+' : ''}${v.toStringAsFixed(1).replaceAll('.', ',')}%';
+      final s = v.toStringAsFixed(1);
+      return '${v >= 0 ? '+' : ''}${en ? s : s.replaceAll('.', ',')}%';
     default:
       return v.toStringAsFixed(1);
   }
 }
 
 String _fmtN(int n) {
+  final sep = LocaleService.istEnglisch ? ',' : '.';
   final s = n.toString();
   final buf = StringBuffer();
   for (int i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+    if (i > 0 && (s.length - i) % 3 == 0) buf.write(sep);
     buf.write(s[i]);
   }
   return buf.toString();
@@ -241,7 +253,7 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Runde ${_roundIdx + 1} / $_kRounds',
+          t('Runde {n} / {total}', {'n': '${_roundIdx + 1}', 'total': '$_kRounds'}),
           style: const TextStyle(
               color: Color(0xFF1A1A1A), fontSize: 17, fontWeight: FontWeight.w700),
         ),
@@ -250,7 +262,7 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Center(
-              child: Text('$_totalScore Pkt.',
+              child: Text(t('{n} Pkt.', {'n': '$_totalScore'}),
                   style: const TextStyle(
                       color: Color(0xFF4A9E4A),
                       fontSize: 15,
@@ -287,7 +299,7 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(round.cat.instruction,
+                      Text(t(round.cat.instruction),
                           style: const TextStyle(
                               color: Color(0xFF1B5E20),
                               fontSize: 14,
@@ -296,8 +308,8 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                       const SizedBox(height: 4),
                       Text(
                         _answered
-                            ? 'Ergebnis: $_roundPts / ${_kPerRound * _kPtsPerCorrect} Punkte'
-                            : 'Ziehe die Karten in die richtige Reihenfolge',
+                            ? t('Ergebnis: {pts} / {max} Punkte', {'pts': '$_roundPts', 'max': '${_kPerRound * _kPtsPerCorrect}'})
+                            : t('Ziehe die Karten in die richtige Reihenfolge'),
                         style: const TextStyle(
                             color: Color(0xFF4A9E4A),
                             fontSize: 12,
@@ -310,12 +322,12 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
               const SizedBox(height: 10),
 
               // Pos.-Label
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
-                    Text('Pos.',
-                        style: TextStyle(
+                    Text(t('Pos.'),
+                        style: const TextStyle(
                             color: Color(0xFFBBBBBB),
                             fontSize: 11,
                             fontWeight: FontWeight.w600)),
@@ -354,10 +366,10 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                         color: const Color(0xFF4A9E4A),
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Text(
-                        'Reihenfolge bestätigen',
+                      child: Text(
+                        t('Reihenfolge bestätigen'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w700),
@@ -403,9 +415,9 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                 child: const Icon(Icons.check_rounded, color: Colors.white, size: 54),
               ),
               const SizedBox(height: 20),
-              const Text(
-                'Perfekt! 🎉',
-                style: TextStyle(
+              Text(
+                t('Perfekt! 🎉'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
@@ -461,13 +473,13 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
               const SizedBox(height: 14),
 
               // Header
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'So wäre es richtig gewesen:',
-                    style: TextStyle(
+                    t('So wäre es richtig gewesen:'),
+                    style: const TextStyle(
                         fontSize: 13,
                         color: Color(0xFF888888),
                         fontWeight: FontWeight.w600),
@@ -510,7 +522,7 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Du hast $richtigAnzahl/$_kPerRound richtig sortiert',
+                      t('Du hast {n}/{total} richtig sortiert', {'n': '$richtigAnzahl', 'total': '$_kPerRound'}),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -537,7 +549,7 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Text(
-                      istFinal ? 'Ergebnis anzeigen →' : 'WEITER →',
+                      istFinal ? t('Ergebnis anzeigen →') : t('WEITER →'),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                           color: Colors.white,
@@ -561,7 +573,7 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
     final pct = (_totalScore / maxScore * 100).round();
     final emoji = pct >= 70 ? '🏆' : pct >= 40 ? '👍' : '📚';
     final grade =
-        pct >= 70 ? 'Ausgezeichnet!' : pct >= 40 ? 'Gut gemacht!' : 'Weiter üben!';
+        pct >= 70 ? t('Ausgezeichnet!') : pct >= 40 ? t('Gut gemacht!') : t('Weiter üben!');
     final ringColor = pct >= 70
         ? const Color(0xFF4A9E4A)
         : pct >= 40
@@ -582,7 +594,7 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                     fontSize: 24,
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            Text('$_totalScore / $maxScore Punkte',
+            Text(t('{score} / {max} Punkte', {'score': '$_totalScore', 'max': '$maxScore'}),
                 style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 15,
@@ -597,7 +609,7 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                 border: Border.all(color: ringColor, width: 6),
               ),
               child: Center(
-                child: Text('$pct %',
+                child: Text(t('{pct} %', {'pct': '$pct'}),
                     style: const TextStyle(
                         color: Color(0xFF1A1A1A),
                         fontSize: 30,
@@ -613,9 +625,9 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                 decoration: BoxDecoration(
                     color: const Color(0xFF4A9E4A),
                     borderRadius: BorderRadius.circular(16)),
-                child: const Text('Nochmal spielen',
+                child: Text(t('Nochmal spielen'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.w700)),
@@ -630,7 +642,7 @@ class _SortierSpielScreenState extends State<SortierSpielScreen>
                 decoration: BoxDecoration(
                     color: const Color(0xFFEAEAE5),
                     borderRadius: BorderRadius.circular(16)),
-                child: const Text('Zurück',
+                child: Text(t('Zurück'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Color(0xFF888888),

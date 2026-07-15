@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/portfolio_daten.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/challenge_panel_signal.dart';
 import '../services/daily_challenge.dart';
 import '../services/daily_resume_service.dart';
@@ -162,9 +163,9 @@ class _PortfolioScreenState extends State<PortfolioScreen>
           ),
         ),
         const SizedBox(width: 10),
-        const Expanded(
-          child: Text('💼 Weltportfolio',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800,
+        Expanded(
+          child: Text(t('💼 Weltportfolio'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800,
                   color: Color(0xFF1A1A1A))),
         ),
         IconButton(
@@ -192,8 +193,8 @@ class _PortfolioScreenState extends State<PortfolioScreen>
       ),
       child: Column(
         children: [
-          const Text('DEIN KAPITAL',
-              style: TextStyle(fontSize: 11, color: Colors.white54,
+          Text(t('DEIN KAPITAL'),
+              style: const TextStyle(fontSize: 11, color: Colors.white54,
                   fontWeight: FontWeight.w700, letterSpacing: 1.2)),
           const SizedBox(height: 8),
           TweenAnimationBuilder<double>(
@@ -218,7 +219,8 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                     color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text('🔥 ${status.streak} Tage in Folge',
+                  child: Text(
+                      t('🔥 {n} Tage in Folge', {'n': '${status.streak}'}),
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
                           color: Colors.white)),
                 ),
@@ -230,7 +232,8 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                   color: const Color(0xFFF9A825).withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text('🏆 Rekord: ${fmtKapital(status.rekordKapital)}',
+                child: Text(
+                    t('🏆 Rekord: {v}', {'v': fmtKapital(status.rekordKapital)}),
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
                         color: Color(0xFFF9A825))),
               ),
@@ -262,16 +265,18 @@ class _PortfolioScreenState extends State<PortfolioScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Dein Rang',
+              Text(t('Dein Rang'),
                   style: const TextStyle(fontSize: 12, color: Color(0xFF888888),
                       fontWeight: FontWeight.w600)),
               if (rang.naechsteSchwelle != null)
-                Text('Noch ${fmtKapital(rang.naechsteSchwelle! - status.kapital)}',
+                Text(
+                    t('Noch {v}',
+                        {'v': fmtKapital(rang.naechsteSchwelle! - status.kapital)}),
                     style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
             ],
           ),
           const SizedBox(height: 4),
-          Text(rang.titel,
+          Text(t(rang.titel),
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
                   color: Color(0xFF1A1A1A))),
           const SizedBox(height: 10),
@@ -310,16 +315,16 @@ class _PortfolioScreenState extends State<PortfolioScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('VERLAUF (14 TAGE)',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+          Text(t('VERLAUF (14 TAGE)'),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                   color: Color(0xFF888888), letterSpacing: 1.2)),
           const SizedBox(height: 10),
           if (werte.length < 2)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
               child: Text(
-                'Noch keine Historie — spiele deinen ersten Tag!',
-                style: TextStyle(fontSize: 13, color: Color(0xFF888888)),
+                t('Noch keine Historie — spiele deinen ersten Tag!'),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
               ),
             )
           else
@@ -348,13 +353,15 @@ class _PortfolioScreenState extends State<PortfolioScreen>
         ),
         child: Column(
           children: [
-            const Text('Heute erledigt ✓',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
+            Text(t('Heute erledigt ✓'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
                     color: Color(0xFF2E7D32))),
             const SizedBox(height: 4),
             Text(
-              'Morgen geht\'s weiter — neue News in '
-              '${restzeit.inHours}h ${restzeit.inMinutes % 60}m',
+              t('Morgen geht\'s weiter — neue News in {h}h {m}m', {
+                'h': '${restzeit.inHours}',
+                'm': '${restzeit.inMinutes % 60}',
+              }),
               style: const TextStyle(fontSize: 12, color: Color(0xFF4A9E4A)),
             ),
           ],
@@ -378,9 +385,9 @@ class _PortfolioScreenState extends State<PortfolioScreen>
               BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4)),
             ],
           ),
-          child: const Text('Heute investieren →',
+          child: Text(t('Heute investieren →'),
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white, fontSize: 17,
+              style: const TextStyle(color: Colors.white, fontSize: 17,
                   fontWeight: FontWeight.w700)),
         ),
       ),

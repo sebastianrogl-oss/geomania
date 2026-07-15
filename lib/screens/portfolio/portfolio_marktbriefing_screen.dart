@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../data/portfolio_daten.dart';
+import '../../l10n/uebersetzungen.dart';
 import '../../services/challenge_panel_signal.dart';
 import '../../services/daily_resume_service.dart';
 import '../../services/portfolio_markt_service.dart';
 import '../../services/portfolio_service.dart';
 import '../../utils/portfolio_format.dart';
 import '../../widgets/portfolio_flagge.dart';
+import '../../widgets/spiel_erklaerung.dart';
 import 'portfolio_investieren_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -70,8 +72,8 @@ class _PortfolioMarktbriefingScreenState
                     children: [
                       _buildSektorDesTages(),
                       const SizedBox(height: 20),
-                      const Text('HEUTIGE MARKTNACHRICHTEN',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                      Text(t('HEUTIGE MARKTNACHRICHTEN'),
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                               color: Color(0xFF888888), letterSpacing: 1.2)),
                       const SizedBox(height: 10),
                       ..._markt.news.asMap().entries.map((e) =>
@@ -96,9 +98,9 @@ class _PortfolioMarktbriefingScreenState
                         BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4)),
                       ],
                     ),
-                    child: const Text('Investieren →',
+                    child: Text(t('Investieren →'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white, fontSize: 17,
+                        style: const TextStyle(color: Colors.white, fontSize: 17,
                             fontWeight: FontWeight.w700)),
                   ),
                 ),
@@ -137,13 +139,24 @@ class _PortfolioMarktbriefingScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('💼 Marktbriefing',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
+                Text(t('Marktbriefing'),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
                         color: Color(0xFF1A1A1A))),
-                Text('Kapital: ${fmtKapital(widget.status.kapital)}',
+                Text(t('Kapital: {v}', {'v': fmtKapital(widget.status.kapital)}),
                     style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
               ],
             ),
+          ),
+          ErklaerungButton(
+            titel: t('Portfolio des Tages — Spielregeln'),
+            farbe: const Color(0xFF4A90D9),
+            abschnitte: [
+              t('Lies zuerst das Marktbriefing: hier stehen die heutigen Markt-Nachrichten und der Sektor-Trend des Tages — sie beeinflussen, welche Länder und Sektoren heute gut abschneiden.'),
+              t('Wähle danach 3 Länder aus 16 zur Auswahl für dein Depot.'),
+              t('Verteile dein Kapital prozentual auf die 3 gewählten Länder (Gewichtung) — mehr Gewicht auf ein Land bedeutet mehr Einfluss auf dein Ergebnis, aber auch mehr Risiko.'),
+              t('In der Auflösung siehst du die tatsächliche Tagesrendite jedes Landes sowie mögliche Bonus-Erträge (z.B. Kontinents-Synergie, Allianz-Bonus, Sektor-Kombi-Bonus), wenn deine Auswahl dazu passt.'),
+              t('Ziel: dein Kapital von Tag zu Tag durch geschickte Länderauswahl vermehren.'),
+            ],
           ),
         ],
       ),
@@ -182,8 +195,10 @@ class _PortfolioMarktbriefingScreenState
             // (mit Ellipsis) statt über den Rand der Pille hinauszulaufen.
             Flexible(
               child: Text(
-                'Tagessektor: ${sektor.name} '
-                '(+${trend.staerke.toStringAsFixed(1)}%)',
+                t('Tagessektor: {s} (+{n}%)', {
+                  's': sektor.name,
+                  'n': trend.staerke.toStringAsFixed(1),
+                }),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -333,8 +348,8 @@ class _PortfolioMarktbriefingScreenState
             color: const Color(0xFFEAEAE5),
             borderRadius: BorderRadius.circular(6),
           ),
-          child: const Text('MARKT-NEWS',
-              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
+          child: Text(t('MARKT-NEWS'),
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
                   color: Color(0xFF888888), letterSpacing: 0.8)),
         ),
         if (istGrossereignisNews(n)) ...[
@@ -345,8 +360,8 @@ class _PortfolioMarktbriefingScreenState
               color: const Color(0xFFF9A825).withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Text('⚡ Großereignis',
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
+            child: Text(t('⚡ Großereignis'),
+                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
                     color: Color(0xFFB4750E), letterSpacing: 0.3)),
           ),
         ],
@@ -375,8 +390,11 @@ class _PortfolioMarktbriefingScreenState
     final impactFarbe =
         positiv ? const Color(0xFF4A9E4A) : const Color(0xFFE53935);
     return Text(
-      '${positiv ? "Profitiert" : "Betroffen"}: '
-      '${sektor.emoji} ${sektor.name}',
+      t('{status}: {emoji} {sektor}', {
+        'status': positiv ? t('Profitiert') : t('Betroffen'),
+        'emoji': sektor.emoji,
+        'sektor': sektor.name,
+      }),
       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
           color: impactFarbe),
     );
@@ -406,7 +424,7 @@ class _PortfolioMarktbriefingScreenState
               )).toList(),
         ),
         const SizedBox(height: 6),
-        Text('+${n.allianzBonus!.toStringAsFixed(1)}% Bonus',
+        Text(t('+{n}% Bonus', {'n': n.allianzBonus!.toStringAsFixed(1)}),
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900,
                 color: Color(0xFF4A9E4A))),
       ],
@@ -449,7 +467,7 @@ class _PortfolioMarktbriefingScreenState
           }).toList(),
         ),
         const SizedBox(height: 6),
-        Text('+${n.sektorKomboBonus!.toStringAsFixed(1)}% Bonus',
+        Text(t('+{n}% Bonus', {'n': n.sektorKomboBonus!.toStringAsFixed(1)}),
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900,
                 color: Color(0xFF4A9E4A))),
       ],
@@ -477,8 +495,10 @@ class _PortfolioMarktbriefingScreenState
                   size: 14, color: Color(0xFF7C3AED)),
               const SizedBox(width: 4),
               Text(
-                '${n.bandbreiteMin!.toStringAsFixed(0)}% bis '
-                '${n.bandbreiteMax!.toStringAsFixed(0)}%',
+                t('{min}% bis {max}%', {
+                  'min': n.bandbreiteMin!.toStringAsFixed(0),
+                  'max': n.bandbreiteMax!.toStringAsFixed(0),
+                }),
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800,
                     color: Color(0xFF7C3AED)),
               ),
@@ -486,8 +506,8 @@ class _PortfolioMarktbriefingScreenState
           ),
         ),
         const SizedBox(height: 4),
-        const Text('Ungewisse Auswirkung',
-            style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic,
+        Text(t('Ungewisse Auswirkung'),
+            style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic,
                 color: Color(0xFF888888))),
       ],
     );

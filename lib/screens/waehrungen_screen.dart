@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/currencies.dart';
+import '../l10n/uebersetzungen.dart';
 
 // ── Phase ─────────────────────────────────────────────────────────────────────
 
@@ -142,20 +143,20 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
             const SizedBox(height: 32),
             const Text('💱', style: TextStyle(fontSize: 56)),
             const SizedBox(height: 16),
-            const Text('Währungen-Quiz',
-                style: TextStyle(
+            Text(t('Währungen-Quiz'),
+                style: const TextStyle(
                     color: Color(0xFF1A1A1A),
                     fontSize: 28,
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            const Text('Welche Währung hat dieses Land?',
-                style: TextStyle(
+            Text(t('Welche Währung hat dieses Land?'),
+                style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 15,
                     fontWeight: FontWeight.w500)),
             const SizedBox(height: 40),
-            const Text('SCHWIERIGKEITSGRAD',
-                style: TextStyle(
+            Text(t('SCHWIERIGKEITSGRAD'),
+                style: const TextStyle(
                     color: Color(0xFF999999),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -163,22 +164,22 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
             const SizedBox(height: 12),
             _DiffOption(
               emoji: '🟢',
-              label: 'Leicht',
-              sub: 'EUR, USD, GBP, JPY & Co.',
+              label: t('Leicht'),
+              sub: t('EUR, USD, GBP, JPY & Co.'),
               onTap: () => _startQuiz(1),
             ),
             const SizedBox(height: 10),
             _DiffOption(
               emoji: '🟡',
-              label: 'Mittel',
-              sub: 'Krone, Forint, Won & mehr',
+              label: t('Mittel'),
+              sub: t('Krone, Forint, Won & mehr'),
               onTap: () => _startQuiz(2),
             ),
             const SizedBox(height: 10),
             _DiffOption(
               emoji: '🔴',
-              label: 'Schwer',
-              sub: 'Kyat, Kip, Tögrög & exotische Währungen',
+              label: t('Schwer'),
+              sub: t('Kyat, Kip, Tögrög & exotische Währungen'),
               onTap: () => _startQuiz(3),
             ),
           ],
@@ -249,7 +250,7 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
                 }),
               ),
               const SizedBox(height: 6),
-              Text('Frage ${_qIndex + 1} von $_kCount',
+              Text(t('Frage {n} von {total}', {'n': '${_qIndex + 1}', 'total': '$_kCount'}),
                   style: const TextStyle(
                       color: Color(0xFF888888),
                       fontSize: 12,
@@ -271,9 +272,9 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
                             fontSize: 24,
                             fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
-                    const Text('Welche Währung hat dieses Land?',
+                    Text(t('Welche Währung hat dieses Land?'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                             color: Color(0xFF888888),
                             fontSize: 14,
                             fontWeight: FontWeight.w600)),
@@ -366,7 +367,7 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
   Widget _buildResult() {
     final pct = (_score / _kCount * 100).round();
     final emoji = pct >= 80 ? '🏆' : pct >= 50 ? '👍' : '📚';
-    final grade = pct >= 80 ? 'Ausgezeichnet!' : pct >= 50 ? 'Gut gemacht!' : 'Weiter üben!';
+    final grade = pct >= 80 ? t('Ausgezeichnet!') : pct >= 50 ? t('Gut gemacht!') : t('Weiter üben!');
     final ringColor = pct >= 80
         ? const Color(0xFF4A9E4A)
         : pct >= 50
@@ -387,7 +388,7 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
                     fontSize: 24,
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            Text('$_score / $_kCount richtig',
+            Text(t('{score} / {total} richtig', {'score': '$_score', 'total': '$_kCount'}),
                 style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 15,
@@ -402,7 +403,7 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
                 border: Border.all(color: ringColor, width: 6),
               ),
               child: Center(
-                child: Text('$pct %',
+                child: Text(t('{pct} %', {'pct': '$pct'}),
                     style: const TextStyle(
                         color: Color(0xFF1A1A1A),
                         fontSize: 30,
@@ -418,9 +419,9 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
                 decoration: BoxDecoration(
                     color: const Color(0xFF4A9E4A),
                     borderRadius: BorderRadius.circular(16)),
-                child: const Text('Nochmal spielen',
+                child: Text(t('Nochmal spielen'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.w700)),
@@ -435,9 +436,9 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
                 decoration: BoxDecoration(
                     color: const Color(0xFFEAEAE5),
                     borderRadius: BorderRadius.circular(16)),
-                child: const Text('Schwierigkeit ändern',
+                child: Text(t('Schwierigkeit ändern'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Color(0xFF888888),
                         fontSize: 16,
                         fontWeight: FontWeight.w700)),
@@ -452,7 +453,7 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
                 decoration: BoxDecoration(
                     color: const Color(0xFFEAEAE5),
                     borderRadius: BorderRadius.circular(16)),
-                child: const Text('Zurück',
+                child: Text(t('Zurück'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Color(0xFF888888),
@@ -469,9 +470,9 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
 
   String _diffLabel(int d) {
     switch (d) {
-      case 1: return '🟢 Leicht';
-      case 2: return '🟡 Mittel';
-      default: return '🔴 Schwer';
+      case 1: return '🟢 ${t('Leicht')}';
+      case 2: return '🟡 ${t('Mittel')}';
+      default: return '🔴 ${t('Schwer')}';
     }
   }
 }

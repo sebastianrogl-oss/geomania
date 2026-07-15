@@ -55,4 +55,25 @@ class ProfilbildService {
   // anderen Profilbild-Optionen. BoxFit.cover füllt den Kreis stattdessen voll.
   static bool istWeitformat(String pfad) =>
       pfad.contains('/globus_') || pfad.contains('/coin_');
+
+  // ── Werbe-Freischaltung ────────────────────────────────────────────────────
+  //
+  // Coin/Globus bleiben immer kostenlos (Standard-Auswahl + einfachster
+  // Einstieg). Die restlichen Kontinent-Tier-Icons sind per Rewarded-Ad
+  // (1 Werbung) dauerhaft freischaltbar — eigenständig vom Abzeichen-System
+  // (freigeschalteteAbzeichen), das eine andere Belohnungsquelle betrifft.
+  static const _kFreigeschaltetPrefix = 'profilbild_freigeschaltet_';
+
+  static bool istImmerKostenlos(String pfad) => istWeitformat(pfad);
+
+  static Future<bool> istFreigeschaltet(String pfad) async {
+    if (istImmerKostenlos(pfad)) return true;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('$_kFreigeschaltetPrefix$pfad') ?? false;
+  }
+
+  static Future<void> schalteFrei(String pfad) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('$_kFreigeschaltetPrefix$pfad', true);
+  }
 }

@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/countries.dart';
+import '../l10n/uebersetzungen.dart';
+import '../services/locale_service.dart';
 import '../services/stats_service.dart';
 
 class GdpQuizScreen extends StatefulWidget {
@@ -60,12 +62,14 @@ class _GdpQuizScreenState extends State<GdpQuizScreen> {
   }
 
   String _formatGdp(int gdp) {
+    final en = LocaleService.istEnglisch;
     if (gdp >= 1000000000000) {
       final v = gdp / 1000000000000;
-      return '${v.toStringAsFixed(2).replaceAll('.', ',')} Bio. \$';
+      final s = v.toStringAsFixed(2);
+      return '${en ? s : s.replaceAll('.', ',')} ${en ? 'T' : 'Bio.'} \$';
     }
     final v = gdp / 1000000000;
-    return '${v.toStringAsFixed(0)} Mrd. \$';
+    return '${v.toStringAsFixed(0)} ${en ? 'B' : 'Mrd.'} \$';
   }
 
   void _answer(int gdp) {
@@ -105,8 +109,8 @@ class _GdpQuizScreenState extends State<GdpQuizScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('BIP-Quiz',
-            style: TextStyle(
+        title: Text(t('BIP-Quiz'),
+            style: const TextStyle(
                 color: Color(0xFF1A1A1A),
                 fontSize: 17,
                 fontWeight: FontWeight.w700)),
@@ -153,7 +157,7 @@ class _GdpQuizScreenState extends State<GdpQuizScreen> {
                     ),
                   ),
             const SizedBox(height: 6),
-            Text('Frage ${_current + 1} von $_totalQuestions',
+            Text(t('Frage {n} von {total}', {'n': '${_current + 1}', 'total': '$_totalQuestions'}),
                 style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 12,
@@ -171,8 +175,8 @@ class _GdpQuizScreenState extends State<GdpQuizScreen> {
                   Text(country.flagEmoji,
                       style: const TextStyle(fontSize: 60)),
                   const SizedBox(height: 12),
-                  const Text('Wie hoch ist das BIP von',
-                      style: TextStyle(
+                  Text(t('Wie hoch ist das BIP von'),
+                      style: const TextStyle(
                           color: Color(0xFF888888),
                           fontSize: 13,
                           fontWeight: FontWeight.w500)),
@@ -218,7 +222,7 @@ class _GdpQuizScreenState extends State<GdpQuizScreen> {
             const Spacer(),
             Text(emoji, style: const TextStyle(fontSize: 72)),
             const SizedBox(height: 20),
-            Text('$_score / $_totalQuestions richtig',
+            Text(t('{score} / {total} richtig', {'score': '$_score', 'total': '$_totalQuestions'}),
                 style: const TextStyle(
                     color: Color(0xFF1A1A1A),
                     fontSize: 28,
@@ -226,10 +230,10 @@ class _GdpQuizScreenState extends State<GdpQuizScreen> {
             const SizedBox(height: 8),
             Text(
               pct >= 80
-                  ? 'Wirtschafts-Experte!'
+                  ? t('Wirtschafts-Experte!')
                   : pct >= 50
-                      ? 'Gut gemacht!'
-                      : 'Weiter üben!',
+                      ? t('Gut gemacht!')
+                      : t('Weiter üben!'),
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: Color(0xFF888888), fontSize: 15),
@@ -268,9 +272,9 @@ class _GdpQuizScreenState extends State<GdpQuizScreen> {
                       color: const Color(0xFF2E7D32),
                       borderRadius: BorderRadius.circular(16)),
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: const Text('Nochmal spielen',
+                  child: Text(t('Nochmal spielen'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w700)),
@@ -285,7 +289,7 @@ class _GdpQuizScreenState extends State<GdpQuizScreen> {
                     color: const Color(0xFFEAEAE5),
                     borderRadius: BorderRadius.circular(16)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                child: const Text('Zurück',
+                child: Text(t('Zurück'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Color(0xFF888888),

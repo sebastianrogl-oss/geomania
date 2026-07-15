@@ -39,7 +39,9 @@ class StatsService {
 
   static Future<Map<String, DailyCatStats>> allDailyStats() async {
     final m = <String, DailyCatStats>{};
-    for (final c in _cats) m[c] = await getDailyStats(c);
+    for (final c in _cats) {
+      m[c] = await getDailyStats(c);
+    }
     return m;
   }
 
@@ -103,7 +105,9 @@ class StatsService {
 
   static Future<Map<String, LernenProgress>> allLernenProgress() async {
     final m = <String, LernenProgress>{};
-    for (final c in _cats) m[c] = await getLernenProgress(c);
+    for (final c in _cats) {
+      m[c] = await getLernenProgress(c);
+    }
     return m;
   }
 

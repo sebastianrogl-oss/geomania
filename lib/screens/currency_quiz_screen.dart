@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/countries.dart';
 import '../data/economic_blocks.dart';
+import '../l10n/uebersetzungen.dart';
 
 enum _Difficulty { easy, hard }
 
@@ -130,8 +131,8 @@ class _CurrencyQuizScreenState extends State<CurrencyQuizScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Währungs-Quiz',
-            style: TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.w800)),
+        title: Text(t('Währungs-Quiz'),
+            style: const TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: !_started
@@ -152,22 +153,22 @@ class _CurrencyQuizScreenState extends State<CurrencyQuizScreen> {
           children: [
             const Text('💱', style: TextStyle(fontSize: 72)),
             const SizedBox(height: 20),
-            const Text('Währungs-Quiz',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
+            Text(t('Währungs-Quiz'),
+                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
             const SizedBox(height: 8),
-            const Text('Welche Währung gehört zu welchem Land?\n10 Fragen · 10 Sekunden pro Frage',
+            Text(t('Welche Währung gehört zu welchem Land?\n10 Fragen · 10 Sekunden pro Frage'),
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+                style: const TextStyle(color: Color(0xFF888888), fontSize: 13)),
             const SizedBox(height: 32),
-            const Text('SCHWIERIGKEITSGRAD',
-                style: TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+            Text(t('SCHWIERIGKEITSGRAD'),
+                style: const TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _DiffBtn(label: 'Leicht', sub: 'Bekannte Länder', active: _difficulty == _Difficulty.easy,
+                Expanded(child: _DiffBtn(label: t('Leicht'), sub: t('Bekannte Länder'), active: _difficulty == _Difficulty.easy,
                     onTap: () => setState(() => _difficulty = _Difficulty.easy))),
                 const SizedBox(width: 10),
-                Expanded(child: _DiffBtn(label: 'Schwer', sub: 'Alle 195 Länder', active: _difficulty == _Difficulty.hard,
+                Expanded(child: _DiffBtn(label: t('Schwer'), sub: t('Alle 195 Länder'), active: _difficulty == _Difficulty.hard,
                     onTap: () => setState(() => _difficulty = _Difficulty.hard))),
               ],
             ),
@@ -183,7 +184,7 @@ class _CurrencyQuizScreenState extends State<CurrencyQuizScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
-                child: const Text('Starten', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                child: Text(t('Starten'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
               ),
             ),
           ],
@@ -220,7 +221,7 @@ class _CurrencyQuizScreenState extends State<CurrencyQuizScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              Text('$_score Pkt', style: const TextStyle(color: Color(0xFFF9A825), fontWeight: FontWeight.w700, fontSize: 13)),
+              Text(t('{n} Pkt', {'n': '$_score'}), style: const TextStyle(color: Color(0xFFF9A825), fontWeight: FontWeight.w700, fontSize: 13)),
             ],
           ),
           const SizedBox(height: 10),
@@ -267,8 +268,8 @@ class _CurrencyQuizScreenState extends State<CurrencyQuizScreen> {
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
                 const SizedBox(height: 6),
-                const Text('Welche Währung hat dieses Land?',
-                    style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+                Text(t('Welche Währung hat dieses Land?'),
+                    style: const TextStyle(color: Color(0xFF888888), fontSize: 13)),
               ],
             ),
           ),
@@ -342,7 +343,7 @@ class _CurrencyQuizScreenState extends State<CurrencyQuizScreen> {
             Text('$_score / $_questionsPerRound',
                 style: const TextStyle(fontSize: 52, fontWeight: FontWeight.w900, color: Color(0xFF1A1A1A))),
             const SizedBox(height: 8),
-            Text('$pct % richtig',
+            Text(t('{pct} % richtig', {'pct': '$pct'}),
                 style: const TextStyle(fontSize: 16, color: Color(0xFF888888), fontWeight: FontWeight.w600)),
             const SizedBox(height: 32),
             SizedBox(
@@ -356,13 +357,13 @@ class _CurrencyQuizScreenState extends State<CurrencyQuizScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
-                child: const Text('Nochmal spielen', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                child: Text(t('Nochmal spielen'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               ),
             ),
             const SizedBox(height: 12),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Zurück', style: TextStyle(color: Color(0xFF888888))),
+              child: Text(t('Zurück'), style: const TextStyle(color: Color(0xFF888888))),
             ),
           ],
         ),

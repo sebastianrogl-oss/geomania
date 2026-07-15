@@ -1,4 +1,4 @@
-package com.example.geomania
+package com.northlight.geomania
 
 import io.flutter.embedding.android.FlutterActivity
 

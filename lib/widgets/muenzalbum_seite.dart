@@ -4,10 +4,10 @@ import '../data/abzeichen_data.dart';
 import 'muenze_widget.dart';
 
 const _kategorien = [
-  (AbzeichenKategorie.serien, 'Serien & Erfolge'),
+  (AbzeichenKategorie.serien, 'Serien'),
   (AbzeichenKategorie.kontinente, 'Kontinente'),
   (AbzeichenKategorie.meilensteine, 'Meilensteine'),
-  (AbzeichenKategorie.challenges, 'Tages-Challenges'),
+  (AbzeichenKategorie.challenges, 'Challenges'),
 ];
 
 /// Die Abzeichen-Galerie im "Münzalbum"-Design — zweite Seite des

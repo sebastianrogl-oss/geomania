@@ -1,4 +1,5 @@
 import 'countries.dart';
+import '../l10n/uebersetzungen.dart';
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
@@ -587,7 +588,7 @@ final List<LernWelt> lernwelten = [
 
 // ── Hilfsfunktionen für UI ────────────────────────────────────────────────────
 
-String lernModusLabel(LernModus m) => switch (m) {
+String lernModusLabel(LernModus m) => t(switch (m) {
   LernModus.flaggenQuizBild      => 'Flaggen-Quiz (Bild)',
   LernModus.flaggenQuizMultiple  => 'Flaggen-Quiz (Multiple)',
   LernModus.hauptstaedteMultiple => 'Hauptstädte (Multiple Choice)',
@@ -609,12 +610,52 @@ String lernModusLabel(LernModus m) => switch (m) {
   LernModus.zufallsFakt          => 'Wissens-Quiz (Fun-Fact)',
   LernModus.bekanntesGebaeude    => 'Wahrzeichen-Quiz',
   LernModus.grenzkettenRaetsel   => 'Grenzketten-Rätsel',
-};
+});
+
+/// Zeitlimit in Sekunden für [modus] in Abschnitt 4 (Meister) — 0 bedeutet
+/// kein Timer. Nach Modus-Kategorie gestaffelt: schnelle Bild-/Multiple-
+/// Erkennung bekommt am wenigsten Zeit, Eingabe-Modi (Tippen kostet Zeit) und
+/// komplexe Multi-Schritt-Modi am meisten. preisSchaetzen/zufallsFakt/
+/// bekanntesGebaeude sind bewusst ohne Timer (freies Nachdenken/Schätzen).
+/// bipGesamt/flaeche/extremFrageLeicht fallen mangels eigener Kategorie auf
+/// den Sicherheits-Fallback (kein Timer) zurück.
+int timerSekundenFuerModus(LernModus modus) {
+  const schnell = {
+    LernModus.flaggenQuizBild,
+    LernModus.flaggenQuizMultiple,
+    LernModus.umrissBild,
+    LernModus.umrissMultiple,
+  };
+  const mittel = {
+    LernModus.hauptstaedteMultiple,
+    LernModus.waehrungsQuiz,
+    LernModus.nachbarland,
+    LernModus.extremFrage,
+  };
+  const eingabe = {
+    LernModus.flaggenQuizEingabe,
+    LernModus.umrissEingabe,
+    LernModus.hauptstaedteEingabe,
+  };
+  const komplex = {
+    LernModus.sortierSpiel,
+    LernModus.grenzkettenRaetsel,
+    LernModus.wirtschaftssektoren,
+  };
+
+  if (schnell.contains(modus)) return 15;
+  if (mittel.contains(modus)) return 20;
+  if (eingabe.contains(modus)) return 30;
+  if (komplex.contains(modus)) return 40;
+  return 0; // Sicherheits-Fallback: unbekannter/nicht gelisteter Modus
+  // bekommt keinen Timer statt zu crashen (preisSchaetzen, zufallsFakt,
+  // bekanntesGebaeude, bipGesamt, flaeche, extremFrageLeicht).
+}
 
 String lernModusFragenLabel(LernStation s) =>
     s.modus == LernModus.sortierSpiel
-        ? '${s.fragenAnzahl} Runden'
-        : '${s.fragenAnzahl} Fragen';
+        ? t('{n} Runden', {'n': '${s.fragenAnzahl}'})
+        : t('{n} Fragen', {'n': '${s.fragenAnzahl}'});
 
 LernStation? stationById(String id) {
   for (final w in lernwelten) {

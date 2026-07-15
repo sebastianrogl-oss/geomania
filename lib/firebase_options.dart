@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '514970095088',
     projectId: 'geomania-283d0',
     storageBucket: 'geomania-283d0.firebasestorage.app',
-    iosBundleId: 'com.example.geomania',
+    iosBundleId: 'com.northlight.geomania',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -72,7 +72,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '514970095088',
     projectId: 'geomania-283d0',
     storageBucket: 'geomania-283d0.firebasestorage.app',
-    iosBundleId: 'com.example.geomania',
+    iosBundleId: 'com.northlight.geomania',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

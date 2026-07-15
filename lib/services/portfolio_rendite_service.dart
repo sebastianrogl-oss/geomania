@@ -80,16 +80,16 @@ double tatsaechlicheRendite(
       zufallsSchwankung(iso, tagesSeed);
 }
 
-/// Kontinents-Synergie: alle gewählten Länder ein Kontinent → +6%,
-/// mindestens zwei gemeinsam → +2%, sonst 0.
+/// Kontinents-Synergie: alle gewählten Länder ein Kontinent → +3%,
+/// mindestens zwei gemeinsam → +1%, sonst 0.
 int kontinentsBonusProzent(List<String> isos) {
   final konts = isos.map((iso) => landKontinent[iso]).toList();
-  if (konts.toSet().length == 1) return 6;
+  if (konts.toSet().length == 1) return 3;
   final counts = <String?, int>{};
   for (final k in konts) {
     counts[k] = (counts[k] ?? 0) + 1;
   }
-  if (counts.values.any((c) => c >= 2)) return 2;
+  if (counts.values.any((c) => c >= 2)) return 1;
   return 0;
 }
 

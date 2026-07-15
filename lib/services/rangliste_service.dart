@@ -7,12 +7,15 @@ import 'profilbild_service.dart';
 class RanglisteService {
   static final _db = FirebaseFirestore.instance;
 
-  static String get _heutigerTag {
-    final n = DateTime.now();
-    return '${n.year}'
-        '${n.month.toString().padLeft(2, '0')}'
-        '${n.day.toString().padLeft(2, '0')}';
-  }
+  static String get _heutigerTag => tagString(DateTime.now());
+
+  /// Firestore-Collection-Key im Format 'JJJJMMTT' für ein beliebiges Datum
+  /// (nicht nur heute) — genutzt für die 14-Tage-Historie und die Bereinigung
+  /// alter Tage. Absichtlich lexikografisch sortierbar (fest zweistellig
+  /// gepaddet), auch wenn das hier nicht ausgenutzt wird.
+  static String tagString(DateTime d) => '${d.year}'
+      '${d.month.toString().padLeft(2, '0')}'
+      '${d.day.toString().padLeft(2, '0')}';
 
   /// Die ID des höchsten aktuell freigeschalteten Abzeichens dieses Spielers,
   /// oder null — wird beim Hochladen eines Tagesergebnisses mitgeschrieben
@@ -59,14 +62,61 @@ class RanglisteService {
     }
   }
 
-  // Top 100 der heutigen Tages-Rangliste
+  // ── 14-Tage-Rollfenster ──────────────────────────────────────────────────
+  //
+  // Speichert wie ergebnisSpeichern() und räumt zusätzlich den Tag GENAU
+  // 15 Tage vor heute ab (1 Tag Sicherheitsabstand zum sichtbaren 14-Tage-
+  // Fenster, siehe Abschluss-Check-Kommentar im Rangliste-Screen). Läuft bei
+  // JEDEM Spieler mit, der ein Ergebnis speichert — reicht ohne eigene Cloud
+  // Function, weil Firestore-Client-SDKs keine Subcollections auflisten
+  // können, hier aber der exakte Tages-Key direkt berechnet statt gelistet
+  // wird. Das Löschen fremder Einträge erlaubt firestore.rules NUR wenn deren
+  // erstelltAm bereits > 14 Tage alt ist (siehe dortiger Kommentar).
+  static Future<void> ergebnisSpeichernMitBereinigung({
+    required String challengeId,
+    required num wert,
+    double? renditeProzent,
+  }) async {
+    await ergebnisSpeichern(
+      challengeId: challengeId,
+      wert: wert,
+      renditeProzent: renditeProzent,
+    );
+
+    final vorFuenfzehnTagen = DateTime.now().subtract(const Duration(days: 15));
+    final altTag = tagString(vorFuenfzehnTagen);
+
+    try {
+      final altCollection = _db
+          .collection('ranglisten')
+          .doc(challengeId)
+          .collection(altTag);
+
+      // Batch-weise löschen (nicht alle auf einmal) — Kosten-/Rate-Limit-
+      // Schutz, reicht über mehrere Aufrufe verteilt trotzdem zeitnah aus.
+      final altDocs = await altCollection.limit(50).get();
+      for (final doc in altDocs.docs) {
+        await doc.reference.delete();
+      }
+    } catch (e) {
+      // Einzelne Dokumente können hier per Regel abgelehnt werden (z.B. noch
+      // keine 14 Tage alt durch Zeitzonen-Grenzfälle) — das darf das
+      // eigentliche Speichern oben nicht beeinträchtigen, daher nur loggen.
+      print('Rangliste-Bereinigung Fehler: $e');
+    }
+  }
+
+  // Top 100 der Tages-Rangliste für [tag] (Standard: heute) — [tag] erlaubt
+  // das Zurückblättern durch die 14-Tage-Historie im Rangliste-Screen.
   static Future<List<RanglistenEintrag>> ladeTagesRangliste(
-      String challengeId) async {
+      String challengeId, {
+    DateTime? tag,
+  }) async {
     try {
       final q = await _db
           .collection('ranglisten')
           .doc(challengeId)
-          .collection(_heutigerTag)
+          .collection(tag == null ? _heutigerTag : tagString(tag))
           .orderBy('punkte', descending: true)
           .limit(100)
           .get();
@@ -204,6 +254,7 @@ class RanglisteService {
       return [];
     }
   }
+
 }
 
 class RanglistenEintrag {

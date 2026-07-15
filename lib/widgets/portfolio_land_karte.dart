@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/portfolio_daten.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/portfolio_engine.dart';
 import '../utils/portfolio_format.dart';
 import 'portfolio_flagge.dart';
@@ -40,24 +41,26 @@ class PortfolioLandKarte extends StatelessWidget {
                 child: Text(landName(b.iso),
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               ),
-              Text('${b.anteilProzent}% Gewicht',
+              Text(t('{n}% Gewicht', {'n': '${b.anteilProzent}'}),
                   style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
             ],
           ),
           const SizedBox(height: 10),
-          PortfolioKomponenteZeile(label: 'Basis', wert: b.basis),
+          PortfolioKomponenteZeile(label: t('Basis'), wert: b.basis),
           if (b.news.abs() > 0.05)
             PortfolioKomponenteZeile(
-                label: b.newsNamen.isEmpty ? 'News' : 'News (${b.newsNamen.join(", ")})',
+                label: b.newsNamen.isEmpty
+                    ? t('News')
+                    : t('News ({n})', {'n': b.newsNamen.join(", ")}),
                 wert: b.news),
-          if (b.trend.abs() > 0.05) PortfolioKomponenteZeile(label: 'Trend', wert: b.trend),
-          PortfolioKomponenteZeile(label: 'Schwankung 🎲', wert: b.schwankung),
+          if (b.trend.abs() > 0.05) PortfolioKomponenteZeile(label: t('Trend'), wert: b.trend),
+          PortfolioKomponenteZeile(label: t('Schwankung 🎲'), wert: b.schwankung),
           const Divider(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Tagesrendite',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              Text(t('Tagesrendite'),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
               Text(fmtProzent(b.tagesRendite),
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
             ],
@@ -66,7 +69,7 @@ class PortfolioLandKarte extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Beitrag (×${b.anteilProzent}%)',
+              Text(t('Beitrag (×{n}%)', {'n': '${b.anteilProzent}'}),
                   style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
               Text(fmtProzent(b.beitragProzent),
                   style: TextStyle(

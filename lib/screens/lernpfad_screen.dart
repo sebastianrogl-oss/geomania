@@ -1,5 +1,12 @@
+// HINWEIS: Dieser Screen wird aktuell NICHT verwendet — main.dart bindet für
+// den Home-Tab home_screen.dart ein (der den Lernpfad als Zickzack-Pfad mit
+// Maskottchen rendert), nicht LernpfadScreen. Diese Datei ist die einzige
+// verbleibende Referenz auf LernpfadScreen im Code (siehe grep). Übersetzte
+// Strings hier landen dadurch nirgends sichtbar — die eigentlichen
+// UI-Übersetzungen für den Lernpfad liegen in home_screen.dart.
 import 'package:flutter/material.dart';
 import '../data/lernpfad_data.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/fortschritt_service.dart';
 import '../widgets/kontinent_hintergrund.dart';
 import '../widgets/station_emoji.dart';
@@ -50,8 +57,8 @@ class _LernpfadScreenState extends State<LernpfadScreen> {
         backgroundColor: const Color(0xFF1B3A2D),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Lernpfad',
-            style: TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(t('Lernpfad'),
+            style: const TextStyle(fontWeight: FontWeight.w800)),
       ),
       body: snap == null
           ? const Center(child: CircularProgressIndicator())
@@ -219,7 +226,10 @@ class _AbschnittKarte extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Abschnitt ${abschnitt.stufe} — ${abschnitt.titel}',
+                              t('Abschnitt {n} — {titel}', {
+                                'n': '${abschnitt.stufe}',
+                                'titel': t(abschnitt.titel),
+                              }),
                               style: TextStyle(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 14,
@@ -230,7 +240,7 @@ class _AbschnittKarte extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              abschnitt.untertitel,
+                              t(abschnitt.untertitel),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: frei
@@ -265,9 +275,9 @@ class _AbschnittKarte extends StatelessWidget {
                       ],
                       if (abschnitt.hatTimer) ...[
                         const SizedBox(width: 6),
-                        const Tooltip(
-                          message: '15-Sekunden-Timer pro Frage',
-                          child: Text('⏱️', style: TextStyle(fontSize: 14)),
+                        Tooltip(
+                          message: t('15-Sekunden-Timer pro Frage'),
+                          child: const Text('⏱️', style: TextStyle(fontSize: 14)),
                         ),
                       ],
                     ],
@@ -324,7 +334,10 @@ class _StationZeile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String untertitel = details.istGestartet
-        ? 'Fortsetzen (${details.aktuellerFragenIndex}/${station.fragenAnzahl})'
+        ? t('Fortsetzen ({a}/{b})', {
+            'a': '${details.aktuellerFragenIndex}',
+            'b': '${station.fragenAnzahl}',
+          })
         : lernModusFragenLabel(station);
 
     final StationStatus status;

@@ -71,8 +71,23 @@ const _weltLayout = [
 
 const double _iconSizeEuropa = 94.5;  // 135 × 0,7
 const double _iconSizeAndere = 75.6;  // 108 × 0,7
-const double _btnRadius = 41.0;
-const double _gap       = 130.0;      // 100 + 30
+
+/// Fixer Abstand von der Bildschirmmitte bis zur INNENKANTE (dem Pfad
+/// zugewandte Kante) von Coin und Globus (pfad_maskottchen.dart) — ein
+/// gemeinsamer Basiswert für beide, statt wie zuvor ein fixer Gap ab der
+/// jeweiligen Stationsposition: die Stationen liegen je nach
+/// Zickzack-Pfadmuster unterschiedlich weit von der Mitte entfernt, wodurch
+/// bei stationsrelativer Platzierung optisch ungleich weit von der Mitte
+/// entfernte Icons entstanden. Die Stationsposition entscheidet weiterhin
+/// NUR noch links/rechts, nicht mehr die Distanz. Innenkante statt
+/// Icon-Mitte als Referenz: Coin/Globus sind mit 220-265px so groß relativ
+/// zur Handybreite (~360-430dp), dass ein Mitte-Mitte-Abstand je nach
+/// Icon-Größe unterschiedlich stark vom Clamp am Bildschirmrand eingeholt
+/// würde — mit der Innenkante als gemeinsamem Fixpunkt beginnen beide Icons
+/// sichtbar am selben "Ring" um den Pfad. Die Pfad-Deko-Icons (Wahrzeichen,
+/// s.u.) nutzen diesen Wert NICHT mehr — sie sind stattdessen fix auf ¼/¾
+/// der Screenbreite zentriert (siehe _layoutOverlays).
+const double pfadIconAbstandVonMitte = 75.0;
 
 Widget _dekoImage(String datei, double left, double top, double size) => Positioned(
       left: left,
@@ -92,14 +107,6 @@ Widget _dekoImage(String datei, double left, double top, double size) => Positio
       ),
     );
 
-// Alle Deko-Bilder außer dem Globus (welt_globus.png) rücken 50px näher an
-// den Pfad heran (kleinerer Gap), damit in der Handyansicht (schmaler
-// Screen) mehr Abstand zum Bildschirmrand bleibt. Globus bewusst
-// ausgenommen — seine Position war bereits passend. Die Münze (siehe
-// muenze_widget.dart) ist ein eigenständiges Widget außerhalb dieser Deko-
-// Ebene und daher von dieser Verschiebung ohnehin nicht betroffen.
-const double _gapVerschiebung = 50.0;
-
 List<Widget> _layoutOverlays(
   List<({int a, int s, String datei, bool links})> layout,
   List<List<Offset>> stationenProAbschnitt,
@@ -112,11 +119,12 @@ List<Widget> _layoutOverlays(
     final abschnitt = stationenProAbschnitt[p.a];
     if (p.s >= abschnitt.length) continue;
     final pos = abschnitt[p.s];
-    final gap =
-        p.datei == 'welt_globus.png' ? _gap : _gap - _gapVerschiebung;
-    final double left = p.links
-        ? (pos.dx - _btnRadius - gap - size).clamp(0.0, screenWidth - size)
-        : (pos.dx + _btnRadius + gap).clamp(0.0, screenWidth - size);
+    // Icon-Mitte auf der Mitte der jeweiligen Bildschirmhälfte (¼ bzw. ¾
+    // der Screenbreite) — auf Nutzerwunsch, abweichend von Coins/Globus
+    // (pfad_maskottchen.dart), die weiterhin an der Bildschirmmitte ±
+    // festem Abstand ausgerichtet sind.
+    final double mitteHaelfte = p.links ? screenWidth * 0.25 : screenWidth * 0.75;
+    final double left = (mitteHaelfte - size / 2).clamp(0.0, screenWidth - size);
     overlays.add(_dekoImage(p.datei, left, pos.dy - size / 2, size));
   }
   return overlays;

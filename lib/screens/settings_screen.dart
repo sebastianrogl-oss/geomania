@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../data/lernpfad_data.dart';
+import '../services/ad_service.dart';
 import '../services/auth_service.dart';
 import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
@@ -23,7 +23,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _anzeigename = '';
   bool _sound = true;
   bool _vibration = true;
-  LernWelt? _aktuelleWelt;
 
   @override
   void initState() {
@@ -48,13 +47,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final sound = await EinstellungenService.soundAktiv;
     final vibration = await EinstellungenService.vibrationAktiv;
-    final welt = await FortschrittService.aktuelleWelt();
     if (!mounted) return;
     setState(() {
       _anzeigename = AuthService.anzeigename ?? t('Spieler');
       _sound = sound;
       _vibration = vibration;
-      _aktuelleWelt = welt;
     });
   }
 
@@ -68,6 +65,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _anzeigenameAendern() {
     final controller = TextEditingController(text: _anzeigename);
+    String? fehlerText;
+    bool speichert = false;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -104,7 +103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       controller: controller,
                       maxLength: 16,
                       autofocus: true,
-                      onChanged: (_) => setModalState(() {}),
+                      onChanged: (_) => setModalState(() => fehlerText = null),
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                       decoration: InputDecoration(
                         hintText: t('Dein Name'),
@@ -119,13 +118,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(t('Muss zwischen 2 und 16 Zeichen lang sein'),
                         style: const TextStyle(fontSize: 12, color: Color(0xFFCC0000))),
                   ],
+                  if (fehlerText != null) ...[
+                    const SizedBox(height: 6),
+                    Text(fehlerText!,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFFCC0000))),
+                  ],
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: gueltig
+                      onPressed: (gueltig && !speichert)
                           ? () async {
-                              await AuthService.setzeAnzeigename(text);
+                              setModalState(() => speichert = true);
+                              final ergebnis =
+                                  await AuthService.setzeAnzeigenameEindeutig(text);
+                              if (ergebnis != AnzeigenameErgebnis.erfolgreich) {
+                                setModalState(() {
+                                  speichert = false;
+                                  fehlerText = ergebnis ==
+                                          AnzeigenameErgebnis.bereitsVergeben
+                                      ? t('Dieser Name ist schon vergeben — bitte wähle einen anderen.')
+                                      : t('Etwas ist schiefgelaufen — bitte versuch es erneut.');
+                                });
+                                return;
+                              }
                               if (!ctx.mounted) return;
                               Navigator.pop(ctx);
                               if (!mounted) return;
@@ -140,8 +156,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
-                      child: Text(t('Speichern'),
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                      child: speichert
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text(t('Speichern'),
+                              style: const TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w800)),
                     ),
                   ),
                 ],
@@ -168,42 +192,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── Lernfortschritt zurücksetzen ─────────────────────────────────────────
 
   Future<void> _fortschrittZuruecksetzen() async {
-    final welt = _aktuelleWelt;
-    final gewaehlt = await showDialog<String>(
+    // Nur noch "Abbrechen" + "Alles zurücksetzen" — die frühere Option, nur
+    // die aktuelle Welt zurückzusetzen, wurde bewusst entfernt (auf Wunsch).
+    final bestaetigt1 = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t('Fortschritt zurücksetzen')),
-        content: Text(t('Was soll zurückgesetzt werden?')),
+        content: Text(t('Der gesamte Fortschritt wird zurückgesetzt.')),
+        actionsAlignment: MainAxisAlignment.start,
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(ctx, false),
             child: Text(t('Abbrechen')),
           ),
-          if (welt != null)
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'kontinent'),
-              child: Text(t('Nur {welt}', {'welt': welt.name})),
-            ),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, 'alles'),
+            onPressed: () => Navigator.pop(ctx, true),
             child: Text(t('Alles zurücksetzen'),
                 style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
-    if (gewaehlt == null) return;
+    if (bestaetigt1 != true) return;
 
-    final beschreibung =
-        gewaehlt == 'kontinent' ? welt!.name : t('der gesamte Fortschritt');
     if (!mounted) return;
     final bestaetigt = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t('Bist du sicher?')),
         content: Text(t(
-            '{b} wird zurückgesetzt. Das kann nicht rückgängig gemacht werden.',
-            {'b': beschreibung})),
+            'Das setzt deinen Lernpfad-Fortschritt zurück (Stationen, Kontinente). Deine Tages-Challenge-Ergebnisse und Ranglisten bleiben davon unberührt.')),
+        actionsAlignment: MainAxisAlignment.start,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -218,11 +237,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (bestaetigt != true) return;
 
-    if (gewaehlt == 'kontinent') {
-      await FortschrittService.kontinentZuruecksetzen(welt!.id);
-    } else {
-      await FortschrittService.allesDatenZuruecksetzen();
-    }
+    // NUR der Lernpfad (lokal) — Tages-Challenges/Ranglisten sind davon
+    // bewusst unabhängig und bleiben unangetastet (siehe Anfrage: der
+    // Zusatz aus einem früheren Umbau, der hier auch die Firestore-
+    // Ranglisten löschte, wurde wieder entfernt).
+    await FortschrittService.allesDatenZuruecksetzen();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(t('✅ Fortschritt wurde zurückgesetzt')),
@@ -231,12 +250,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
+  // ── Werbeeinstellungen (UMP-Consent) ────────────────────────────────────
+
+  Future<void> _werbeeinstellungenVerwalten() async {
+    final verfuegbar = await AdService.zeigeConsentEinstellungen();
+    if (!verfuegbar && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('Aktuell keine Werbeeinstellungen verfügbar')),
+      ));
+    }
+  }
+
   // ── Feedback ─────────────────────────────────────────────────────────────
 
   Future<void> _feedbackGeben() async {
     final uri = Uri(
       scheme: 'mailto',
-      path: 'feedback@geomania.app',
+      path: 'northlightapps@gmx.at',
       queryParameters: {'subject': 'GeoMania Feedback'},
     );
     final erfolg = await launchUrl(uri);
@@ -245,17 +275,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Text(t('Kein Mail-Programm gefunden')),
       ));
     }
-  }
-
-  // ── Alles freischalten (Test-Modus) ──────────────────────────────────────
-
-  Future<void> _allesFreischalten() async {
-    await FortschrittService.allesFreischalten();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(t('🔓 Alle Abschnitte & Stationen freigeschaltet')),
-      backgroundColor: _accent,
-    ));
   }
 
   @override
@@ -338,37 +357,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const _Trenner(),
               _Zeile(
+                icon: Icons.privacy_tip_outlined,
+                title: t('Werbeeinstellungen verwalten'),
+                onTap: _werbeeinstellungenVerwalten,
+              ),
+              const _Trenner(),
+              _Zeile(
                 icon: Icons.mail_outline_rounded,
                 title: t('Feedback geben'),
                 onTap: _feedbackGeben,
               ),
             ]),
-            const SizedBox(height: 32),
-
-            const _Trenner(),
-            const SizedBox(height: 16),
-            Text(t('ENTWICKLER-OPTIONEN'),
-                style: const TextStyle(
-                    color: Color(0xFF888888),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.5)),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFC5DDFF), width: 1.5),
-              ),
-              child: _Zeile(
-                icon: Icons.lock_open_rounded,
-                title: t('Alles freischalten (Test-Modus)'),
-                subtitle: t('Alle Stationen sofort spiel- & wiederholbar'),
-                titleColor: const Color(0xFF1565C0),
-                onTap: _allesFreischalten,
-              ),
-            ),
           ],
         ),
       ),

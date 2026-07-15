@@ -1,5 +1,43 @@
 import '../services/locale_service.dart';
+import 'uebersetzungen_ads.dart';
+import 'uebersetzungen_anzeigename.dart';
+import 'uebersetzungen_categorymatch.dart';
+import 'uebersetzungen_challenges.dart';
+import 'uebersetzungen_connections.dart';
+import 'uebersetzungen_currencyquiz.dart';
+import 'uebersetzungen_economicblocks.dart';
+import 'uebersetzungen_financehub.dart';
+import 'uebersetzungen_flagquiz.dart';
+import 'uebersetzungen_gdpquiz.dart';
+import 'uebersetzungen_higherlower.dart';
+import 'uebersetzungen_lernen.dart';
+import 'uebersetzungen_quiz.dart';
+import 'laender_fakten_en.dart';
+import 'laender_gebaeude_en.dart';
+import 'uebersetzungen_lernpfad.dart';
+import 'uebersetzungen_lernwelten.dart';
+import 'uebersetzungen_mapquiz.dart';
+import 'uebersetzungen_marktbriefing.dart';
+import 'uebersetzungen_outlinequiz.dart';
+import 'uebersetzungen_portfolio.dart';
+import 'uebersetzungen_portfolio_aufloesung.dart';
+import 'uebersetzungen_portfolio_investieren.dart';
+import 'uebersetzungen_portfoliobeispiel.dart';
+import 'uebersetzungen_profil.dart';
+import 'uebersetzungen_ranking.dart';
+import 'uebersetzungen_rangliste.dart';
+import 'uebersetzungen_rankingquiz.dart';
+import 'uebersetzungen_schaetzen.dart';
+import 'uebersetzungen_sortierspiel.dart';
+import 'spielkategorien_en.dart';
 import 'uebersetzungen_settings.dart';
+import 'uebersetzungen_stationquiz.dart';
+import 'uebersetzungen_tagesspiele.dart';
+import 'uebersetzungen_waehrungen.dart';
+import 'uebersetzungen_widgets.dart';
+import 'uebersetzungen_wirtschaftssektoren.dart';
+import 'wirtschaftssektoren_en.dart';
+import 'wirtschaftssektoren_frage_en.dart';
 
 // Zentrale Übersetzungstabelle (Deutsch -> Englisch). Statt eines
 // offiziellen ARB-/gen-l10n-Setups (zu viel Umbau-Overhead für eine bereits
@@ -9,7 +47,45 @@ import 'uebersetzungen_settings.dart';
 // an unabhängigen Dateien möglich ist, ohne dass sich Änderungen an EINER
 // riesigen Map gegenseitig überschreiben.
 final Map<String, String> uebersetzungen = {
+  ...uebersetzungenAds,
+  ...uebersetzungenAnzeigename,
+  ...uebersetzungenCategoryMatch,
+  ...uebersetzungenChallenges,
+  ...uebersetzungenConnections,
+  ...uebersetzungenCurrencyQuiz,
+  ...uebersetzungenEconomicBlocks,
+  ...uebersetzungenFinanceHub,
+  ...uebersetzungenFlagQuiz,
+  ...uebersetzungenGdpQuiz,
+  ...uebersetzungenLernen,
+  ...uebersetzungenQuiz,
   ...uebersetzungenSettings,
+  ...uebersetzungenLernpfad,
+  ...uebersetzungenLernwelten,
+  ...uebersetzungenMapQuiz,
+  ...uebersetzungenStationQuiz,
+  ...uebersetzungenTagesspiele,
+  ...uebersetzungenWaehrungen,
+  ...uebersetzungenHigherLower,
+  ...uebersetzungenWidgets,
+  ...uebersetzungenRanking,
+  ...uebersetzungenRangliste,
+  ...uebersetzungenRankingQuiz,
+  ...uebersetzungenSchaetzen,
+  ...uebersetzungenSortierSpiel,
+  ...uebersetzungenPortfolio,
+  ...uebersetzungenPortfolioAufloesung,
+  ...uebersetzungenMarktbriefing,
+  ...uebersetzungenOutlineQuiz,
+  ...uebersetzungenPortfolioInvestieren,
+  ...uebersetzungenPortfolioBeispiel,
+  ...uebersetzungenProfil,
+  ...laenderFaktenEn,
+  ...laenderGebaeudeEn,
+  ...wirtschaftssektorenFrageEn,
+  ...wirtschaftssektorenEn,
+  ...uebersetzungenWirtschaftssektoren,
+  ...spielkategorienEn,
 };
 
 /// Übersetzt [de] nach Englisch, wenn LocaleService.istEnglisch — sonst wird

@@ -15,6 +15,16 @@ service cloud.firestore {
       allow write: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.uid == uid;
+      // 14-Tage-Rollfenster: jeder angemeldete Nutzer darf einen (auch
+      // fremden) Eintrag löschen, aber NUR wenn er bereits älter als 14
+      // Tage ist — ermöglicht clientseitige Bereinigung alter Tage ohne
+      // eine Cloud Function einzurichten, ohne generelles Lösch-Recht auf
+      // aktuelle Einträge anderer Spieler zu öffnen. (Kein "eigener Eintrag
+      // jederzeit löschbar"-Fall mehr: der einzige Aufrufer dafür — ein
+      // Ranglisten-Reset über "Fortschritt zurücksetzen" — wurde bewusst
+      // wieder entfernt, siehe RanglisteService.)
+      allow delete: if request.auth != null
+        && resource.data.erstelltAm < request.time - duration.value(14, 'd');
     }
 
     // Portfolio Alltime-Rangliste: jeder angemeldete Nutzer darf lesen,
@@ -24,6 +34,31 @@ service cloud.firestore {
       allow write: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.uid == uid;
+    }
+
+    // Anzeigename-Reservierungen: Dokument-ID = normalisierter (kleinge-
+    // schriebener, whitespace-vereinheitlichter) Anzeigename. Verhindert
+    // doppelte Namen in der Rangliste. "create" wird von Firestore nur
+    // zugelassen, wenn das Dokument noch NICHT existiert -> das ist der
+    // eigentliche Schutz gegen zwei Spieler, die gleichzeitig denselben
+    // Namen reservieren (die Firestore-Transaktion in
+    // setzeAnzeigenameEindeutig() sorgt zusätzlich dafür, dass Freigabe des
+    // alten + Anlage des neuen Namens atomar zusammen passieren). "update"
+    // bewusst nicht erlaubt: beim Ändern des Namens wird die alte
+    // Reservierung gelöscht und eine neue angelegt, nie ein bestehendes
+    // Dokument überschrieben — eine Regel-Variante mit
+    // "request.resource.data.uid == request.auth.uid" als zusätzliche
+    // OR-Bedingung für "write" (wie ursprünglich vorgeschlagen) würde genau
+    // das erlauben: jeder könnte ein FREMDES Reservierungs-Dokument
+    // überschreiben, indem er im Request-Payload einfach die eigene uid
+    // einträgt — deshalb bewusst bei den getrennten create/delete-Regeln
+    // ohne update geblieben.
+    match /anzeigenamen_reserviert/{nameKey} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
     }
   }
 }

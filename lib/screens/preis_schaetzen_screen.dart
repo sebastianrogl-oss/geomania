@@ -2,7 +2,9 @@ import 'dart:math';
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/country_rankings.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/abzeichen_service.dart';
+import '../services/locale_service.dart';
 import '../services/challenge_ergebnis_service.dart';
 import '../services/challenge_panel_signal.dart';
 import '../services/challenge_rekord_service.dart';
@@ -12,7 +14,10 @@ import '../services/tages_seed_service.dart';
 import '../services/skala_service.dart';
 import '../services/rangliste_service.dart';
 import '../widgets/abzeichen_popup.dart';
+import '../widgets/challenge_fertig_button.dart';
 import '../widgets/rangliste_ergebnis_karte.dart';
+import '../widgets/rekord_badge.dart';
+import '../widgets/spiel_erklaerung.dart';
 
 // ── Question ──────────────────────────────────────────────────────────────────
 //
@@ -155,15 +160,14 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     final ergebnisse = ergebnisseRoh
         .map((e) => _SchaetzErgebnis.fromJson(e as Map<String, dynamic>))
         .toList();
-    final q = _fragen[idx];
-    final realVal = q.kat.getValue(q.land)!;
-    final sk = SkalaService.fuerRankingId(
-        q.kat.id, realVal, TagesSeedService.seedFuer(_kId) + 500 + idx);
+    // _skala wurde bereits oben in _starteFragen() EINMAL für die ganze
+    // Runde berechnet — hier nur noch die Startposition des Sliders für
+    // die fortgesetzte Frage neu bestimmen, NICHT die Skala selbst.
+    final sk = _skala!;
     final start = sk.min + TagesSeedService.startBruch(idx) * (sk.max - sk.min);
     setState(() {
       _idx = idx;
       _gesamt = gesamt;
-      _skala = sk;
       _sliderVal = start.clamp(sk.min, sk.max);
       _beantwortet = false;
       _letztePts = 0;
@@ -195,10 +199,13 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
 
     final fragen = pool.take(8).map((land) => _Frage(land, kat)).toList();
 
+    // EINMAL pro Tages-Runde aus den ECHTEN Werten der tatsächlich gezogenen
+    // 8 Länder berechnet — bleibt danach für alle 8 Fragen dieser Runde
+    // unverändert (siehe SkalaService.ausRundenWerten).
+    final werteDieserRunde =
+        fragen.map((f) => f.kat.getValue(f.land)!).toList();
     final sk = fragen.isNotEmpty
-        ? SkalaService.fuerRankingId(
-            fragen.first.kat.id, fragen.first.kat.getValue(fragen.first.land)!,
-            TagesSeedService.seedFuer(_kId) + 500)
+        ? SkalaService.ausRundenWerten(kat.id, werteDieserRunde)
         : null;
     final start = sk != null
         ? sk.min + TagesSeedService.startBruch(0) * (sk.max - sk.min)
@@ -258,13 +265,10 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   // Werten (z.B. 12 % Waldanteil -> 250 % "Abweichung" bei nur 30 echten
   // Prozentpunkten Differenz). Hier zählt stattdessen die ABSOLUTE Differenz
   // in Prozentpunkten, weil das die tatsächliche "Daneben-Distanz" auf der
-  // Skala widerspiegelt.
-  bool _istProzentKategorie(String id) => const {
-        'forest',
-        'corruption',
-        'press_freedom',
-        'inflation',
-      }.contains(id);
+  // Skala widerspiegelt. Zentral in SkalaService definiert (auch für die
+  // Rundenskalen-Clamp-Logik dort genutzt) statt einer zweiten, hier
+  // separat gepflegten Liste.
+  bool _istProzentKategorie(String id) => SkalaService.istProzentKategorie(id);
 
   int _punkteProzentKategorie(double abweichungPunkte) {
     if (abweichungPunkte <= 1) return 100;
@@ -280,11 +284,10 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
 
   Future<void> _weiter() async {
     if (_idx + 1 >= _fragen.length) {
-      print('>>> SPIEL FERTIG (schaetzen), punkte=$_gesamt');
       _neuerRekord = await ChallengeRekordService.setzeFallsBesser(_kId, _gesamt);
       await ChallengeRekordService.speichereHeutigePunkte(_kId, _gesamt);
       await ChallengeRekordService.summeErhoehen(_kId, _gesamt.toDouble());
-      await RanglisteService.ergebnisSpeichern(
+      await RanglisteService.ergebnisSpeichernMitBereinigung(
           challengeId: 'schaetzen', wert: _gesamt);
       await DailyChallenge.markDone(_kId);
       await DailyResumeService.loeschen(_kId);
@@ -298,7 +301,6 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
         await AbzeichenPopup.zeigen(context, neueAbzeichen);
       }
       if (!mounted) return;
-      print('>>> setze _fertig=true, baue Ergebnis-Screen');
       setState(() {
         _fertig = true;
         _rekord = _gesamt > (_rekord ?? 0) ? _gesamt : _rekord;
@@ -306,15 +308,14 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
       return;
     }
     final nextIdx = _idx + 1;
-    final q = _fragen[nextIdx];
-    final realVal = q.kat.getValue(q.land)!;
-    final sk = SkalaService.fuerRankingId(
-        q.kat.id, realVal, TagesSeedService.seedFuer(_kId) + 500 + nextIdx);
+    // _skala bleibt für die ganze Runde unverändert (siehe _starteFragen())
+    // — hier wird NUR die Slider-Startposition innerhalb dieser festen
+    // Skala neu bestimmt, nicht die Skala selbst.
+    final sk = _skala!;
     final start =
         sk.min + TagesSeedService.startBruch(nextIdx) * (sk.max - sk.min);
     setState(() {
       _idx = nextIdx;
-      _skala = sk;
       _sliderVal = start.clamp(sk.min, sk.max);
       _beantwortet = false;
       _letztePts = 0;
@@ -342,20 +343,20 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   }
 
   String _labelFuer(int p) {
-    if (p == 100) return 'Perfekter Treffer!';
-    if (p >= 99)  return 'Fast perfekt!';
-    if (p >= 95)  return 'Unglaublich nah!';
-    if (p >= 90)  return 'Sehr präzise!';
-    if (p >= 83)  return 'Hervorragend!';
-    if (p >= 75)  return 'Sehr gut!';
-    if (p >= 65)  return 'Gut gemacht!';
-    if (p >= 55)  return 'Nicht schlecht!';
-    if (p >= 45)  return 'Nah dran!';
-    if (p >= 35)  return 'Gute Richtung!';
-    if (p >= 20)  return 'Weiter üben!';
-    if (p >= 10)  return 'Noch weit weg';
-    if (p >= 1)   return 'Sehr weit daneben';
-    return 'Daneben!';
+    if (p == 100) return t('Perfekter Treffer!');
+    if (p >= 99)  return t('Fast perfekt!');
+    if (p >= 95)  return t('Unglaublich nah!');
+    if (p >= 90)  return t('Sehr präzise!');
+    if (p >= 83)  return t('Hervorragend!');
+    if (p >= 75)  return t('Sehr gut!');
+    if (p >= 65)  return t('Gut gemacht!');
+    if (p >= 55)  return t('Nicht schlecht!');
+    if (p >= 45)  return t('Nah dran!');
+    if (p >= 35)  return t('Gute Richtung!');
+    if (p >= 20)  return t('Weiter üben!');
+    if (p >= 10)  return t('Noch weit weg');
+    if (p >= 1)   return t('Sehr weit daneben');
+    return t('Daneben!');
   }
 
   Color _farbe(int p) {
@@ -364,6 +365,20 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     if (p >= 50) return const Color(0xFFF9A825);
     if (p >= 30) return const Color(0xFFF57C00);
     return const Color(0xFFE53935);
+  }
+
+  // Ganzzahlige Rundung würde bei sehr kleinen Werten (z.B. Tourismus-
+  // einnahmen/Militärausgaben winziger Länder) fälschlich "0" anzeigen,
+  // obwohl der Wert ungleich null ist — dann fest auf 2 Nachkommastellen
+  // ausweichen, sonst ganzzahlig runden wie gewohnt.
+  String _fmtGerundetOderZweiDezimal(double v, String einheit) {
+    final en = LocaleService.istEnglisch;
+    if (v == 0) return '0 $einheit';
+    if (v.round() == 0) {
+      final s = v.toStringAsFixed(2);
+      return '${en ? s : s.replaceAll('.', ',')} $einheit';
+    }
+    return '${v.round()} $einheit';
   }
 
   String _fakt(_Frage q, double realVal) {
@@ -405,7 +420,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
       case 'gdpTotal':
         return rank <= 3
             ? '$name gehört zu den größten Volkswirtschaften der Welt (Platz $rank).'
-            : '$name erwirtschaftet ein BIP von ${(realVal / 1e9).round()} Mrd. USD (Platz $rank).';
+            : '$name erwirtschaftet ein BIP von ${_fmtGerundetOderZweiDezimal(realVal / 1e9, 'Mrd. USD')} (Platz $rank).';
       case 'internet':
         return rank <= 5
             ? '$name gehört zu den schnellsten Ländern beim Internet (Platz $rank).'
@@ -425,11 +440,11 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
       case 'tourism':
         return rank <= 3
             ? '$name gehört zu den top Reisezielen weltweit (Platz $rank nach Einnahmen).'
-            : '$name erwirtschaftet ${realVal.round()} Mrd. USD durch Tourismus (Platz $rank).';
+            : '$name erwirtschaftet ${_fmtGerundetOderZweiDezimal(realVal, 'Mrd. USD')} durch Tourismus (Platz $rank).';
       case 'military':
         return rank == 1
             ? '$name hat das größte Militärbudget der Welt.'
-            : '$name gibt ${realVal.round()} Mrd. USD für das Militär aus (Platz $rank).';
+            : '$name gibt ${_fmtGerundetOderZweiDezimal(realVal, 'Mrd. USD')} für das Militär aus (Platz $rank).';
       case 'birth_rate':
         return rank == 1
             ? '$name hat die höchste Geburtenrate weltweit.'
@@ -437,7 +452,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
       case 'forest':
         return rank <= 5
             ? '$name gehört zu den waldreichsten Ländern der Welt (Platz $rank).'
-            : '${realVal.round()} % der Fläche von $name sind von Wald bedeckt (Platz $rank).';
+            : '${_fmtGerundetOderZweiDezimal(realVal, '%')} der Fläche von $name sind von Wald bedeckt (Platz $rank).';
       case 'alcohol':
         return rank <= 3
             ? '$name gehört zu den Ländern mit dem höchsten Alkoholkonsum der Welt (Platz $rank).'
@@ -477,8 +492,8 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
         title: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Das große Schätzen',
-                style: TextStyle(
+            Text(t('Das große Schätzen'),
+                style: const TextStyle(
                     color: Color(0xFF1A1A1A),
                     fontSize: 17,
                     fontWeight: FontWeight.w700)),
@@ -493,15 +508,28 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
         actions: [
           if (!_fertig && _gesamt > 0)
             Padding(
-              padding: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 8),
               child: Center(
-                child: Text('$_gesamt Pkt.',
+                child: Text(t('{n} Pkt.', {'n': '$_gesamt'}),
                     style: const TextStyle(
                         color: Color(0xFF4A9E4A),
                         fontSize: 15,
                         fontWeight: FontWeight.w800)),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: ErklaerungButton(
+              titel: t('Das große Schätzen — Spielregeln'),
+              farbe: const Color(0xFFF9A825),
+              abschnitte: [
+                t('Zu einem Land und einer Kategorie (z.B. Bevölkerung, BIP pro Kopf) siehst du eine Skala mit einem Schieberegler.'),
+                t('Bewege den Regler auf die Position, an der du den echten Wert vermutest, und bestätige deine Schätzung.'),
+                t('Je näher deine Schätzung am tatsächlichen Wert liegt, desto mehr Punkte bekommst du für diese Frage.'),
+                t('Das Spiel besteht aus mehreren Fragen hintereinander — am Ende siehst du deine Gesamtpunktzahl und alle Antworten im Überblick.'),
+              ],
+            ),
+          ),
         ],
       ),
       body: _fertig ? _buildErgebnis() : _buildQuiz(),
@@ -536,13 +564,14 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                     borderRadius: BorderRadius.circular(10)),
                 child: Row(
                   children: [
-                    const Text('🏆 Rekord:',
-                        style: TextStyle(
+                    Text(t('🏆 Rekord:'),
+                        style: const TextStyle(
                             color: Color(0xFF888888),
                             fontSize: 11,
                             fontWeight: FontWeight.w600)),
                     const SizedBox(width: 6),
-                    Text('$_rekord / $_kMaxPts Punkte',
+                    Text(t('{a} / {b} Punkte',
+                        {'a': '$_rekord', 'b': '$_kMaxPts'}),
                         style: const TextStyle(
                             color: Color(0xFFF9A825),
                             fontSize: 11,
@@ -573,7 +602,8 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
             ),
             const SizedBox(height: 6),
             Center(
-              child: Text('Frage ${_idx + 1} von ${_fragen.length}',
+              child: Text(t('Frage {a} von {b}',
+                      {'a': '${_idx + 1}', 'b': '${_fragen.length}'}),
                   style: const TextStyle(
                       color: Color(0xFF888888),
                       fontSize: 12,
@@ -633,9 +663,9 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                         fontSize: 32,
                         fontWeight: FontWeight.w800)),
               ),
-              const Center(
-                child: Text('Deine Schätzung',
-                    style: TextStyle(
+              Center(
+                child: Text(t('Deine Schätzung'),
+                    style: const TextStyle(
                         color: Color(0xFF888888),
                         fontSize: 12,
                         fontWeight: FontWeight.w600)),
@@ -674,9 +704,9 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                     borderRadius: BorderRadius.circular(16),
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: const Text('Bestätigen',
+                  child: Text(t('Bestätigen'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w700)),
@@ -717,7 +747,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                         scale: _ptsAnim,
                         child: Column(
                           children: [
-                            Text('+$_letztePts Punkte',
+                            Text(t('+{n} Punkte', {'n': '$_letztePts'}),
                                 style: TextStyle(
                                     color: _farbe(_letztePts),
                                     fontSize: 34,
@@ -745,8 +775,8 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('Deine Schätzung',
-                                        style: TextStyle(
+                                    Text(t('Deine Schätzung'),
+                                        style: const TextStyle(
                                             color: Color(0xFF2196F3),
                                             fontSize: 10,
                                             fontWeight: FontWeight.w600)),
@@ -762,8 +792,8 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    const Text('Richtiger Wert',
-                                        style: TextStyle(
+                                    Text(t('Richtiger Wert'),
+                                        style: const TextStyle(
                                             color: Color(0xFF4A9E4A),
                                             fontSize: 10,
                                             fontWeight: FontWeight.w600)),
@@ -793,8 +823,15 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                           Center(
                             child: Text(
                               _istProzentKategorie(q.kat.id)
-                                  ? 'Abweichung: ${_abweichung.round()} Prozentpunkte'
-                                  : 'Abweichung: ${_abweichung.toStringAsFixed(1).replaceAll('.', ',')} % der Skala',
+                                  ? t('Abweichung: {n} Prozentpunkte',
+                                      {'n': '${_abweichung.round()}'})
+                                  : t('Abweichung: {n} % der Skala', {
+                                      'n': LocaleService.istEnglisch
+                                          ? _abweichung.toStringAsFixed(1)
+                                          : _abweichung
+                                              .toStringAsFixed(1)
+                                              .replaceAll('.', ','),
+                                    }),
                               style: TextStyle(
                                   color: _farbe(_letztePts),
                                   fontSize: 13,
@@ -844,8 +881,8 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Text(
                     _idx + 1 >= _fragen.length
-                        ? 'Ergebnis anzeigen'
-                        : 'Weiter →',
+                        ? t('Ergebnis anzeigen')
+                        : t('Weiter →'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                         color: Colors.white,
@@ -864,97 +901,70 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   // ── Ergebnis ──────────────────────────────────────────────────────────────
 
   Widget _buildErgebnis() {
-    print('>>> _buildErgebnis() aufgerufen (schaetzen)');
-    final pct = (_gesamt / _kMaxPts * 100).round();
-    final emoji = pct >= 80 ? '🎯' : pct >= 50 ? '👍' : '📚';
-    final grade = pct >= 80
-        ? 'Ausgezeichnet!'
-        : pct >= 50
-            ? 'Gut gemacht!'
-            : 'Weiter üben!';
-    print('>>> _buildErgebnis() gibt Widget zurück (schaetzen)');
     return SafeArea(
       child: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+            child: Column(
+              children: [
+                RekordBadge(
+                  neuerRekord: _neuerRekord,
+                  rekordText: _rekord != null
+                      ? t('{a} / {b} Punkte', {'a': '$_rekord', 'b': '$_kMaxPts'})
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                RanglisteErgebnisKarte(
+                  challengeId: 'schaetzen',
+                  eigenerWert: _gesamt,
+                  punkteLabel: t('Gesamtpunktzahl'),
+                  farbe: const Color(0xFFF9A825),
+                  punkteAnzeige: RichText(
+                    text: TextSpan(children: [
+                      TextSpan(
+                          text: '$_gesamt',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF1A1A1A))),
+                      TextSpan(
+                          text: ' / $_kMaxPts',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFB0AEA8))),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Divider(color: Color(0xFFD0CEC8)),
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 20),
               child: Column(
                 children: [
-                  Text(emoji, style: const TextStyle(fontSize: 72)),
-                  const SizedBox(height: 14),
-                  Text(grade,
-                      style: const TextStyle(
-                          color: Color(0xFF1A1A1A),
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 16),
-                  RanglisteErgebnisKarte(
-                    challengeId: 'schaetzen',
-                    eigenerWert: _gesamt,
-                    punkteLabel: 'Gesamtpunktzahl',
-                    farbe: const Color(0xFFF9A825),
-                    punkteAnzeige: RichText(
-                      text: TextSpan(children: [
-                        TextSpan(
-                            text: '$_gesamt',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 30,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF1A1A1A))),
-                        TextSpan(
-                            text: ' / $_kMaxPts',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFFB0AEA8))),
-                      ]),
-                    ),
-                  ),
-                  if (_neuerRekord) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: const Color(0xFFFFF3CD),
-                          borderRadius: BorderRadius.circular(12)),
-                      child: const Text('🏆 Neuer Rekord!',
-                          style: TextStyle(
-                              color: Color(0xFF856404),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800)),
-                    ),
-                  ],
-                  const SizedBox(height: 28),
                   if (_alleErgebnisse.isNotEmpty)
                     _ErgebnisListeKarte(
                         ergebnisse: _alleErgebnisse, farbe: _farbe),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 4),
                 ],
               ),
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            child: GestureDetector(
-              onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                    color: const Color(0xFF4A9E4A),
-                    borderRadius: BorderRadius.circular(16)),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: const Text('Weiter',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700)),
-              ),
-            ),
+            child: ChallengeFertigButton(
+                onTap: () => ChallengePanelSignal.zurueckZumPanel(context)),
           ),
         ],
       ),
@@ -1006,8 +1016,12 @@ class _ErgebnisZeile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final abweichungText = ergebnis.istProzentKategorie
-        ? '${ergebnis.abweichung.round()} Prozentpunkte daneben'
-        : '${ergebnis.abweichung.toStringAsFixed(1).replaceAll('.', ',')} % der Skala daneben';
+        ? t('{n} Prozentpunkte daneben', {'n': '${ergebnis.abweichung.round()}'})
+        : t('{n} % der Skala daneben', {
+            'n': LocaleService.istEnglisch
+                ? ergebnis.abweichung.toStringAsFixed(1)
+                : ergebnis.abweichung.toStringAsFixed(1).replaceAll('.', ','),
+          });
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(

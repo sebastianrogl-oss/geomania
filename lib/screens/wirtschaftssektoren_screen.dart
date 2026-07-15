@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/wirtschaftssektoren.dart';
+import '../l10n/uebersetzungen.dart';
 
 // ── Phase ─────────────────────────────────────────────────────────────────────
 
@@ -157,14 +158,14 @@ class _WirtschaftssektorenScreenState
             const SizedBox(height: 32),
             const Text('🏭', style: TextStyle(fontSize: 56)),
             const SizedBox(height: 16),
-            const Text('Wirtschaftssektoren',
-                style: TextStyle(
+            Text(t('Wirtschaftssektoren'),
+                style: const TextStyle(
                     color: Color(0xFF1A1A1A),
                     fontSize: 26,
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            const Text('Lerne die wichtigsten Wirtschaftssektoren der Welt kennen.',
-                style: TextStyle(
+            Text(t('Lerne die wichtigsten Wirtschaftssektoren der Welt kennen.'),
+                style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -180,7 +181,7 @@ class _WirtschaftssektorenScreenState
                 decoration: BoxDecoration(
                     color: const Color(0xFFEAEAE5),
                     borderRadius: BorderRadius.circular(20)),
-                child: Text('${e.value} ${e.key}',
+                child: Text('${e.value} ${t(e.key)}',
                     style: const TextStyle(
                         color: Color(0xFF444444),
                         fontSize: 12,
@@ -189,8 +190,8 @@ class _WirtschaftssektorenScreenState
             ),
             const Spacer(),
 
-            const Text('WAS MÖCHTEST DU TUN?',
-                style: TextStyle(
+            Text(t('WAS MÖCHTEST DU TUN?'),
+                style: const TextStyle(
                     color: Color(0xFF999999),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -201,8 +202,8 @@ class _WirtschaftssektorenScreenState
               onTap: _startLearn,
               child: _ModeCard(
                 emoji: '📚',
-                title: 'Lernen',
-                sub: '8 Lernkarten — swipe durch Länder und Sektoren',
+                title: t('Lernen'),
+                sub: t('8 Lernkarten — swipe durch Länder und Sektoren'),
                 color: const Color(0xFFE8F5E9),
                 textColor: const Color(0xFF2E7D32),
               ),
@@ -212,8 +213,8 @@ class _WirtschaftssektorenScreenState
               onTap: _startQuiz,
               child: _ModeCard(
                 emoji: '🧠',
-                title: 'Quiz',
-                sub: '10 Fragen — welcher Sektor dominiert dieses Land?',
+                title: t('Quiz'),
+                sub: t('10 Fragen — welcher Sektor dominiert dieses Land?'),
                 color: const Color(0xFFE3F2FD),
                 textColor: const Color(0xFF1565C0),
               ),
@@ -260,8 +261,8 @@ class _WirtschaftssektorenScreenState
                     decoration: BoxDecoration(
                         color: const Color(0xFF4A9E4A),
                         borderRadius: BorderRadius.circular(20)),
-                    child: const Text('Quiz starten',
-                        style: TextStyle(
+                    child: Text(t('Quiz starten'),
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.w700)),
@@ -277,7 +278,6 @@ class _WirtschaftssektorenScreenState
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: List.generate(_learnCards.length, (i) {
-                final active = i == _cardIndex;
                 return Expanded(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 2),
@@ -319,9 +319,9 @@ class _WirtschaftssektorenScreenState
                       decoration: BoxDecoration(
                           color: const Color(0xFF4A9E4A),
                           borderRadius: BorderRadius.circular(16)),
-                      child: const Text('Weiter →',
+                      child: Text(t('Weiter →'),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w700)),
@@ -335,7 +335,7 @@ class _WirtschaftssektorenScreenState
                       decoration: BoxDecoration(
                           color: const Color(0xFF4A9E4A),
                           borderRadius: BorderRadius.circular(16)),
-                      child: const Text('Quiz starten 🧠',
+                      child: Text(t('Quiz starten 🧠'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               color: Colors.white,
@@ -364,8 +364,8 @@ class _WirtschaftssektorenScreenState
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => setState(() => _phase = _Phase.start),
         ),
-        title: const Text('Wirtschaftssektoren',
-            style: TextStyle(
+        title: Text(t('Wirtschaftssektoren'),
+            style: const TextStyle(
                 color: Color(0xFF1A1A1A), fontSize: 17, fontWeight: FontWeight.w700)),
         centerTitle: true,
         actions: [
@@ -405,7 +405,7 @@ class _WirtschaftssektorenScreenState
                 }),
               ),
               const SizedBox(height: 6),
-              Text('Frage ${_qIndex + 1} von $_kQuizCount',
+              Text(t('Frage {n} von {total}', {'n': '${_qIndex + 1}', 'total': '$_kQuizCount'}),
                   style: const TextStyle(
                       color: Color(0xFF888888),
                       fontSize: 12,
@@ -427,9 +427,9 @@ class _WirtschaftssektorenScreenState
                             fontSize: 22,
                             fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
-                    const Text('Was ist der wichtigste Wirtschaftssektor?',
+                    Text(t('Was ist der wichtigste Wirtschaftssektor?'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                             color: Color(0xFF888888),
                             fontSize: 14,
                             fontWeight: FontWeight.w600)),
@@ -498,7 +498,7 @@ class _WirtschaftssektorenScreenState
                             style: const TextStyle(fontSize: 18)),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Text(opt,
+                          child: Text(t(opt),
                               style: TextStyle(
                                   color: textColor,
                                   fontSize: 15,
@@ -522,7 +522,7 @@ class _WirtschaftssektorenScreenState
   Widget _buildResult() {
     final pct = (_score / _kQuizCount * 100).round();
     final emoji = pct >= 80 ? '🏆' : pct >= 50 ? '👍' : '📚';
-    final grade = pct >= 80 ? 'Ausgezeichnet!' : pct >= 50 ? 'Gut gemacht!' : 'Weiter üben!';
+    final grade = pct >= 80 ? t('Ausgezeichnet!') : pct >= 50 ? t('Gut gemacht!') : t('Weiter üben!');
     final ringColor = pct >= 80
         ? const Color(0xFF4A9E4A)
         : pct >= 50
@@ -543,7 +543,7 @@ class _WirtschaftssektorenScreenState
                     fontSize: 24,
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            Text('$_score / $_kQuizCount richtig',
+            Text(t('{score} / {total} richtig', {'score': '$_score', 'total': '$_kQuizCount'}),
                 style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 15,
@@ -558,7 +558,7 @@ class _WirtschaftssektorenScreenState
                 border: Border.all(color: ringColor, width: 6),
               ),
               child: Center(
-                child: Text('$pct %',
+                child: Text(t('{pct} %', {'pct': '$pct'}),
                     style: const TextStyle(
                         color: Color(0xFF1A1A1A),
                         fontSize: 30,
@@ -574,9 +574,9 @@ class _WirtschaftssektorenScreenState
                 decoration: BoxDecoration(
                     color: const Color(0xFF4A9E4A),
                     borderRadius: BorderRadius.circular(16)),
-                child: const Text('Nochmal spielen',
+                child: Text(t('Nochmal spielen'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.w700)),
@@ -591,9 +591,9 @@ class _WirtschaftssektorenScreenState
                 decoration: BoxDecoration(
                     color: const Color(0xFFEAEAE5),
                     borderRadius: BorderRadius.circular(16)),
-                child: const Text('Nochmal lernen 📚',
+                child: Text(t('Nochmal lernen 📚'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Color(0xFF888888),
                         fontSize: 16,
                         fontWeight: FontWeight.w700)),
@@ -608,7 +608,7 @@ class _WirtschaftssektorenScreenState
                 decoration: BoxDecoration(
                     color: const Color(0xFFEAEAE5),
                     borderRadius: BorderRadius.circular(16)),
-                child: const Text('Zurück',
+                child: Text(t('Zurück'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Color(0xFF888888),
@@ -661,7 +661,7 @@ class _LearnCard extends StatelessWidget {
                     color: const Color(0xFF4A9E4A),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text('${data.sektorEmoji}  ${data.mainSector}',
+                  child: Text('${data.sektorEmoji}  ${t(data.mainSector)}',
                       style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
@@ -700,8 +700,8 @@ class _LearnCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('TOP EXPORTE',
-                    style: TextStyle(
+                Text(t('TOP EXPORTE'),
+                    style: const TextStyle(
                         color: Color(0xFF999999),
                         fontSize: 11,
                         fontWeight: FontWeight.w700,

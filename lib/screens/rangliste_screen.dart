@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
+import '../l10n/uebersetzungen.dart';
+import '../services/locale_service.dart';
 import '../services/profilbild_service.dart';
 import '../services/rangliste_service.dart';
 import '../utils/portfolio_format.dart';
+
+const _kMonatsnamenDe = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+];
+const _kMonatsnamenEn = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 enum _Challenge { schaetzen, higherlower, ranking, portfolio }
 
@@ -14,7 +25,7 @@ extension _ChallengeX on _Challenge {
       };
 
   String get label => switch (this) {
-        _Challenge.schaetzen => 'Schätzen',
+        _Challenge.schaetzen => t('Schätzen'),
         _Challenge.higherlower => 'Higher/Lower',
         _Challenge.ranking => 'Ranking',
         _Challenge.portfolio => 'Portfolio',
@@ -34,6 +45,19 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
   late Future<List<RanglistenEintrag>> _future;
   String? _eigenesProfilbild;
 
+  // 14-Tage-Historie der Tages-Ranglisten (nicht für Portfolio "Gesamt").
+  // Auf Mitternacht normalisiert, damit die Tage-Differenz-Vergleiche unten
+  // nicht von der Tageszeit des jeweiligen DateTime.now()-Aufrufs abhängen.
+  late DateTime _angezeigterTag = _heuteDatum;
+
+  static DateTime get _heuteDatum {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  bool get _kannZurueck => _heuteDatum.difference(_angezeigterTag).inDays < 13;
+  bool get _kannVorwaerts => _angezeigterTag.isBefore(_heuteDatum);
+
   @override
   void initState() {
     super.initState();
@@ -46,13 +70,14 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
     if (_challenge == _Challenge.portfolio && _portfolioSubTab == 1) {
       return RanglisteService.ladePortfolioAlltime();
     }
-    return RanglisteService.ladeTagesRangliste(_challenge.id);
+    return RanglisteService.ladeTagesRangliste(_challenge.id, tag: _angezeigterTag);
   }
 
   void _wechsleChallenge(_Challenge c) {
     if (_challenge == c) return;
     setState(() {
       _challenge = c;
+      _angezeigterTag = _heuteDatum;
       _future = _ladeAktuelle();
     });
   }
@@ -61,6 +86,14 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
     if (_portfolioSubTab == i) return;
     setState(() {
       _portfolioSubTab = i;
+      _angezeigterTag = _heuteDatum;
+      _future = _ladeAktuelle();
+    });
+  }
+
+  void _wechsleTag(DateTime neuerTag) {
+    setState(() {
+      _angezeigterTag = neuerTag;
       _future = _ladeAktuelle();
     });
   }
@@ -71,10 +104,26 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
     await neu;
   }
 
+  String get _angezeigterTagLabel {
+    final diff = _heuteDatum.difference(_angezeigterTag).inDays;
+    if (diff == 0) return t('Heute');
+    if (diff == 1) return t('Gestern');
+    final monate = LocaleService.istEnglisch ? _kMonatsnamenEn : _kMonatsnamenDe;
+    final monat = monate[_angezeigterTag.month - 1];
+    return LocaleService.istEnglisch
+        ? '$monat ${_angezeigterTag.day}'
+        : '${_angezeigterTag.day}. $monat';
+  }
+
   bool get _istGeld => _challenge == _Challenge.portfolio;
 
   bool get _istPortfolioHeute =>
       _challenge == _Challenge.portfolio && _portfolioSubTab == 0;
+
+  // Datums-Navigation gilt für alle Tages-Ranglisten (auch Portfolio
+  // "Heute"), NICHT für Portfolio "Gesamt" (All-Time-Kapital, unverändert).
+  bool get _zeigeDatumsNav =>
+      _challenge != _Challenge.portfolio || _portfolioSubTab == 0;
 
   @override
   Widget build(BuildContext context) {
@@ -88,33 +137,38 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Rangliste',
-                      style: TextStyle(
+                  Text(t('Rangliste'),
+                      style: const TextStyle(
                           color: Color(0xFF1A1A1A),
                           fontSize: 22,
                           fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
-                  const Text('Wer ist der beste Geo-Profi?',
-                      style: TextStyle(
+                  Text(t('Wer ist der beste Geo-Profi?'),
+                      style: const TextStyle(
                           color: Color(0xFF888888),
                           fontSize: 12,
                           fontWeight: FontWeight.w600)),
                   const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final c in _Challenge.values)
-                          _ChallengePill(
+                  // Row mit Expanded statt Wrap: 4 Kacheln MÜSSEN in eine
+                  // Zeile passen (nicht umbrechen) — auf dem Handy war dafür
+                  // v.a. "Higher/Lower" zu breit, Wrap ließ die Reihe dann in
+                  // 2 Zeilen umbrechen. Jede Kachel bekommt jetzt exakt 1/4
+                  // der verfügbaren Breite, der Text schrumpft bei Bedarf
+                  // per FittedBox statt zu überlaufen.
+                  Row(
+                    children: [
+                      for (final c in _Challenge.values) ...[
+                        if (c != _Challenge.values.first)
+                          const SizedBox(width: 6),
+                        Expanded(
+                          child: _ChallengePill(
                             label: c.label,
                             active: _challenge == c,
                             onTap: () => _wechsleChallenge(c),
                           ),
+                        ),
                       ],
-                    ),
+                    ],
                   ),
                   if (_challenge == _Challenge.portfolio) ...[
                     const SizedBox(height: 10),
@@ -122,15 +176,44 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _SubTabPill(
-                          label: 'Heute',
+                          label: t('Heute'),
                           active: _portfolioSubTab == 0,
                           onTap: () => _wechslePortfolioSubTab(0),
                         ),
                         const SizedBox(width: 8),
                         _SubTabPill(
-                          label: 'Gesamt',
+                          label: t('Gesamt'),
                           active: _portfolioSubTab == 1,
                           onTap: () => _wechslePortfolioSubTab(1),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (_zeigeDatumsNav) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left),
+                          color: const Color(0xFF1A1A1A),
+                          onPressed: _kannZurueck
+                              ? () => _wechsleTag(
+                                  _angezeigterTag.subtract(const Duration(days: 1)))
+                              : null,
+                        ),
+                        Text(
+                          _angezeigterTagLabel,
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w800),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right),
+                          color: const Color(0xFF1A1A1A),
+                          onPressed: _kannVorwaerts
+                              ? () => _wechsleTag(
+                                  _angezeigterTag.add(const Duration(days: 1)))
+                              : null,
                         ),
                       ],
                     ),
@@ -161,10 +244,17 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
                     }
                     final liste = snap.data ?? [];
                     if (liste.isEmpty) {
+                      // Bei Portfolio "Gesamt" (kein Tagesbezug) und bei
+                      // "Heute" bleibt die ursprüngliche "sei der Erste"-
+                      // Meldung sinnvoll — bei einem vergangenen Tag wäre
+                      // sie irreführend (man kann rückwirkend nicht mehr
+                      // "der Erste" sein), daher dort ein neutraler Hinweis.
+                      final vergangenerTag =
+                          _zeigeDatumsNav && _angezeigterTag != _heuteDatum;
                       return ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-                        children: const [_LeererZustand()],
+                        children: [_LeererZustand(vergangenerTag: vergangenerTag)],
                       );
                     }
                     return ListView.separated(
@@ -206,17 +296,33 @@ class _ChallengePill extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: active ? const Color(0xFF4A9E4A) : const Color(0xFFEAEAE5),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-              color: active ? Colors.white : const Color(0xFF888888),
-              fontSize: 13,
-              fontWeight: FontWeight.w700),
+        // FittedBox statt fixer Schriftgröße: bei 4 Kacheln in einer Reihe
+        // (Row+Expanded) auf einem schmalen Handyscreen reicht der Platz
+        // für "Higher/Lower" bei fixem fontSize nicht immer — FittedBox
+        // schrumpft den Text stattdessen leicht statt ihn abzuschneiden.
+        // Feste Höhe auf dem Container (statt intrinsisch aus dem Inhalt
+        // abgeleitet): ohne sie wurde die "Higher/Lower"-Kachel sichtbar
+        // kleiner als die anderen drei, weil FittedBox in der unbegrenzten
+        // Höhen-Achse proportional zum (stärkeren) Skalierungsfaktor des
+        // längeren Texts mitschrumpft.
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              style: TextStyle(
+                  color: active ? Colors.white : const Color(0xFF888888),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700),
+            ),
+          ),
         ),
       ),
     );
@@ -407,7 +513,8 @@ class _ProfilbildIcon extends StatelessWidget {
 // ── Leerzustand ───────────────────────────────────────────────────────────────
 
 class _LeererZustand extends StatelessWidget {
-  const _LeererZustand();
+  final bool vergangenerTag;
+  const _LeererZustand({this.vergangenerTag = false});
 
   @override
   Widget build(BuildContext context) {
@@ -418,14 +525,16 @@ class _LeererZustand extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
-      child: const Column(
+      child: Column(
         children: [
-          Text('🏆', style: TextStyle(fontSize: 28)),
-          SizedBox(height: 12),
+          const Text('🏆', style: TextStyle(fontSize: 28)),
+          const SizedBox(height: 12),
           Text(
-            'Noch keine Einträge heute — sei der Erste!',
+            vergangenerTag
+                ? t('Keine Daten für diesen Tag')
+                : t('Noch keine Einträge heute — sei der Erste!'),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
                 color: Color(0xFF1A1A1A),
                 fontSize: 14,
                 fontWeight: FontWeight.w800,

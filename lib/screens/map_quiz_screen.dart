@@ -7,6 +7,7 @@ import '../services/stats_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../data/countries.dart';
+import '../l10n/uebersetzungen.dart';
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
 const _cOcean = Color(0xFF8EC8DC);
@@ -608,8 +609,8 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Karte meistern',
-            style: TextStyle(
+        title: Text(t('Karte meistern'),
+            style: const TextStyle(
                 color: Color(0xFF1A1A1A),
                 fontSize: 17,
                 fontWeight: FontWeight.w700)),
@@ -619,7 +620,7 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Center(
-                child: Text('$_totalScore Pkt.',
+                child: Text(t('{n} Pkt.', {'n': '$_totalScore'}),
                     style: const TextStyle(
                         color: Color(0xFF4A9E4A),
                         fontSize: 15,
@@ -637,13 +638,13 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
   }
 
   Widget _buildLoading() {
-    return const Center(
+    return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        CircularProgressIndicator(color: Colors.white),
-        SizedBox(height: 16),
-        Text('Weltkarte wird geladen…',
+        const CircularProgressIndicator(color: Colors.white),
+        const SizedBox(height: 16),
+        Text(t('Weltkarte wird geladen…'),
             style:
-                TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -762,7 +763,7 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
           Text(country.flagEmoji, style: const TextStyle(fontSize: 26)),
           const SizedBox(width: 10),
           Flexible(
-            child: Text('Wo liegt ${country.name}?',
+            child: Text(t('Wo liegt {land}?', {'land': country.name}),
                 style: const TextStyle(
                     color: Color(0xFF1A1A1A),
                     fontSize: 15,
@@ -770,11 +771,11 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
           ),
         ]),
         if (!_answered && !_waitingForCorrect)
-          const Padding(
-            padding: EdgeInsets.only(top: 4),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
             child: Text(
-                'Tippe auf die Karte  ·  Scrollrad oder +/− zum Zoomen',
-                style: TextStyle(color: Color(0xFF999999), fontSize: 11)),
+                t('Tippe auf die Karte  ·  Scrollrad oder +/− zum Zoomen'),
+                style: const TextStyle(color: Color(0xFF999999), fontSize: 11)),
           ),
       ]),
     );
@@ -790,9 +791,9 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Falsch! Finde das richtige Land.',
-                style: TextStyle(color: Color(0xFFC62828), fontSize: 13, fontWeight: FontWeight.w700)),
-            Text('${country.flagEmoji} Wo liegt ${country.name}?',
+            Text(t('Falsch! Finde das richtige Land.'),
+                style: const TextStyle(color: Color(0xFFC62828), fontSize: 13, fontWeight: FontWeight.w700)),
+            Text('${country.flagEmoji} ${t('Wo liegt {land}?', {'land': country.name})}',
                 style: const TextStyle(color: Color(0xFF888888), fontSize: 11)),
           ]),
         ),
@@ -805,10 +806,10 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
     final pct = (_totalScore / maxPossible * 100).round();
     final emoji = pct >= 80 ? '🏆' : pct >= 50 ? '🗺️' : '📚';
     final grade = pct >= 80
-        ? 'Karten-Experte!'
+        ? t('Karten-Experte!')
         : pct >= 50
-            ? 'Gut gemacht!'
-            : 'Weiter üben!';
+            ? t('Gut gemacht!')
+            : t('Weiter üben!');
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -822,7 +823,7 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
                   fontSize: 22,
                   fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
-          Text('$_totalScore / $maxPossible Punkte',
+          Text(t('{score} / {max} Punkte', {'score': '$_totalScore', 'max': '$maxPossible'}),
               style: const TextStyle(color: Colors.white70, fontSize: 15)),
           const SizedBox(height: 32),
           Container(
@@ -851,9 +852,9 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                child: const Text('Nochmal spielen',
+                child: Text(t('Nochmal spielen'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Color(0xFF1A1A1A),
                         fontSize: 16,
                         fontWeight: FontWeight.w700)),
@@ -868,9 +869,9 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(16)),
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: const Text('Zurück',
+              child: Text(t('Zurück'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.w700)),

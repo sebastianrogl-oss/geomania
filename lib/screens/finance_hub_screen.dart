@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/finance_facts.dart';
 import '../data/connections_puzzles.dart';
+import '../l10n/uebersetzungen.dart';
 import 'higher_lower_screen.dart';
 import 'category_match_screen.dart';
 import 'ranking_quiz_screen.dart';
@@ -26,8 +27,8 @@ class FinanceHubScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Finanzen & Wirtschaft',
-            style: TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.w800, fontSize: 17)),
+        title: Text(t('Finanzen & Wirtschaft'),
+            style: const TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.w800, fontSize: 17)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -47,12 +48,12 @@ class FinanceHubScreen extends StatelessWidget {
               ),
               padding: const EdgeInsets.all(20),
               child: Row(children: [
-                const Expanded(
+                Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Wirtschaftswissen', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.1)),
-                    SizedBox(height: 6),
-                    Text('Teste dein Wissen\nüber Finanzen & Wirtschaft',
-                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.35)),
+                    Text(t('Wirtschaftswissen'), style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.1)),
+                    const SizedBox(height: 6),
+                    Text(t('Teste dein Wissen\nüber Finanzen & Wirtschaft'),
+                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.35)),
                   ]),
                 ),
                 const Text('📈', style: TextStyle(fontSize: 48)),
@@ -61,13 +62,13 @@ class FinanceHubScreen extends StatelessWidget {
             const SizedBox(height: 28),
 
             // ── Schnellspiele ───────────────────────────────────────────────
-            const Text('SCHNELLSPIELE',
-                style: TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+            Text(t('SCHNELLSPIELE'),
+                style: const TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
             const SizedBox(height: 10),
             _GameCard(
               emoji: '⬆️⬇️',
               title: 'Higher or Lower',
-              sub: 'Ist der Wert höher oder niedriger?',
+              sub: t('Ist der Wert höher oder niedriger?'),
               bgColor: const Color(0xFFE3F2FD),
               titleColor: const Color(0xFF1565C0),
               subColor: const Color(0xFF1976D2),
@@ -76,8 +77,8 @@ class FinanceHubScreen extends StatelessWidget {
             const SizedBox(height: 10),
             _GameCard(
               emoji: '🎯',
-              title: 'Kategorie-Match',
-              sub: 'Welches Land gewinnt welche Kategorie?',
+              title: t('Kategorie-Match'),
+              sub: t('Welches Land gewinnt welche Kategorie?'),
               bgColor: const Color(0xFFE0F7FA),
               titleColor: const Color(0xFF006064),
               subColor: const Color(0xFF00838F),
@@ -86,8 +87,8 @@ class FinanceHubScreen extends StatelessWidget {
             const SizedBox(height: 10),
             _GameCard(
               emoji: '🏅',
-              title: 'Ranking-Quiz',
-              sub: 'Länder nach BIP, Fläche & mehr sortieren',
+              title: t('Ranking-Quiz'),
+              sub: t('Länder nach BIP, Fläche & mehr sortieren'),
               bgColor: const Color(0xFFFCE4EC),
               titleColor: const Color(0xFF880E4F),
               subColor: const Color(0xFFAD1457),
@@ -97,8 +98,8 @@ class FinanceHubScreen extends StatelessWidget {
 
             // ── Neue Spiele ─────────────────────────────────────────────────
             Row(children: [
-              const Text('NEUE SPIELE',
-                  style: TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+              Text(t('NEUE SPIELE'),
+                  style: const TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
               const SizedBox(width: 8),
               Container(
                 decoration: BoxDecoration(
@@ -106,7 +107,7 @@ class FinanceHubScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                child: const Text('NEU', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
+                child: Text(t('NEU'), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
               ),
             ]),
             const SizedBox(height: 10),
@@ -114,12 +115,12 @@ class FinanceHubScreen extends StatelessWidget {
             // Currency Quiz
             _GameCard(
               emoji: '💱',
-              title: 'Währungs-Quiz',
-              sub: 'Welche Währung hat dieses Land?',
+              title: t('Währungs-Quiz'),
+              sub: t('Welche Währung hat dieses Land?'),
               bgColor: const Color(0xFFFFF8E7),
               titleColor: const Color(0xFFF57F17),
               subColor: const Color(0xFFFFA726),
-              badge: '10 Sek. Timer',
+              badge: t('10 Sek. Timer'),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CurrencyQuizScreen())),
             ),
             const SizedBox(height: 10),
@@ -127,12 +128,12 @@ class FinanceHubScreen extends StatelessWidget {
             // Economic Blocks
             _GameCard(
               emoji: '🤝',
-              title: 'Wirtschaftsblöcke',
+              title: t('Wirtschaftsblöcke'),
               sub: 'EU · G7 · G20 · OPEC · BRICS · ASEAN',
               bgColor: const Color(0xFFE8F4FF),
               titleColor: const Color(0xFF1565C0),
               subColor: const Color(0xFF1976D2),
-              badge: '10 Fragen',
+              badge: t('10 Fragen'),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EconomicBlocksScreen())),
             ),
             const SizedBox(height: 10),
@@ -143,8 +144,8 @@ class FinanceHubScreen extends StatelessWidget {
             const SizedBox(height: 28),
 
             // ── Wusstest du? ────────────────────────────────────────────────
-            const Text('WUSSTEST DU?',
-                style: TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+            Text(t('WUSSTEST DU?'),
+                style: const TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
             const SizedBox(height: 10),
             Container(
               decoration: BoxDecoration(
@@ -160,14 +161,14 @@ class FinanceHubScreen extends StatelessWidget {
                 const Text('💡', style: TextStyle(fontSize: 32)),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Text(todayFact,
+                  child: Text(t(todayFact),
                       style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600, height: 1.45)),
                 ),
               ]),
             ),
             const SizedBox(height: 8),
             Center(
-              child: Text('Täglich neuer Fakt',
+              child: Text(t('Täglich neuer Fakt'),
                   style: TextStyle(fontSize: 11, color: Colors.grey[500])),
             ),
           ],
@@ -251,13 +252,13 @@ class _ConnectionsCard extends StatelessWidget {
           Row(children: [
             const Text('🔗', style: TextStyle(fontSize: 26)),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Connections – Finanz Edition',
-                    style: TextStyle(color: Color(0xFF7B5800), fontSize: 15, fontWeight: FontWeight.w800)),
-                SizedBox(height: 2),
-                Text('Finde die 4 Gruppen à 4 Länder',
-                    style: TextStyle(color: Color(0xFFF9A825), fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(t('Connections – Finanz Edition'),
+                    style: const TextStyle(color: Color(0xFF7B5800), fontSize: 15, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(t('Finde die 4 Gruppen à 4 Länder'),
+                    style: const TextStyle(color: Color(0xFFF9A825), fontSize: 12, fontWeight: FontWeight.w600)),
               ]),
             ),
             const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFF9A825), size: 14),
@@ -272,7 +273,7 @@ class _ConnectionsCard extends StatelessWidget {
             ),
           )).toList()),
           const SizedBox(height: 8),
-          Text('Heutiges Rätsel: "${puzzle.title}"',
+          Text(t('Heutiges Rätsel: "{title}"', {'title': t(puzzle.title)}),
               style: const TextStyle(color: Color(0xFF888888), fontSize: 11, fontWeight: FontWeight.w500)),
         ]),
       ),

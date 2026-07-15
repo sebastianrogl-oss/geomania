@@ -1,10 +1,13 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../data/portfolio_daten.dart';
+import '../../l10n/uebersetzungen.dart';
 import '../../services/challenge_panel_signal.dart';
 import '../../services/portfolio_engine.dart';
 import '../../services/portfolio_service.dart';
 import '../../utils/portfolio_format.dart';
+import '../../widgets/challenge_ergebnis_header.dart';
+import '../../widgets/challenge_fertig_button.dart';
 import '../../widgets/portfolio_land_karte.dart';
 import '../../widgets/rangliste_ergebnis_karte.dart';
 
@@ -34,19 +37,6 @@ class PortfolioAufloesungScreen extends StatefulWidget {
 class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
   PortfolioTagesErgebnis get ergebnis => widget.ergebnis;
   PortfolioStatus get status => widget.status;
-
-  bool get _verlust => ergebnis.depotRenditeGesamt < 0;
-
-  bool get _trendGenutzt => ergebnis.beitraege.any((b) => b.trend != 0);
-
-  String? get _lernNudge {
-    if (_verlust) return 'Breiter streuen senkt solche Ausschläge.';
-    if (!_trendGenutzt) {
-      return 'Der ${status.trend.name}-Trend war heute nicht in deinem '
-          'Depot — beim nächsten Mal im Blick behalten.';
-    }
-    return null;
-  }
 
   @override
   void initState() {
@@ -84,8 +74,8 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                 children: [
                   const Text('🎉', style: TextStyle(fontSize: 40)),
                   const SizedBox(height: 12),
-                  const Text('Neuer Rang erreicht!',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF888888),
+                  Text(t('Neuer Rang erreicht!'),
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF888888),
                           fontWeight: FontWeight.w700)),
                   const SizedBox(height: 4),
                   Text(titel,
@@ -101,8 +91,8 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                         color: const Color(0xFF1A1A1A),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text('Weiter',
-                          style: TextStyle(color: Colors.white,
+                      child: Text(t('Weiter'),
+                          style: const TextStyle(color: Colors.white,
                               fontWeight: FontWeight.w700)),
                     ),
                   ),
@@ -125,57 +115,58 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
   @override
   Widget build(BuildContext context) {
     final positiv = ergebnis.depotRenditeGesamt >= 0;
-    final nudge = _lernNudge;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F0E8),
       body: SafeArea(
         child: Column(
           children: [
+            ChallengeErgebnisHeader(titel: t('Portfolio')),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Expanded(
-                    child: Text('💼 Auflösung',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
-                            color: Color(0xFF1A1A1A))),
+                  _buildKapitalHero(positiv),
+                  const SizedBox(height: 16),
+                  RanglisteErgebnisKarte(
+                    challengeId: 'portfolio',
+                    eigenerWert:
+                        (ergebnis.neuesKapital - ergebnis.altesKapital).round(),
+                    punkteLabel: t('Tagesgewinn'),
+                    farbe: const Color(0xFF4A90D9),
+                    formatWert: (w) => fmtKapital(w.toDouble()),
+                    punkteAnzeige: Text(
+                      fmtKapital(
+                          (ergebnis.neuesKapital - ergebnis.altesKapital),
+                          mitVorzeichen: true),
+                      style: const TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1A1A1A)),
+                    ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Divider(color: Color(0xFFD0CEC8)),
+            ),
+            const SizedBox(height: 4),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildKapitalHero(positiv),
-                    const SizedBox(height: 16),
-                    RanglisteErgebnisKarte(
-                      challengeId: 'portfolio',
-                      eigenerWert:
-                          (ergebnis.neuesKapital - ergebnis.altesKapital).round(),
-                      punkteLabel: 'Tagesgewinn',
-                      farbe: const Color(0xFF4A90D9),
-                      formatWert: (w) => fmtKapital(w.toDouble()),
-                      punkteAnzeige: Text(
-                        fmtKapital(
-                            (ergebnis.neuesKapital - ergebnis.altesKapital),
-                            mitVorzeichen: true),
-                        style: const TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF1A1A1A)),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
                     ...ergebnis.beitraege
                         .map((b) => PortfolioLandKarte(beitrag: b)),
                     if (ergebnis.kontinentsBonus > 0) ...[
                       const SizedBox(height: 4),
                       _buildBonusZeile(
-                          'Kontinents-Synergie', ergebnis.kontinentsBonus.toDouble()),
+                          t('Kontinents-Synergie'), ergebnis.kontinentsBonus.toDouble()),
                       const SizedBox(height: 4),
                     ],
                     // Allianz-Bonus: eigener, vom Kontinents-Bonus oben
@@ -184,7 +175,9 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                     for (final allianz in ergebnis.erfuellteAllianzen) ...[
                       const SizedBox(height: 4),
                       _buildBonusZeile(
-                          'Allianz-Bonus (${allianz.allianzKontinente!.map(kontinentNameFuerId).join("+")})',
+                          t('Allianz-Bonus ({k})', {
+                            'k': allianz.allianzKontinente!.map(kontinentNameFuerId).join("+")
+                          }),
                           allianz.allianzBonus!),
                       const SizedBox(height: 4),
                     ],
@@ -193,16 +186,16 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                     for (final kombo in ergebnis.erfuellteSektorKombos) ...[
                       const SizedBox(height: 4),
                       _buildBonusZeile(
-                          'Sektor-Kombi-Bonus (${kombo.sektorKombo!.map((s) => portfolioSektoren.firstWhere((p) => p.id == s).name).join("+")})',
+                          t('Sektor-Kombi-Bonus ({s})', {
+                            's': kombo.sektorKombo!
+                                .map((s) => portfolioSektoren.firstWhere((p) => p.id == s).name)
+                                .join("+")
+                          }),
                           kombo.sektorKomboBonus!),
                       const SizedBox(height: 4),
                     ],
                     const Divider(height: 24),
                     _buildGesamtZeile(positiv),
-                    if (nudge != null) ...[
-                      const SizedBox(height: 16),
-                      _buildNudge(nudge),
-                    ],
                   ],
                 ),
               ),
@@ -213,25 +206,8 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
               // "Rangliste"-Buttons — führt zurück zum Challenge-Panel,
               // identisch zum etablierten Navigationsverhalten der anderen
               // 3 Challenges.
-              child: GestureDetector(
-                onTap: () => _zurueckZumDepot(context),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4A9E4A),
-                    borderRadius: BorderRadius.circular(50),
-                    border: Border.all(color: const Color(0xFF1A1A1A), width: 2.5),
-                    boxShadow: const [
-                      BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4), blurRadius: 0),
-                    ],
-                  ),
-                  child: const Text('Fertig',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
-                          color: Colors.white)),
-                ),
-              ),
+              child: ChallengeFertigButton(
+                  onTap: () => _zurueckZumDepot(context)),
             ),
           ],
         ),
@@ -317,11 +293,11 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Expanded(
-          child: Text('Depot-Rendite gesamt',
+        Expanded(
+          child: Text(t('Depot-Rendite gesamt'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
         ),
         const SizedBox(width: 8),
         Text(fmtProzent(ergebnis.depotRenditeGesamt),
@@ -329,20 +305,6 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                 fontSize: 18, fontWeight: FontWeight.w900,
                 color: positiv ? const Color(0xFF4A9E4A) : const Color(0xFFE53935))),
       ],
-    );
-  }
-
-  Widget _buildNudge(String text) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAEAE5),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(text,
-          style: const TextStyle(
-              fontSize: 12, color: Color(0xFF888888), fontStyle: FontStyle.italic)),
     );
   }
 }

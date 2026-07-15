@@ -10,6 +10,10 @@ import '../data/laender_grenzketten.dart';
 import '../data/laender_nachbarn.dart';
 import '../data/lernpfad_data.dart';
 import '../data/wirtschaftssektoren.dart';
+import '../l10n/uebersetzungen.dart';
+import '../l10n/waehrungen_kuerzel_en.dart';
+import '../l10n/wirtschaftssektoren_en.dart';
+import 'locale_service.dart';
 import 'antwort_generator.dart';
 import 'fortschritt_service.dart';
 import 'skala_service.dart';
@@ -207,10 +211,17 @@ class StationSession {
 
 class _SpielKategorie {
   final String id;
-  final String label;
+  final String labelDe;
   final String einheit;
   final double? Function(String iso2) wert;
-  const _SpielKategorie(this.id, this.label, this.einheit, this.wert);
+  const _SpielKategorie(this.id, this.labelDe, this.einheit, this.wert);
+
+  // Live-Getter statt gespeichertem Feld: _spielKategorien ist `static
+  // final` und wird beim ersten Zugriff EINMALIG ausgewertet — ein zur
+  // Ladezeit gebackenes t()-Ergebnis würde bei einem Sprachwechsel mitten
+  // in der App-Laufzeit stehen bleiben. Als Getter wird bei JEDEM Zugriff
+  // frisch übersetzt.
+  String get label => t(labelDe);
 }
 
 // Kehrt _normalisiereKontinent() um: 'europa' → 'Europa' usw. — für den
@@ -232,9 +243,13 @@ class FragenGenerator {
     _waehrungByIso2 = {};
     _sektorByIso2   = {};
 
+    // co.nameDe (nicht co.name!) — countryName in currencies.dart/
+    // wirtschaftssektoren.dart ist immer Deutsch, unabhängig von der
+    // App-Sprache. co.name ist ein lokalisierter Getter (siehe Country in
+    // countries.dart) und würde diesen Abgleich im Englisch-Modus brechen.
     for (final c in currencies) {
       for (final co in countries) {
-        if (co.name == c.countryName) {
+        if (co.nameDe == c.countryName) {
           _waehrungByIso2![co.iso2] = c;
           break;
         }
@@ -242,7 +257,7 @@ class FragenGenerator {
     }
     for (final s in wirtschaftssektoren) {
       for (final co in countries) {
-        if (co.name == s.countryName) {
+        if (co.nameDe == s.countryName) {
           _sektorByIso2![co.iso2] = s;
           break;
         }
@@ -537,6 +552,26 @@ class FragenGenerator {
     return LernModus.zufallsFakt;
   }
 
+  /// Ermittelt den Modus, der beim (Neu-)Start dieser Station TATSÄCHLICH
+  /// gespielt würde — berücksichtigt die Pensionierungs-Substitution (siehe
+  /// _pensionierterErsatz). Für die Stations-Sheet-Anzeige in home_screen.dart:
+  /// Label/Icon sollen immer zum tatsächlich geöffneten Quiz passen, nicht
+  /// nur zum ursprünglich zugewiesenen station.modus.
+  ///
+  /// Eine bereits ABGESCHLOSSENE Station behält beim Replay IMMER ihren
+  /// ursprünglichen Modus — die Pensionierungs-Substitution greift nur noch
+  /// für den ersten, noch nicht abgeschlossenen Durchlauf (Nutzer-Entscheidung:
+  /// ein wiederholtes Spielen soll nicht plötzlich einen anderen Modus als
+  /// beim letzten Mal zeigen, nur weil der Block-Pool inzwischen ausgeschöpft
+  /// wurde).
+  static Future<LernModus> ermittleTatsaechlichenModus(
+      LernStation station) async {
+    if (await FortschrittService.istStationAbgeschlossen(station.id)) {
+      return station.modus;
+    }
+    return await _pensionierterErsatz(station.modus, station) ?? station.modus;
+  }
+
   /// Haupteinstieg: generiert alle Fragen für eine Station.
   static Future<List<Frage>> generiereFragenFuerStation(
       LernStation station) async {
@@ -545,8 +580,7 @@ class FragenGenerator {
     if (pool.isEmpty) return [];
     final kontinent = _kontinent(station);
     final schwierigkeit = station.schwierigkeitsgrad;
-    final modus =
-        await _pensionierterErsatz(station.modus, station) ?? station.modus;
+    final modus = await ermittleTatsaechlichenModus(station);
 
     switch (modus) {
       case LernModus.flaggenQuizBild:
@@ -632,7 +666,7 @@ class FragenGenerator {
           iso2, pool, anzahlOptionen: 4);
       return Frage(
         id: '${station.id}_fm_${e.key}',
-        frage: 'Welche Flagge gehört zu ${co?.name ?? iso2}?',
+        frage: t('Welche Flagge gehört zu {land}?', {'land': co?.name ?? iso2}),
         richtigeAntwort: iso2,
         antwortOptionen: optionen, // ISO2-Codes → UI zeigt FlaggenWidget
         modus: LernModus.flaggenQuizMultiple,
@@ -651,9 +685,19 @@ class FragenGenerator {
 
   // ── Umriss: Silhouette sehen → Land wählen ─────────────────────────────────
 
+  // Für den Umriss-Ausschluss (Zwergstaaten/kleine Inselstaaten, siehe
+  // kUmrissAusschluss) gefilterter Pool — fällt auf den ungefilterten Pool
+  // zurück, falls eine Station ausschließlich aus ausgeschlossenen Ländern
+  // besteht (verhindert eine leere Fragenliste).
+  static List<String> _umrissPool(List<String> pool) {
+    final gefiltert = pool.where(kannAlsUmrissErscheinen).toList();
+    return gefiltert.isEmpty ? pool : gefiltert;
+  }
+
   static Future<List<Frage>> _umrissBild(LernStation station, List<String> pool) async {
     final kontId = _normalisiereKontinent(_kontinent(station));
-    final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station);
+    final ausgewaehlt =
+        await _pickKern(_umrissPool(pool), station.fragenAnzahl, station);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2);
@@ -675,7 +719,8 @@ class FragenGenerator {
 
   static Future<List<Frage>> _umrissMultiple(LernStation station, List<String> pool) async {
     final kontId = _normalisiereKontinent(_kontinent(station));
-    final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station);
+    final ausgewaehlt =
+        await _pickKern(_umrissPool(pool), station.fragenAnzahl, station);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final optionen = generiereUmrissOptionen(iso2, kontId);
@@ -708,7 +753,7 @@ class FragenGenerator {
         ..shuffle(_rng);
       return Frage(
         id: '${station.id}_hm_${e.key}',
-        frage: 'Was ist die Hauptstadt von ${co.name}?',
+        frage: t('Was ist die Hauptstadt von {land}?', {'land': co.name}),
         richtigeAntwort: co.capital,
         antwortOptionen: optionen,
         modus: LernModus.hauptstaedteMultiple,
@@ -729,7 +774,7 @@ class FragenGenerator {
       final co = _country(iso2)!;
       return Frage(
         id: '${station.id}_he_${e.key}',
-        frage: 'Was ist die Hauptstadt von ${co.name}?',
+        frage: t('Was ist die Hauptstadt von {land}?', {'land': co.name}),
         richtigeAntwort: co.capital,
         antwortOptionen: const [],
         modus: LernModus.hauptstaedteEingabe,
@@ -751,7 +796,7 @@ class FragenGenerator {
       final co = _country(iso2)!;
       return Frage(
         id: '${station.id}_fe_${e.key}',
-        frage: 'Welchem Land gehört diese Flagge?',
+        frage: t('Welchem Land gehört diese Flagge?'),
         richtigeAntwort: co.name,
         antwortOptionen: const [],
         modus: LernModus.flaggenQuizEingabe,
@@ -767,13 +812,14 @@ class FragenGenerator {
   // Zyklus (siehe Kommentar bei _hauptstaedteEingabe).
   static Future<List<Frage>> _umrissEingabe(
       LernStation station, List<String> pool) async {
-    final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station);
+    final ausgewaehlt =
+        await _pickKern(_umrissPool(pool), station.fragenAnzahl, station);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2);
       return Frage(
         id: '${station.id}_ue_${e.key}',
-        frage: 'Welchem Land gehört dieser Umriss?',
+        frage: t('Welchem Land gehört dieser Umriss?'),
         richtigeAntwort: co?.name ?? landByIso[iso2]?.name ?? iso2,
         antwortOptionen: const [],
         modus: LernModus.umrissEingabe,
@@ -824,7 +870,9 @@ class FragenGenerator {
   };
 
   static String _kuerzeWaehrungsname(CurrencyData curr) =>
-      _waehrungsKuerzel[curr.currencyCode] ?? curr.currencyName;
+      LocaleService.istEnglisch
+          ? (waehrungsKuerzelEn[curr.currencyCode] ?? curr.currencyName)
+          : (_waehrungsKuerzel[curr.currencyCode] ?? curr.currencyName);
 
   // ── Währungs-Quiz ───────────────────────────────────────────────────────────
 
@@ -838,9 +886,16 @@ class FragenGenerator {
       final iso2 = e.value;
       final co = _country(iso2)!;
       final curr = _waehrungByIso2![iso2]!;
-      final richtig = '${_kuerzeWaehrungsname(curr)} (${curr.currencyCode})';
+      // Nur der Name der Währung — der Code (z.B. "(EUR)") wurde bewusst
+      // entfernt, war für die meisten Spieler ohnehin nicht aussagekräftig.
+      final richtig = _kuerzeWaehrungsname(curr);
 
-      // Distraktoren: erst gleiche Region, dann global — dedupliziert nach Code
+      // Distraktoren: erst gleiche Region, dann global — weiterhin nach
+      // currencyCode dedupliziert (verlässlicher als der angezeigte Name:
+      // verhindert Duplikate auch wenn zwei unterschiedliche Währungen
+      // zufällig denselben verkürzten Namen hätten), zusätzlich nach dem
+      // angezeigten Namen selbst, damit nie zwei identisch aussehende
+      // Optionen im selben Fragensatz landen.
       final kandidaten = [
         ..._waehrungByIso2!.entries
             .where((d) => d.key != iso2 && _country(d.key)?.region == co.region),
@@ -849,11 +904,15 @@ class FragenGenerator {
       ]..shuffle(_rng);
 
       final geseheneCodes = <String>{curr.currencyCode};
+      final geseheneNamen = <String>{richtig};
       final distrOpts = <String>[];
       for (final d in kandidaten) {
         if (geseheneCodes.contains(d.value.currencyCode)) continue;
+        final name = _kuerzeWaehrungsname(d.value);
+        if (geseheneNamen.contains(name)) continue;
         geseheneCodes.add(d.value.currencyCode);
-        distrOpts.add('${_kuerzeWaehrungsname(d.value)} (${d.value.currencyCode})');
+        geseheneNamen.add(name);
+        distrOpts.add(name);
         if (distrOpts.length >= 3) break;
       }
 
@@ -861,7 +920,7 @@ class FragenGenerator {
 
       return Frage(
         id: '${station.id}_w_${e.key}',
-        frage: 'Welche Währung hat dieses Land?',
+        frage: t('Welche Währung hat dieses Land?'),
         richtigeAntwort: richtig,
         antwortOptionen: optionen,
         modus: LernModus.waehrungsQuiz,
@@ -909,7 +968,7 @@ class FragenGenerator {
 
       fragen.add(Frage(
         id: '${station.id}_s_$runde',
-        frage: 'Sortiere nach: ${kategorie.label} (größte zuerst)',
+        frage: t('Sortiere nach: {k} (größte zuerst)', {'k': kategorie.label}),
         richtigeAntwort: sortiert.join(','),
         antwortOptionen: gemischt,
         modus: LernModus.sortierSpiel,
@@ -963,7 +1022,7 @@ class FragenGenerator {
 
       return Frage(
         id: '${station.id}_p_${e.key}',
-        frage: 'Schätze: ${kategorie.label} von ${co.name}',
+        frage: t('Schätze: {k} von {land}', {'k': kategorie.label, 'land': co.name}),
         richtigeAntwort: wert.toString(),
         antwortOptionen: const [],
         modus: LernModus.preisSchaetzen,
@@ -982,6 +1041,14 @@ class FragenGenerator {
 
   // ── Wirtschaftssektoren ─────────────────────────────────────────────────────
 
+  // sektorEmojis-Keys (wirtschaftssektoren.dart) und SektorData.mainSector
+  // bleiben bewusst Deutsch (Daten-Vergleichsbasis) — nur der angezeigte
+  // Antworttext wird hier lokalisiert.
+  static String _sektorAnzeigename(String mainSectorDe) =>
+      LocaleService.istEnglisch
+          ? (wirtschaftssektorenEn[mainSectorDe] ?? mainSectorDe)
+          : mainSectorDe;
+
   static Future<List<Frage>> _wirtschaftssektoren(
       LernStation station, List<String> pool, int schw) async {
     final mitSektor =
@@ -989,20 +1056,20 @@ class FragenGenerator {
     if (mitSektor.isEmpty) return await _flaggenBild(station, pool, 'Welt', schw);
 
     final ausgewaehlt = _pick(mitSektor, station.fragenAnzahl);
-    final alleSektoren = sektorEmojis.keys.toList();
+    final alleSektoren = sektorEmojis.keys.map(_sektorAnzeigename).toList();
 
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2)!;
       final sektor = _sektorByIso2![iso2]!;
-      final richtig = sektor.mainSector;
+      final richtig = _sektorAnzeigename(sektor.mainSector);
       final distr = alleSektoren.where((s) => s != richtig).toList()
         ..shuffle(_rng);
       final optionen = [richtig, ...distr.take(3)]..shuffle(_rng);
 
       return Frage(
         id: '${station.id}_wi_${e.key}',
-        frage: 'Welcher Wirtschaftssektor dominiert in ${co.name}?',
+        frage: t('Welcher Wirtschaftssektor dominiert in {land}?', {'land': co.name}),
         richtigeAntwort: richtig,
         antwortOptionen: optionen,
         modus: LernModus.wirtschaftssektoren,
@@ -1135,7 +1202,7 @@ class FragenGenerator {
 
       return Frage(
         id: '${station.id}_bg_${e.key}',
-        frage: 'Wie hoch ist das BIP (Bruttoinlandsprodukt) von ${co.name}?',
+        frage: t('Wie hoch ist das BIP (Bruttoinlandsprodukt) von {land}?', {'land': co.name}),
         richtigeAntwort: richtig,
         antwortOptionen: optionen,
         modus: LernModus.bipGesamt,
@@ -1173,7 +1240,7 @@ class FragenGenerator {
 
       return Frage(
         id: '${station.id}_fl_${e.key}',
-        frage: 'Wie groß ist die Fläche von ${co.name}?',
+        frage: t('Wie groß ist die Fläche von {land}?', {'land': co.name}),
         richtigeAntwort: richtig,
         antwortOptionen: optionen,
         modus: LernModus.flaeche,
@@ -1212,7 +1279,7 @@ class FragenGenerator {
 
       return Frage(
         id: '${station.id}_wl_${e.key}',
-        frage: 'Welches Land nutzt $waehrungsName?',
+        frage: t('Welches Land nutzt {w}?', {'w': waehrungsName}),
         richtigeAntwort: co.name,
         antwortOptionen: optionen,
         modus: LernModus.waehrungZuLand,
@@ -1400,7 +1467,7 @@ class FragenGenerator {
 
       return Frage(
         id: '${station.id}_zf_${e.key}',
-        frage: fakt.frage,
+        frage: t(fakt.frage),
         richtigeAntwort: richtig,
         antwortOptionen: optionen,
         modus: LernModus.zufallsFakt,
@@ -1449,7 +1516,7 @@ class FragenGenerator {
 
       return Frage(
         id: '${station.id}_gb_${e.key}',
-        frage: 'In welchem Land steht ${geb.bauwerk}?',
+        frage: t('In welchem Land steht {bauwerk}?', {'bauwerk': t(geb.bauwerk)}),
         richtigeAntwort: richtig,
         antwortOptionen: optionen,
         modus: LernModus.bekanntesGebaeude,
@@ -1485,8 +1552,8 @@ class FragenGenerator {
 
       return Frage(
         id: '${station.id}_gk_${e.key}',
-        frage: 'Auf dem Landweg von $von nach $nach: durch welches dieser '
-            'Länder MUSST du dabei NICHT fahren?',
+        frage: t('Auf dem Landweg von {von} nach {nach}: durch welches dieser Länder MUSST du dabei NICHT fahren?',
+            {'von': von, 'nach': nach}),
         richtigeAntwort: r.keinTransitIso,
         antwortOptionen: optionen,
         modus: LernModus.grenzkettenRaetsel,

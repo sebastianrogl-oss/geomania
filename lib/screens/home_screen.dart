@@ -1,12 +1,15 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/lernpfad_data.dart';
+import '../l10n/uebersetzungen.dart';
+import '../services/ad_service.dart';
 import '../services/challenge_panel_signal.dart';
 import '../services/challenge_rekord_service.dart';
 import '../services/daily_challenge.dart';
 import '../services/fortschritt_service.dart';
 import '../services/portfolio_service.dart';
 import '../services/profilbild_service.dart';
+import '../services/station_session_service.dart';
+import '../utils/responsive.dart';
 import '../widgets/kontinent_hintergrund.dart';
 import '../widgets/pfad_deko_layer.dart';
 import '../widgets/pfad_maskottchen.dart';
@@ -72,8 +75,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // springt die Ansicht bei 100%-Fortschritt immer zur letzten Welt zurück.
   bool _weltInitialisiert = false;
   Set<String> _doneChallenges = {};
+  // Tatsächlich zu spielender Modus je Station (nach Pensionierungs-
+  // Substitution bzw. einer bereits laufenden gespeicherten Session) — nur
+  // für die aktive Welt befüllt, siehe _ladeTatsaechlicheModi(). Label/Icon
+  // auf dem Stationsbutton sollen IMMER zum tatsächlich geöffneten Quiz
+  // passen, nicht nur zum ursprünglich zugewiesenen station.modus (siehe
+  // Kommentar bei FragenGenerator._pensionierterErsatz). Fallback auf
+  // station.modus, solange diese Map noch nicht (neu) geladen ist.
+  Map<String, LernModus> _tatsaechlicheModi = {};
   String _profilbild = ProfilbildService.standard;
   bool _panelOffen = false;
+  final ScrollController _pfadScrollController = ScrollController();
+  // Verhindert wiederholtes Auto-Scrollen bei jedem _load()-Rebuild (z.B.
+  // nach Abschluss einer Station) — nur EINMAL pro Welt auslösen: beim
+  // ersten Erscheinen dieser Welt (App-Start) oder beim Kontinent-Wechsel.
+  String? _zuletztGescrollteWeltId;
   late final AnimationController _rippleCtrl;
   late final AnimationController _panelCtrl;
   late final Animation<Offset> _panelSlide;
@@ -149,6 +165,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     ProfilbildService.geaendert.removeListener(_ladeProfilbild);
     _rippleCtrl.dispose();
     _panelCtrl.dispose();
+    _pfadScrollController.dispose();
     super.dispose();
   }
 
@@ -177,6 +194,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _aktivWelt = aktiv;
       _doneChallenges = done;
     });
+    _ladeTatsaechlicheModi(aktiv);
+  }
+
+  // Berechnet für jede Station der übergebenen Welt den Modus, der beim
+  // Antippen TATSÄCHLICH gespielt würde (siehe _tatsaechlicheModi oben) —
+  // parallel per Future.wait, da SharedPreferences nach dem ersten Zugriff
+  // im Prozess bereits im Speicher gecacht ist (kein spürbarer I/O-Overhead
+  // trotz vieler Stationen).
+  Future<void> _ladeTatsaechlicheModi(LernWelt welt) async {
+    final alleStationen = welt.abschnitte.expand((a) => a.stationen).toList();
+    final eintraege = await Future.wait(alleStationen.map((s) async {
+      final gespeichert = await StationSession.laden(s.id);
+      final modus = gespeichert?.aktuelleFrage?.modus ??
+          await FragenGenerator.ermittleTatsaechlichenModus(s);
+      return MapEntry(s.id, modus);
+    }));
+    if (!mounted) return;
+    setState(() => _tatsaechlicheModi = Map.fromEntries(eintraege));
   }
 
   void _togglePanel() {
@@ -207,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           farbe: const Color(0xFFF9A825),
           logoAsset: 'assets/icons/challenge_preis.png',
           fallbackIcon: Icons.sell,
-          titel: 'Das große Schätzen',
+          titel: t('Das große Schätzen'),
           startDatum: kChallengesStartDatum,
           spielScreenBuilder: (_) => const PreisSchaetzenScreen(),
           ergebnisScreenBuilder: (_) => const PreisSchaetzenScreen(nurAnsicht: true),
@@ -220,7 +255,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           farbe: const Color(0xFF4A9E4A),
           logoAsset: 'assets/icons/challenge_higher_lower.png',
           fallbackIcon: Icons.swap_vert,
-          titel: 'Higher or Lower',
+          titel: t('Higher or Lower'),
           startDatum: kChallengesStartDatum,
           spielScreenBuilder: (_) => const HigherLowerScreen(),
           ergebnisScreenBuilder: (_) => const HigherLowerScreen(nurAnsicht: true),
@@ -233,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           farbe: const Color(0xFF7C3AED),
           logoAsset: 'assets/icons/challenge_ranking.png',
           fallbackIcon: Icons.military_tech,
-          titel: 'Ranking Game',
+          titel: t('Ranking Game'),
           startDatum: kChallengesStartDatum,
           spielScreenBuilder: (_) => const RankingGameScreen(),
           ergebnisScreenBuilder: (_) => const RankingGameScreen(nurAnsicht: true),
@@ -246,7 +281,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           farbe: const Color(0xFF4A90D9),
           logoAsset: 'assets/icons/challenge_portfolio.png',
           fallbackIcon: Icons.business_center,
-          titel: 'Portfolio',
+          titel: t('Portfolio'),
           startDatum: kChallengesStartDatum,
           spielScreenBuilder: (_) => const PortfolioScreen(),
           ergebnisScreenBuilder: (_) => const PortfolioErgebnisAnsichtScreen(),
@@ -281,15 +316,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return _aktivWelt.abschnitte.last;
   }
 
-  void _stationTippen(LernStation station) {
+  Future<void> _stationTippen(LernStation station) async {
     final details = _snap?.detailsFor(station.id);
     if (details == null || !details.istFreigeschaltet) return;
+
+    // Label/Icon im Sheet müssen zum TATSÄCHLICH gespielten Modus passen,
+    // nicht nur zum ursprünglich zugewiesenen station.modus: bei einer
+    // bereits laufenden gespeicherten Session zählt deren tatsächliche
+    // Frage, sonst greift dieselbe Pensionierungs-Prüfung wie beim
+    // eigentlichen Start (FragenGenerator.generiereFragenFuerStation).
+    final gespeichert = await StationSession.laden(station.id);
+    final tatsaechlicherModus = gespeichert?.aktuelleFrage?.modus ??
+        await FragenGenerator.ermittleTatsaechlichenModus(station);
+
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => _StationSheet(
         station: station,
+        modus: tatsaechlicherModus,
         abgeschlossen: details.istAbgeschlossen,
         onStart: () async {
           Navigator.pop(context);
@@ -314,8 +361,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         onWelt: (w) {
           Navigator.pop(context);
           setState(() => _aktivWelt = w);
+          _ladeTatsaechlicheModi(w);
         },
       ),
+    );
+  }
+
+  // Wird von _Pfad nach jedem Build mit der Y-Position der aktuellen (bzw.
+  // bei komplett abgeschlossener Welt: letzten) Station aufgerufen. Löst
+  // NUR beim ersten Aufruf pro Welt-ID eine Scroll-Animation aus — App-Start
+  // und Kontinent-Wechsel liefern eine neue Welt-ID, ein Rebuild nach dem
+  // Abschluss einer Station innerhalb derselben Welt dagegen nicht, daher
+  // kein ständiges Wegscrollen während des normalen Spielens.
+  void _handleAktuelleStationY(double y) {
+    final weltId = _aktivWelt.id;
+    if (_zuletztGescrollteWeltId == weltId) return;
+    _zuletztGescrollteWeltId = weltId;
+    _scrolleZuStation(y);
+  }
+
+  Future<void> _scrolleZuStation(double zielY) async {
+    // Kurze Verzögerung, damit das Layout der neuen Welt (andere Pfadlänge/
+    // -form) vollständig aufgebaut ist, bevor der maxScrollExtent für den
+    // Clamp feststeht — sonst könnte zu früh oder zu kurz gescrollt werden.
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted || !_pfadScrollController.hasClients) return;
+    final viewportHoehe = _pfadScrollController.position.viewportDimension;
+    final ziel = (zielY - viewportHoehe / 2)
+        .clamp(0.0, _pfadScrollController.position.maxScrollExtent);
+    await _pfadScrollController.animateTo(
+      ziel,
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeInOutCubic,
     );
   }
 
@@ -370,6 +447,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             aktuelleStationId: _aktuelleStation?.id,
                             anims: _anims,
                             onStationTap: _stationTippen,
+                            scrollController: _pfadScrollController,
+                            onAktuelleStationY: _handleAktuelleStationY,
+                            tatsaechlicheModi: _tatsaechlicheModi,
                           ),
                     // 2. Dunkler Overlay (schließt Panel beim Antippen)
                     if (_panelOffen)
@@ -501,11 +581,15 @@ class _WeltBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Welt ${welt.reihenfolge} — ${welt.name}',
+                Text(
+                    t('Welt {n} — {name}',
+                        {'n': '${welt.reihenfolge}', 'name': t(welt.name)}),
                     style: const TextStyle(
                         color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 1),
-                Text('Abschnitt ${abschnitt.stufe} — ${abschnitt.titel}',
+                Text(
+                    t('Abschnitt {n} — {titel}',
+                        {'n': '${abschnitt.stufe}', 'titel': t(abschnitt.titel)}),
                     style: const TextStyle(
                         color: Color(0xFFA8D5A2), fontSize: 12, fontWeight: FontWeight.w600)),
               ],
@@ -519,13 +603,13 @@ class _WeltBanner extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.map_outlined, color: Colors.white, size: 15),
-                  SizedBox(width: 4),
-                  Text('Welten',
-                      style: TextStyle(
+                  const Icon(Icons.map_outlined, color: Colors.white, size: 15),
+                  const SizedBox(width: 4),
+                  Text(t('Welten'),
+                      style: const TextStyle(
                           color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                 ],
               ),
@@ -545,6 +629,12 @@ class _Pfad extends StatelessWidget {
   final String? aktuelleStationId;
   final _Anims anims;
   final void Function(LernStation) onStationTap;
+  final ScrollController scrollController;
+  final void Function(double y) onAktuelleStationY;
+  // Tatsächlich zu spielender Modus je Station-ID (siehe
+  // _HomeScreenState._ladeTatsaechlicheModi) — fällt auf station.modus
+  // zurück, solange die Map für diese Station noch nicht befüllt ist.
+  final Map<String, LernModus> tatsaechlicheModi;
 
   const _Pfad({
     required this.welt,
@@ -552,6 +642,9 @@ class _Pfad extends StatelessWidget {
     required this.aktuelleStationId,
     required this.anims,
     required this.onStationTap,
+    required this.scrollController,
+    required this.onAktuelleStationY,
+    required this.tatsaechlicheModi,
   });
 
   @override
@@ -570,6 +663,12 @@ class _Pfad extends StatelessWidget {
 
     final overlays = <Widget>[];
     double y = topPad;
+    // Y-Position der aktuellen Station fürs Auto-Scrollen (siehe
+    // _HomeScreenState._handleAktuelleStationY). Fallback auf die letzte
+    // Station, falls die Welt komplett abgeschlossen ist (dann matcht keine
+    // Station aktuelleStationId).
+    double? aktuelleStationY;
+    double letzteStationY = topPad;
 
     final List<Offset> alleStationPos = [];
     final List<List<Offset>> stationenProAbschnitt = [];
@@ -608,26 +707,30 @@ class _Pfad extends StatelessWidget {
         final details = snap.detailsFor(s.id);
         final istDone = details.istAbgeschlossen;
         final istAktuell = s.id == aktuelleStationId;
+        final angezeigterModus = tatsaechlicheModi[s.id] ?? s.modus;
 
         final xFrac = xPat[localIdx % xPat.length];
         final cx = xFrac * w;
 
         alleStationPos.add(Offset(cx, y));
         stationenProAbschnitt.last.add(Offset(cx, y));
+        letzteStationY = y;
+        if (istAktuell) aktuelleStationY = y;
         if (istAktuell) {
           // START-Blase nur auf der allerersten Station, solange sie nicht abgeschlossen
-          if (globalStationIdx == 0)
+          if (globalStationIdx == 0) {
             overlays.add(Positioned(
               left: cx - 55,
               top: y - 106,
               width: 110,
               child: _StartSprechblase(istGestartet: details.istGestartet),
             ));
+          }
           overlays.add(Positioned(
             left: cx - 45,
             top: y - 45,
             child: _ActiveBtn(
-              modus: s.modus,
+              modus: angezeigterModus,
               anims: anims,
               onTap: () => onStationTap(s),
               sectionProgress: sectionProgress,
@@ -643,7 +746,7 @@ class _Pfad extends StatelessWidget {
           overlays.add(Positioned(
             left: cx - 41,
             top: y - 41,
-            child: _FreiBtn(modus: s.modus, onTap: () => onStationTap(s)),
+            child: _FreiBtn(modus: angezeigterModus, onTap: () => onStationTap(s)),
           ));
         } else {
           overlays.add(Positioned(
@@ -715,9 +818,18 @@ class _Pfad extends StatelessWidget {
 
     final totalH = y + 80;
 
+    // Erst NACH diesem Build (Layout steht, maxScrollExtent ist bekannt) an
+    // den Aufrufer melden, wo die aktuelle Station liegt — der Aufrufer
+    // entscheidet dann (siehe _handleAktuelleStationY), ob dorthin animiert
+    // gescrollt wird.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      onAktuelleStationY(aktuelleStationY ?? letzteStationY);
+    });
+
     return KontinentHintergrund(
       kontinentId: welt.id,
       child: SingleChildScrollView(
+        controller: scrollController,
         padding: const EdgeInsets.only(bottom: 40),
         child: SizedBox(
           width: double.infinity,
@@ -747,10 +859,10 @@ class _MeilensteinBtn extends StatelessWidget {
     final String label;
     if (istLetzter) {
       icon = istDone ? '🏆' : '⭐';
-      label = istDone ? 'Abschluss ✅' : 'Abschluss';
+      label = istDone ? t('Abschluss ✅') : t('Abschluss');
     } else {
       icon = istDone ? '🎁' : '📖';
-      label = istDone ? 'Abschnitt ✅' : 'Checkpoint';
+      label = istDone ? t('Abschnitt ✅') : t('Checkpoint');
     }
 
     return Column(
@@ -1002,116 +1114,6 @@ class _FreiBtn extends StatelessWidget {
   }
 }
 
-// ── Perspektiv-Ring Painter (oben dünn → unten dick, 3D-Tiefenwirkung) ────────
-
-class _PerspektivRingPainter extends CustomPainter {
-  final Color ringFarbe;
-  const _PerspektivRingPainter({required this.ringFarbe});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 2; // 2px außerhalb Button-Rand (kreisGroesse/2 = 45)
-
-    for (double angle = 0; angle < 2 * pi; angle += 0.008) {
-      // sin(angle): -1=oben(12Uhr), 0=links/rechts(9/3Uhr), +1=unten(6Uhr)
-      final normalizedY = 1.0 - (sin(angle) + 1) / 2;
-      final dicke = 0.2 + (normalizedY * 16.8); // oben 0.2px, seiten ~8.6px, unten 17px
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        angle,
-        0.012,
-        false,
-        Paint()
-          ..color = ringFarbe
-          ..strokeWidth = dicke
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.butt,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
-}
-
-// ── Außenring 3D Painter (SweepGradient + Fortschrittsring) ──────────────────
-
-class _AussenRing3DPainter extends CustomPainter {
-  final double fortschritt;
-  const _AussenRing3DPainter({required this.fortschritt});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    // Feste Außenkante des Rings
-    const outerR = 45.0; // size.width(90)/2
-    const minSw = 3.0;   // oben: dünn
-    const maxSw = 8.0;   // unten: dick
-    const segments = 72;
-
-    // Schatten unten
-    canvas.drawCircle(
-      Offset(center.dx, center.dy + 3),
-      outerR - maxSw / 2,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = maxSw
-        ..color = const Color(0x28000000)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-    );
-
-    // Segmentierter Ring: oben dünn & hell, unten dick & dunkel
-    final segPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.butt;
-
-    for (int i = 0; i < segments; i++) {
-      final startAngle = -pi / 2 + (2 * pi * i / segments);
-      // leichte Überlappung damit keine Lücken entstehen
-      const sweepAngle = 2 * pi / segments + 0.02;
-      final midAngle = startAngle + sweepAngle / 2;
-      // t = 0 oben, t = 1 unten
-      final t = (sin(midAngle) + 1.0) / 2.0;
-      final sw = minSw + t * (maxSw - minSw);
-      // Außenkante bleibt konstant bei outerR
-      final segR = outerR - sw / 2;
-      final color = Color.lerp(
-        const Color(0xFFFFFFFF), // oben: weiß/hell
-        const Color(0xFFB0AEA8), // unten: dunkelgrau
-        t,
-      )!;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: segR),
-        startAngle,
-        sweepAngle,
-        false,
-        segPaint
-          ..strokeWidth = sw
-          ..color = color,
-      );
-    }
-
-    // Gold-Fortschrittsring (obendrauf)
-    if (fortschritt > 0) {
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: outerR - maxSw / 2),
-        -pi / 2,
-        2 * pi * fortschritt,
-        false,
-        Paint()
-          ..color = const Color(0xFFF9A825)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 5.0
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_AussenRing3DPainter o) => o.fortschritt != fortschritt;
-}
-
 // ── Pulsier-Ring Painter (einheitlich grün) ───────────────────────────────────
 
 class _PulsierRing3DPainter extends CustomPainter {
@@ -1263,7 +1265,8 @@ class _AbschnittTrenner extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Abschnitt ${abschnitt.stufe} — ${abschnitt.titel}',
+                  t('Abschnitt {n} — {titel}',
+                      {'n': '${abschnitt.stufe}', 'titel': t(abschnitt.titel)}),
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
@@ -1272,7 +1275,7 @@ class _AbschnittTrenner extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  abschnitt.untertitel,
+                  t(abschnitt.untertitel),
                   style: TextStyle(
                     fontSize: 11,
                     color: istFrei ? const Color(0xFF666666) : const Color(0xFFBBBBBB),
@@ -1302,10 +1305,16 @@ class _AbschnittTrenner extends StatelessWidget {
 
 class _StationSheet extends StatelessWidget {
   final LernStation station;
+  // Tatsächlich zu spielender Modus (nach Pensionierungs-Substitution) —
+  // NICHT einfach station.modus, siehe _stationTippen().
+  final LernModus modus;
   final bool abgeschlossen;
   final VoidCallback onStart;
   const _StationSheet(
-      {required this.station, required this.abgeschlossen, required this.onStart});
+      {required this.station,
+      required this.modus,
+      required this.abgeschlossen,
+      required this.onStart});
 
   @override
   Widget build(BuildContext context) {
@@ -1326,10 +1335,10 @@ class _StationSheet extends StatelessWidget {
                 color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
           ),
           const SizedBox(height: 22),
-          Icon(_modusIcon(station.modus), size: 56, color: const Color(0xFF4A9E4A)),
+          Icon(_modusIcon(modus), size: 56, color: const Color(0xFF4A9E4A)),
           const SizedBox(height: 12),
           Text(
-              lernModusLabel(station.modus).replaceFirst(RegExp(r'^\S+\s'), ''),
+              lernModusLabel(modus),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
@@ -1344,8 +1353,8 @@ class _StationSheet extends StatelessWidget {
                 color: const Color(0xFF4A9E4A).withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text('Bereits abgeschlossen ✅',
-                  style: TextStyle(
+              child: Text(t('Bereits abgeschlossen ✅'),
+                  style: const TextStyle(
                       color: Color(0xFF4A9E4A),
                       fontWeight: FontWeight.w700,
                       fontSize: 12)),
@@ -1364,7 +1373,7 @@ class _StationSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              child: Text(abgeschlossen ? 'Nochmal spielen' : 'START',
+              child: Text(abgeschlossen ? t('Nochmal spielen') : t('START'),
                   style: const TextStyle(
                       fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
             ),
@@ -1374,8 +1383,8 @@ class _StationSheet extends StatelessWidget {
             width: double.infinity,
             child: TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen',
-                  style: TextStyle(
+              child: Text(t('Abbrechen'),
+                  style: const TextStyle(
                       color: Color(0xFF888888),
                       fontWeight: FontWeight.w700,
                       fontSize: 15)),
@@ -1441,7 +1450,8 @@ class _ChallengePanelState extends State<_ChallengePanel> {
   Widget build(BuildContext context) {
     final doneCount = widget.done.length;
     final d = DailyChallenge.untilMidnight();
-    final countdown = 'Heute • Reset in ${d.inHours}h ${d.inMinutes % 60}m';
+    final countdown = t('Heute • Reset in {h}h {m}m',
+        {'h': '${d.inHours}', 'm': '${d.inMinutes % 60}'});
 
     return Container(
       decoration: const BoxDecoration(
@@ -1494,9 +1504,9 @@ class _ChallengePanelState extends State<_ChallengePanel> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '⚡ TÄGLICHE CHALLENGES',
-                      style: TextStyle(
+                    Text(
+                      t('⚡ TÄGLICHE CHALLENGES'),
+                      style: const TextStyle(
                         color: Color(0xFF4A9E4A),
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
@@ -1567,7 +1577,7 @@ class _ChallengePanelState extends State<_ChallengePanel> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '$doneCount von 4 Challenges erledigt',
+                  t('{n} von 4 Challenges erledigt', {'n': '$doneCount'}),
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -1586,6 +1596,12 @@ class _ChallengePanelState extends State<_ChallengePanel> {
           // mehr vollständig hineinpassen (Scrollen nötig) oder unten
           // ungenutzten Leerraum übrig — so füllen die 4 Kacheln den Bereich
           // auf JEDER Bildschirmgröße gleichmäßig und exakt aus.
+          //
+          // Alle 4 Karten bewusst exakt gleich groß UND die Spaltentrennlinie
+          // exakt mittig (siehe Testrunde: sowohl einzelne Kacheln als auch
+          // ganze Spalten unterschiedlich breit zu machen, wurde mit dem
+          // Nutzer wieder verworfen — zurück zur einfachen, symmetrischen
+          // Lösung).
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -1611,7 +1627,7 @@ class _ChallengePanelState extends State<_ChallengePanel> {
                         id: k.id,
                         asset: k.asset,
                         emoji: k.emoji,
-                        title: k.title,
+                        title: t(k.title),
                         bg: k.bg,
                         isDone: widget.done.contains(k.id),
                         onTap: () => widget.onTap(k.id),
@@ -1705,7 +1721,7 @@ class _GrossKarteState extends State<_GrossKarte>
                   ),
                 ],
               ),
-              padding: const EdgeInsets.all(14),
+              padding: EdgeInsets.all(14.rpx(context)),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -1718,22 +1734,35 @@ class _GrossKarteState extends State<_GrossKarte>
                         fit: BoxFit.contain,
                         errorBuilder: (ctx, err, st) => Center(
                           child: Text(widget.emoji,
-                              style: const TextStyle(fontSize: 52)),
+                              style: TextStyle(fontSize: 52.rsp(context))),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  // Titel unten
-                  Text(
-                    widget.title,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                  SizedBox(height: 10.rpx(context)),
+                  // Titel unten — feste Höhe für exakt 2 Zeilen reserviert,
+                  // damit der Icon-Bereich (Expanded oben) bei 1-zeiligen
+                  // Titeln (z.B. "Ranking Quiz") nicht mehr Höhe bekommt als
+                  // bei 2-zeiligen (z.B. "Portfolio des Tages") — sonst
+                  // wirken die Icons trotz gleich großer Kacheln
+                  // unterschiedlich groß. Skaliert mit rpx() (nicht rsp()),
+                  // da sie zur Schriftgröße passen muss, die selbst mit
+                  // rsp() wächst — beide zusammen halten das Verhältnis.
+                  SizedBox(
+                    height: 42.rpx(context),
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: Text(
+                        widget.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.rsp(context),
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -1744,12 +1773,12 @@ class _GrossKarteState extends State<_GrossKarte>
                 top: 8,
                 right: 8,
                 child: Container(
-                  width: 22,
-                  height: 22,
+                  width: 22.rpx(context),
+                  height: 22.rpx(context),
                   decoration: const BoxDecoration(
                       color: Colors.white, shape: BoxShape.circle),
-                  child: const Icon(Icons.check_rounded,
-                      color: Color(0xFF4A9E4A), size: 16),
+                  child: Icon(Icons.check_rounded,
+                      color: const Color(0xFF4A9E4A), size: 16.rpx(context)),
                 ),
               ),
           ],
@@ -1980,7 +2009,7 @@ class _ChallengeBtnState extends State<_ChallengeBtn>
 
 // ── Welt-Übersicht Sheet ──────────────────────────────────────────────────────
 
-class _WeltUebersichtSheet extends StatelessWidget {
+class _WeltUebersichtSheet extends StatefulWidget {
   final LernpfadSnapshot? snap;
   final LernWelt aktivWelt;
   final void Function(LernWelt) onWelt;
@@ -1988,7 +2017,19 @@ class _WeltUebersichtSheet extends StatelessWidget {
       {required this.snap, required this.aktivWelt, required this.onWelt});
 
   @override
+  State<_WeltUebersichtSheet> createState() => _WeltUebersichtSheetState();
+}
+
+class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
+  // Welten, die WÄHREND dieser Sheet-Sitzung per Werbung freigeschaltet
+  // wurden — widget.snap selbst wird nicht neu geladen (der Aufrufer hat
+  // keinen Reload-Hook dafür), daher hier lokal nachgeführt, damit die
+  // Freischaltung sofort sichtbar wird, ohne das Sheet neu zu öffnen.
+  final Set<String> _zusaetzlichFreigeschaltet = {};
+
+  @override
   Widget build(BuildContext context) {
+    final snap = widget.snap;
     return Container(
       constraints:
           BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
@@ -2008,18 +2049,35 @@ class _WeltUebersichtSheet extends StatelessWidget {
                 color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
           ),
           const SizedBox(height: 16),
-          const Text('Alle Welten',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(t('Alle Welten'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 16),
           Flexible(
             child: SingleChildScrollView(
               child: Column(
                 children: lernwelten.map((w) {
-                  final frei = snap?.istWeltFrei(w.id) ?? w.reihenfolge == 1;
+                  final frei = snap?.istWeltFrei(w.id) ??
+                      (w.reihenfolge == 1 ||
+                          _zusaetzlichFreigeschaltet.contains(w.id));
                   final fortschritt = snap?.weltFortschritt(w.id) ?? 0.0;
-                  final istAktiv = w.id == aktivWelt.id;
+                  final istAktiv = w.id == widget.aktivWelt.id;
                   return GestureDetector(
-                    onTap: frei ? () => onWelt(w) : null,
+                    onTap: frei
+                        ? () => widget.onWelt(w)
+                        : () => showModalBottomSheet(
+                              context: context,
+                              backgroundColor: Colors.transparent,
+                              isScrollControlled: true,
+                              builder: (_) => _KontinentFreischaltenDialog(
+                                weltId: w.id,
+                                weltName: w.name,
+                                onFreigeschaltet: () {
+                                  setState(
+                                      () => _zusaetzlichFreigeschaltet.add(w.id));
+                                  widget.onWelt(w);
+                                },
+                              ),
+                            ),
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(14),
@@ -2043,7 +2101,7 @@ class _WeltUebersichtSheet extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(w.name,
+                                Text(t(w.name),
                                     style: TextStyle(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 14,
@@ -2081,6 +2139,164 @@ class _WeltUebersichtSheet extends StatelessWidget {
                 }).toList(),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Kontinent per Werbung freischalten ──────────────────────────────────────
+
+class _KontinentFreischaltenDialog extends StatefulWidget {
+  final String weltId;
+  final String weltName;
+  final VoidCallback onFreigeschaltet;
+  const _KontinentFreischaltenDialog({
+    required this.weltId,
+    required this.weltName,
+    required this.onFreigeschaltet,
+  });
+
+  @override
+  State<_KontinentFreischaltenDialog> createState() =>
+      _KontinentFreischaltenDialogState();
+}
+
+class _KontinentFreischaltenDialogState
+    extends State<_KontinentFreischaltenDialog> {
+  int _angesehen = 0;
+  bool _ladeAd = false;
+  bool _nichtVerfuegbar = false;
+
+  @override
+  void initState() {
+    super.initState();
+    FortschrittService.kontinentWerbungenAngesehen(widget.weltId).then((n) {
+      if (mounted) setState(() => _angesehen = n);
+    });
+  }
+
+  Future<void> _werbungAnsehen() async {
+    setState(() {
+      _ladeAd = true;
+      _nichtVerfuegbar = false;
+    });
+
+    final belohnt = await AdService.zeigeRewardedAd(onBelohnt: () {});
+    if (!mounted) return;
+
+    if (!belohnt) {
+      setState(() {
+        _ladeAd = false;
+        _nichtVerfuegbar = true;
+      });
+      return;
+    }
+
+    final neuerStand =
+        await FortschrittService.kontinentWerbungErhoehen(widget.weltId);
+    if (!mounted) return;
+
+    if (neuerStand >= FortschrittService.kontinentWerbungenNoetig) {
+      Navigator.pop(context);
+      widget.onFreigeschaltet();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            t('🎉 {welt} ist jetzt freigeschaltet!', {'welt': t(widget.weltName)})),
+        backgroundColor: const Color(0xFF4A9E4A),
+      ));
+      return;
+    }
+
+    setState(() {
+      _angesehen = neuerStand;
+      _ladeAd = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final noetig = FortschrittService.kontinentWerbungenNoetig;
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, MediaQuery.paddingOf(context).bottom + 24),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F4F0),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Text(t('Diesen Kontinent freischalten'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(
+            t('Schau dir {n} kurze Werbungen an, um {welt} freizuschalten',
+                {'n': '$noetig', 'welt': t(widget.weltName)}),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(noetig, (i) {
+              final gesehen = i < _angesehen;
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: gesehen ? const Color(0xFF4A9E4A) : const Color(0xFFD4D4CC),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            t('{n} von {gesamt} angesehen', {'n': '$_angesehen', 'gesamt': '$noetig'}),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
+          ),
+          if (_nichtVerfuegbar) ...[
+            const SizedBox(height: 12),
+            Text(
+              t('Werbung aktuell nicht verfügbar, versuch es später erneut'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: Color(0xFFC62828)),
+            ),
+          ],
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _ladeAd ? null : _werbungAnsehen,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A9E4A),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+            child: _ladeAd
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  )
+                : Text(t('Werbung ansehen'),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),
         ],
       ),

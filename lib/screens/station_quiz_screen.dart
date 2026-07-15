@@ -3,11 +3,17 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:vibration/vibration.dart';
 import '../data/countries.dart';
 import '../data/laender_aliase.dart';
 import '../data/lernpfad_data.dart';
 import '../data/wirtschaftssektoren.dart';
+import '../l10n/uebersetzungen.dart';
+import '../l10n/wirtschaftssektoren_en.dart';
+import '../services/locale_service.dart';
+import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
+import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/skala_service.dart';
 import '../services/station_session_service.dart';
@@ -18,13 +24,20 @@ import '../widgets/flaggen_widget.dart';
 
 Map<String, List<List<Offset>>>? _geoCache;
 
-/// Schritt 1: ne_50m als Basis laden (alle Länder, mittlere Qualität, ein Netzwerk-Call)
+/// Schritt 1: ne_10m als Basis laden (alle Länder, hohe Qualität, ein Netzwerk-Call)
 Future<Map<String, List<List<Offset>>>> _ladeGeoRings() async {
   if (_geoCache != null) return _geoCache!;
-  final raw = await rootBundle.loadString('assets/geo/ne_50m_countries.geojson');
+  final raw = await rootBundle.loadString('assets/geo/ne_10m_countries.geojson');
   final json = jsonDecode(raw) as Map<String, dynamic>;
   final features = json['features'] as List;
-  final rings = <String, List<List<Offset>>>{};
+  // Rohe Ringe zuerst je ISO-Code SAMMELN statt sofort überschreiben: manche
+  // Länder haben mehrere Features mit demselben ISO_A2 (z.B. Frankreich +
+  // das winzige Clipperton-Atoll, Kasachstan + die Enklave Baikonur,
+  // Brasilien + Inselterritorien, Australien + Außengebiete) — ein simples
+  // rings[iso2] = ... hätte die Hauptlandmasse durch das zufällig zuletzt
+  // gelesene Fragment ersetzt (führte z.B. dazu, dass für FR nur noch
+  // Clipperton Island statt Frankreich gerendert wurde).
+  final rohRinge = <String, List<List<Offset>>>{};
   for (final f in features) {
     final props = f['properties'] as Map<String, dynamic>;
     final iso2Raw = props['ISO_A2'] as String? ?? '';
@@ -43,11 +56,41 @@ Future<Map<String, List<List<Offset>>>> _ladeGeoRings() async {
         rs.add(_ring((poly as List)[0] as List));
       }
     }
-    if (rs.isNotEmpty) rings[iso2] = _nachbearbeiteRinge(iso2, rs);
+    if (rs.isNotEmpty) (rohRinge[iso2] ??= []).addAll(rs);
   }
+  final rings = <String, List<List<Offset>>>{
+    for (final e in rohRinge.entries) e.key: _nachbearbeiteRinge(e.key, e.value),
+  };
   _geoCache = rings;
   return rings;
 }
+
+/// Inselstaaten/-reiche Länder, bei denen Küsten- bzw. Hauptinseln fester
+/// Bestandteil des erkennbaren Umrisses sind — hier greift NUR der (auf 0,5%
+/// gelockerte) Flächenfilter, aber NICHT der Exklaven-Distanzfilter, sonst
+/// würden z.B. Japans Hokkaido/Kyushu/Shikoku oder Neuseelands Südinsel als
+/// "zu weit entfernt" verworfen. Portugal bewusst NICHT hier: Azoren/Madeira
+/// sollen für den Umriss-Quiz gerade weggefiltert werden (siehe
+/// kLandspezifischeMaxDistanz).
+const Set<String> kInselLaenderBehalten = {
+  'DK', 'NO', 'FI', 'EE', 'HR', 'GR', 'ID', 'PH', 'JP', 'NZ', 'IS',
+  'GB', 'IE', 'CU', 'SB', 'VU', 'PG', 'FJ',
+};
+
+/// Länderspezifisch verschärfte Exklaven-Distanzschwelle (siehe
+/// _entferneWeitEntfernteExklaven) für Länder mit einer bekannten, weit
+/// entfernten Übersee-Region, die für den Umriss-Quiz nicht mit ins Bild
+/// soll. FR bewusst 10° statt der ursprünglich angefragten 5°: bei 5° würde
+/// auch Korsika (~8,6° vom Festlands-Schwerpunkt) mit rausgefiltert werden,
+/// das anders als Französisch-Guayana (~70°) zum allgemein erkannten
+/// Frankreich-Umriss dazugehört (vergleichbar mit Sizilien/Sardinien bei
+/// Italien, die bei ~5° Abstand liegen und bewusst erhalten bleiben).
+const Map<String, double> kLandspezifischeMaxDistanz = {
+  'PT': 5, // nur iberische Halbinsel, ohne Azoren/Madeira
+  'ES': 8, // ohne Kanarische Inseln, Balearen (~6°) bleiben
+  'FR': 10, // ohne Französisch-Guayana, Korsika (~8,6°) bleibt
+  'CL': 10, // ohne Osterinsel
+};
 
 /// Länderspezifische Nachbearbeitung nach dem allgemeinen Flächen-Filter.
 /// Norwegen: Svalbard liegt als eigener Ring weit nördlich vom Festland
@@ -55,12 +98,90 @@ Future<Map<String, List<List<Offset>>>> _ladeGeoRings() async {
 /// Umriss-Quiz bewusst weggelassen — sonst wirkt die Silhouette wie zwei
 /// unzusammenhängende Flecken statt einem erkennbaren Festlands-Umriss.
 List<List<Offset>> _nachbearbeiteRinge(String iso2, List<List<Offset>> rs) {
-  final gefiltert = _filterRings(rs);
+  final minFlaechenAnteil = kInselLaenderBehalten.contains(iso2) ? 0.005 : 0.01;
+  final nachFlaeche =
+      _filterRings(_entzerreAntimeridian(rs), minFlaechenAnteil: minFlaechenAnteil);
+  final gefiltert = kInselLaenderBehalten.contains(iso2)
+      ? nachFlaeche
+      : _entferneWeitEntfernteExklaven(nachFlaeche,
+          schwelleGrad: kLandspezifischeMaxDistanz[iso2] ?? 45.0);
   if (iso2 != 'NO' || gefiltert.length <= 1) return gefiltert;
   double avgLat(List<Offset> r) =>
       r.map((p) => p.dy).reduce((a, b) => a + b) / r.length;
   final ohneSvalbard = gefiltert.where((r) => avgLat(r) < 73.0).toList();
   return ohneSvalbard.isEmpty ? gefiltert : ohneSvalbard;
+}
+
+/// Manche Länder-Geometrien in ne_10m enthalten neben dem Kernland auch weit
+/// entfernte Übersee-Gebiete mit demselben ISO-Code — z.B. Französisch-
+/// Guayana (Südamerika, ~70° von Frankreich entfernt) oder Alaska (~59° von
+/// den kontinentalen USA entfernt). Diese Gebiete sind flächenmäßig nicht
+/// winzig und überleben daher den reinen Prozent-Filter oben, würden aber als
+/// gemeinsame BoundingBox mit dem Kernland dessen Silhouette auf einen
+/// unkenntlichen Fleck in der Ecke schrumpfen lassen. Default-Schwelle 45°:
+/// empirisch an den ne_10m-Daten kalibriert — liegt bequem zwischen den
+/// größten legitimen Archipel-Abständen (Tasmanien ~22°, Kiribati-Inseln bis
+/// ~30°, Azoren ~20°) und den beiden bekannten Exklaven-Fällen (Guayana
+/// ~70°, Alaska ~59°), sodass echte Archipel-Staaten unangetastet bleiben.
+/// Für Länder mit bekannter Übersee-Exklave wird stattdessen die engere
+/// Schwelle aus kLandspezifischeMaxDistanz übergeben.
+List<List<Offset>> _entferneWeitEntfernteExklaven(List<List<Offset>> rs,
+    {double schwelleGrad = 45.0}) {
+  if (rs.length <= 1) return rs;
+  Offset centroid(List<Offset> r) {
+    double sx = 0, sy = 0;
+    for (final p in r) {
+      sx += p.dx;
+      sy += p.dy;
+    }
+    return Offset(sx / r.length, sy / r.length);
+  }
+
+  double bboxArea(List<Offset> r) {
+    double minX = r[0].dx, maxX = r[0].dx, minY = r[0].dy, maxY = r[0].dy;
+    for (final p in r) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+    return (maxX - minX) * (maxY - minY);
+  }
+
+  final areas = rs.map(bboxArea).toList();
+  final kernIdx = areas.indexOf(areas.reduce(max));
+  final kernMitte = centroid(rs[kernIdx]);
+  final ergebnis = [
+    for (var i = 0; i < rs.length; i++)
+      if ((centroid(rs[i]) - kernMitte).distance <= schwelleGrad) rs[i],
+  ];
+  return ergebnis.isEmpty ? rs : ergebnis;
+}
+
+/// Länder, die den Antimeridian (±180°) durchqueren (Russland via Tschukotka,
+/// Fidschi, USA via die Aleuten, grenzwertig auch Kiribati/Neuseeland) ergeben
+/// mit rohen Längengrad-Werten eine Bounding-Box, die fast den gesamten
+/// Globus umfasst — die eigentliche Landmasse wird dadurch auf einen
+/// winzigen Streifen zusammengequetscht (sichtbar z.B. bei Russland: ein
+/// Fragment bei -179° und eines bei +179° liegen in rohen Lng-Werten fast
+/// 360° auseinander statt ~2°). Erkennung: ein naiver Lng-Sprung > 180°
+/// zwischen dem west- und östlichsten Punkt ist bei echten Ländern (anders
+/// als beim Antimeridian-Sprung) praktisch ausgeschlossen. Fix: negative
+/// Längengrade um 360° verschieben, damit z.B. Tschukotka (-179°) und
+/// Kaliningrad (+19°) einen zusammenhängenden Wertebereich statt eines
+/// Sprungs bei ±180° ergeben.
+List<List<Offset>> _entzerreAntimeridian(List<List<Offset>> rs) {
+  double minLng = double.infinity, maxLng = double.negativeInfinity;
+  for (final r in rs) {
+    for (final p in r) {
+      if (p.dx < minLng) minLng = p.dx;
+      if (p.dx > maxLng) maxLng = p.dx;
+    }
+  }
+  if (maxLng - minLng <= 180) return rs;
+  return rs
+      .map((r) => r.map((p) => Offset(p.dx < 0 ? p.dx + 360 : p.dx, p.dy)).toList())
+      .toList();
 }
 
 /// Schritt 2: Einzeldateien für konkrete Quiz-Länder nachladen (höhere Qualität)
@@ -94,7 +215,17 @@ Future<void> _upgradeRingsMitEinzelDateien(
 List<Offset> _ring(List coords) =>
     coords.map((p) => Offset((p[0] as num).toDouble(), (p[1] as num).toDouble())).toList();
 
-List<List<Offset>> _filterRings(List<List<Offset>> rs) {
+// Standard-Schwelle 1% des größten Rings: entfernt Kartografie-Rauschen
+// (Einzelpunkt-Artefakte, Mini-Riffe, winzige Nebeninseln) und — in
+// Kombination mit dem Umriss-Ausschluss kleiner/unmarkanter Länder
+// (kUmrissAusschluss in alle_laender.dart) — auch die vielen kleinen
+// Nebeninseln "normaler" Länder (z.B. Italiens winzige Mittelmeerinseln
+// abseits von Sizilien/Sardinien). Für Archipel-/Inselstaaten wie Malediven,
+// Kiribati, Griechenland, Japan etc. wird stattdessen die gelockerte 0,5%-
+// Schwelle übergeben (siehe kInselLaenderBehalten in _nachbearbeiteRinge),
+// da dort jede Insel zur erkennbaren Form dazugehört und es kein einzelnes
+// "Festland" gibt.
+List<List<Offset>> _filterRings(List<List<Offset>> rs, {double minFlaechenAnteil = 0.01}) {
   if (rs.length <= 1) return rs;
   double bboxArea(List<Offset> r) {
     double minX = r[0].dx, maxX = r[0].dx, minY = r[0].dy, maxY = r[0].dy;
@@ -108,7 +239,10 @@ List<List<Offset>> _filterRings(List<List<Offset>> rs) {
   }
   final areas = rs.map(bboxArea).toList();
   final maxA = areas.reduce(max);
-  return [for (var i = 0; i < rs.length; i++) if (areas[i] >= maxA * 0.10) rs[i]];
+  return [
+    for (var i = 0; i < rs.length; i++)
+      if (areas[i] >= maxA * minFlaechenAnteil) rs[i],
+  ];
 }
 
 class StationQuizScreen extends StatefulWidget {
@@ -144,9 +278,12 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   String? _gewahlteAntwort;
   Timer? _feedbackTimer;
 
-  // Timer
+  // Timer — Dauer hängt vom Modus der jeweils aktuellen Frage ab (siehe
+  // timerSekundenFuerModus), nicht mehr fix 15s. _timerGesamt == 0 bedeutet
+  // kein Timer für die aktuelle Frage (weder Countdown noch UI-Anzeige).
   Timer? _countdownTimer;
-  int _countdown = 15;
+  int _countdown = 0;
+  int _timerGesamt = 0;
 
   // SortierSpiel
   List<String> _sortierReihenfolge = [];
@@ -198,7 +335,12 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         session = StationSession(
           stationId: widget.station!.id,
           aktiveFragen: fragen,
-          hatTimer: widget.station!.schwierigkeitsgrad == 4,
+          // Nutzt dasselbe abschnitt.hatTimer-Flag, das lernpfad_screen.dart
+          // bereits für den Timer-Hinweis in der Abschnitts-Übersicht liest
+          // (korrekt gesetzt für den jeweils LETZTEN Abschnitt eines
+          // Kontinents) — NICHT schwierigkeitsgrad == 4, das bei Südamerika/
+          // Ozeanien (nur 3 statt 4 Abschnitte) nie zutrifft.
+          hatTimer: stationKontext(widget.station!.id)?.$2.hatTimer ?? false,
         );
       }
     }
@@ -264,7 +406,22 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   void _startCountdown() {
     _countdownTimer?.cancel();
-    setState(() => _countdown = 15);
+    final sekunden = timerSekundenFuerModus(
+        _session?.aktuelleFrage?.modus ?? LernModus.zufallsFakt);
+    if (sekunden <= 0) {
+      // Kein Timer für diesen Modus (z.B. preisSchaetzen, zufallsFakt,
+      // bekanntesGebaeude) — auch in Abschnitt 4 keine Zeitanzeige, freies
+      // Nachdenken/Schätzen.
+      setState(() {
+        _timerGesamt = 0;
+        _countdown = 0;
+      });
+      return;
+    }
+    setState(() {
+      _timerGesamt = sekunden;
+      _countdown = sekunden;
+    });
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
@@ -280,8 +437,32 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   void _stopCountdown() => _countdownTimer?.cancel();
 
+  // Kurzes Vibrations-Feedback bei Antwort-Auswertung — kurzer Puls bei
+  // richtig, spürbar längerer bei falsch (inkl. Timer-Ablauf), respektiert
+  // den Vibration-Schalter in den Einstellungen. Nutzt das vibration-Paket
+  // (direkter Vibrator-Zugriff) statt HapticFeedback.*: Flutters
+  // HapticFeedback-API ruft auf Android IMMER View.performHapticFeedback()
+  // auf, was von einer separaten System-Einstellung ("Tipp-/Berührungs-
+  // Feedback") abhängt und bei vielen Geräten (u.a. Samsung One UI) trotz
+  // erteilter VIBRATE-Berechtigung stumm bleibt, wenn diese Einstellung aus
+  // ist — das vibration-Paket spricht den Vibrationsmotor direkt an und
+  // umgeht dieses Problem. Bewusst fire-and-forget (kein await): die Haptik
+  // soll den UI-Fluss nicht verzögern.
+  void _vibriereAntwort(bool richtig) {
+    EinstellungenService.vibrationAktiv.then((aktiv) async {
+      if (!aktiv) return;
+      if (!await Vibration.hasVibrator()) return;
+      if (richtig) {
+        Vibration.vibrate(duration: 40);
+      } else {
+        Vibration.vibrate(duration: 70);
+      }
+    });
+  }
+
   void _timerAbgelaufen() {
     if (_showFeedback || _session == null) return;
+    _vibriereAntwort(false);
     setState(() {
       _showFeedback = true;
       _feedbackRichtig = false;
@@ -302,6 +483,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     final frage = _session!.aktuelleFrage;
     if (frage == null) return;
     final richtig = antwort == frage.richtigeAntwort;
+    _vibriereAntwort(richtig);
     setState(() {
       _gewahlteAntwort = antwort;
       _showFeedback = true;
@@ -338,6 +520,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     if (text.isEmpty) return;
     _stopCountdown();
     final richtig = _eingabeIstRichtig(text, frage.richtigeAntwort, frage.laenderCode);
+    _vibriereAntwort(richtig);
     setState(() {
       _eingabeBestaetigt = true;
       _showFeedback = true;
@@ -363,6 +546,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     if (frage == null) return;
     _stopCountdown();
     final richtig = _sortierReihenfolge.join(',') == frage.richtigeAntwort;
+    _vibriereAntwort(richtig);
     setState(() {
       _sortierGeprueft = true;
       _showFeedback = true;
@@ -392,6 +576,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     final richtig = zielwert == 0
         ? _sliderWert.abs() < 1
         : (_sliderWert - zielwert).abs() / zielwert <= 0.2;
+    _vibriereAntwort(richtig);
     setState(() {
       _preisBestaetigt = true;
       _showFeedback = true;
@@ -443,9 +628,9 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       await FortschrittService.wiederholungAbschliessen(
           widget.wiederholungsAbschnittId!);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('🎉 Abschnitt vollständig abgeschlossen!'),
-        backgroundColor: Color(0xFF4A9E4A),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('🎉 Abschnitt vollständig abgeschlossen!')),
+        backgroundColor: const Color(0xFF4A9E4A),
       ));
       Navigator.pop(context);
       return;
@@ -468,6 +653,12 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     }
     if (!mounted) return;
 
+    // Nach JEDEM Stationsabschluss (nie mitten in einer laufenden Frage) —
+    // zeigt selbst nur, wenn genug Stationen + genug Zeit seit der letzten
+    // Anzeige vergangen sind (siehe AdService.pruefeUndZeigeInterstitial).
+    await AdService.pruefeUndZeigeInterstitial();
+    if (!mounted) return;
+
     if (!FortschrittService.istLetzteStationImAbschnitt(widget.station!.id)) {
       if (mounted) Navigator.pop(context);
       return;
@@ -481,9 +672,9 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     if (!wdhNoetig) {
       await FortschrittService.wiederholungAbschliessen(abschnittId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('🎉 Perfekt! Abschnitt abgeschlossen!'),
-        backgroundColor: Color(0xFF4A9E4A),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('🎉 Perfekt! Abschnitt abgeschlossen!')),
+        backgroundColor: const Color(0xFF4A9E4A),
       ));
       Navigator.pop(context);
       return;
@@ -494,10 +685,10 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         await FortschrittService.sammelFalscheFragenFuerAbschnitt(abschnittId);
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('🔄 Weiter zur Wiederholungsrunde!'),
-      backgroundColor: Color(0xFFD98C30),
-      duration: Duration(milliseconds: 1500),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(t('🔄 Weiter zur Wiederholungsrunde!')),
+      backgroundColor: const Color(0xFFD98C30),
+      duration: const Duration(milliseconds: 1500),
     ));
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
@@ -529,9 +720,15 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     final session = _session!;
     final frage = session.aktuelleFrage;
 
+    // Nutzt den tatsächlichen Modus der geladenen Frage statt
+    // widget.station!.modus — station_session_service.dart kann bei
+    // "pensionierten" Modi (Länderpool welt-/abschnittsweit ausgeschöpft)
+    // zur Spielzeit auf einen anderen, noch aktiven Modus ausweichen (siehe
+    // _pensionierterErsatz). Der Titel muss diese Abweichung mitgehen, sonst
+    // zeigt er einen anderen Modus an als tatsächlich gespielt wird.
     final titel = widget.istWiederholungsrunde
-        ? '🔄 Wiederholungsrunde'
-        : lernModusLabel(widget.station!.modus);
+        ? t('🔄 Wiederholungsrunde')
+        : lernModusLabel(frage?.modus ?? widget.station!.modus);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F0),
@@ -556,11 +753,32 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                if (session.hatTimer) _TimerBar(countdown: _countdown),
+                if (_timerGesamt > 0)
+                  _TimerBar(countdown: _countdown, gesamt: _timerGesamt),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: _frageWidget(frage),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: IntrinsicHeight(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              // zentriert automatisch WENN der Inhalt
+                              // kleiner ist als minHeight — bei zu großem
+                              // Inhalt wird stattdessen normal gescrollt,
+                              // keine Zentrierung erzwungen, kein Overflow
+                              children: [
+                                _frageWidget(frage),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -653,17 +871,48 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
 // ── Timer-Bar ──────────────────────────────────────────────────────────────────
 
-class _TimerBar extends StatelessWidget {
+class _TimerBar extends StatefulWidget {
   final int countdown;
-  const _TimerBar({required this.countdown});
+  final int gesamt;
+  const _TimerBar({required this.countdown, required this.gesamt});
+
+  @override
+  State<_TimerBar> createState() => _TimerBarState();
+}
+
+class _TimerBarState extends State<_TimerBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulsCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulsCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulsCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final fraction = (countdown / 15.0).clamp(0.0, 1.0);
-    final color = countdown > 5
-        ? const Color(0xFFD98C30)
-        : const Color(0xFFD94040);
-    return Column(
+    final fraction = (widget.countdown / widget.gesamt).clamp(0.0, 1.0);
+    // Rot + Pulsieren nur in den letzten 3 Sekunden (absolut, nicht
+    // prozentual) — bei kurzen Timern (15s) fällt das mit der 20%-Marke
+    // zusammen, bei längeren (30-40s) ist es ein bewusst enges Warnfenster.
+    final kritisch = widget.countdown <= 3;
+    final color = kritisch
+        ? const Color(0xFFD94040)
+        : fraction > 0.5
+            ? const Color(0xFF4A9E4A)
+            : const Color(0xFFD98C30);
+
+    final bar = Column(
       children: [
         LinearProgressIndicator(
           value: fraction,
@@ -676,13 +925,21 @@ class _TimerBar extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerRight,
             child: Text(
-              '${countdown}s',
+              '${widget.countdown}s',
               style: TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w700, color: color),
             ),
           ),
         ),
       ],
+    );
+
+    if (!kritisch) return bar;
+    return AnimatedBuilder(
+      animation: _pulsCtrl,
+      builder: (context, child) =>
+          Opacity(opacity: 0.55 + 0.45 * _pulsCtrl.value, child: child),
+      child: bar,
     );
   }
 }
@@ -826,10 +1083,10 @@ class _FlagBildUI extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const Text(
-          'Welchem Land gehört diese Flagge?',
+        Text(
+          t('Welchem Land gehört diese Flagge?'),
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 20),
         ClipRRect(
@@ -912,8 +1169,10 @@ class _GrenzkettenUI extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         Text(
-          'Auf dem Landweg von ${von?.name ?? vonIso} nach ${nach?.name ?? nachIso}: '
-          'durch welches dieser Länder MUSST du dabei NICHT fahren?',
+          t('Auf dem Landweg von {von} nach {nach}: durch welches dieser Länder MUSST du dabei NICHT fahren?', {
+            'von': von?.name ?? vonIso,
+            'nach': nach?.name ?? nachIso,
+          }),
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
@@ -983,8 +1242,8 @@ class _GrenzkettenRoute extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Die richtige Route:',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF888888))),
+          Text(t('Die richtige Route:'),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF888888))),
           const SizedBox(height: 4),
           Text(routeText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           if (erklaerung != null) ...[
@@ -996,6 +1255,43 @@ class _GrenzkettenRoute extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── 2-Spalten-Grid ohne Viewport ─────────────────────────────────────────────
+//
+// Ersetzt GridView.count(shrinkWrap: true): dessen RenderShrinkWrappingViewport
+// verweigert Intrinsic-Höhen-Anfragen (siehe IntrinsicHeight in
+// _StationQuizScreenState.build für die Vertikal-Zentrierung) mit einer
+// Exception ("does not support returning intrinsic dimensions") — bricht die
+// komplette Frage-Anzeige ab, sobald ein Antwort-Grid im Baum steckt. Baut
+// denselben 2-Spalten-Look aus normalen Row/Column-Widgets, die Intrinsic-
+// Höhen-Berechnung unterstützen.
+Widget zweiSpaltenGrid(
+  List<Widget> children, {
+  required double childAspectRatio,
+  double mainAxisSpacing = 12,
+  double crossAxisSpacing = 12,
+}) {
+  final rows = <Widget>[];
+  for (var i = 0; i < children.length; i += 2) {
+    if (i > 0) rows.add(SizedBox(height: mainAxisSpacing));
+    final zweites = i + 1 < children.length ? children[i + 1] : null;
+    rows.add(Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+            child:
+                AspectRatio(aspectRatio: childAspectRatio, child: children[i])),
+        SizedBox(width: crossAxisSpacing),
+        Expanded(
+          child: zweites == null
+              ? const SizedBox.shrink()
+              : AspectRatio(aspectRatio: childAspectRatio, child: zweites),
+        ),
+      ],
+    ));
+  }
+  return Column(children: rows);
 }
 
 // ── Flaggen Multiple: Land → Flagge wählen ─────────────────────────────────────
@@ -1024,14 +1320,9 @@ class _FlagMultipleUI extends StatelessWidget {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 24),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
+        zweiSpaltenGrid(
           childAspectRatio: 1.5,
-          children: frage.antwortOptionen.map((iso2) {
+          frage.antwortOptionen.map((iso2) {
             Color border = Colors.transparent;
             if (showFeedback) {
               if (iso2 == frage.richtigeAntwort) {
@@ -1096,7 +1387,8 @@ class _GenericMCUI extends StatelessWidget {
 
   String _labelFor(String opt) {
     if (frage.modus == LernModus.wirtschaftssektoren) {
-      final emoji = sektorEmojis[opt] ?? '';
+      final emojis = LocaleService.istEnglisch ? sektorEmojisEn : sektorEmojis;
+      final emoji = emojis[opt] ?? '';
       return emoji.isEmpty ? opt : '$emoji  $opt';
     }
     return opt;
@@ -1184,8 +1476,8 @@ class _EingabeUI extends StatelessWidget {
   }
 
   String get _hintText => switch (frage.modus) {
-        LernModus.flaggenQuizEingabe || LernModus.umrissEingabe => 'Land eingeben…',
-        _ => 'Hauptstadt eingeben…',
+        LernModus.flaggenQuizEingabe || LernModus.umrissEingabe => t('Land eingeben…'),
+        _ => t('Hauptstadt eingeben…'),
       };
 
   @override
@@ -1232,8 +1524,8 @@ class _EingabeUI extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             feedbackRichtig
-                ? '✅ Richtig!'
-                : '❌ Richtig war: ${frage.richtigeAntwort}',
+                ? t('✅ Richtig!')
+                : t('❌ Richtig war: {a}', {'a': frage.richtigeAntwort}),
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -1256,9 +1548,9 @@ class _EingabeUI extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12)),
               disabledBackgroundColor: const Color(0xFFCCCCCC),
             ),
-            child: const Text('Bestätigen',
+            child: Text(t('Bestätigen'),
                 style:
-                    TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -1394,8 +1686,8 @@ class _SortierListe extends StatelessWidget {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Reihenfolge prüfen',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            child: Text(t('Reihenfolge prüfen'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -1434,8 +1726,8 @@ class _ErgebnisAnsicht extends StatelessWidget {
       children: [
         Text(
           kategorieLabel != null
-              ? 'Richtig (nach $kategorieLabel, größte zuerst):'
-              : 'Richtige Reihenfolge:',
+              ? t('Richtig (nach {kategorie}, größte zuerst):', {'kategorie': kategorieLabel})
+              : t('Richtige Reihenfolge:'),
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
@@ -1452,8 +1744,11 @@ class _ErgebnisAnsicht extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           anzahlRichtig == richtigeReihenfolge.length
-              ? '✅ Perfekte Reihenfolge!'
-              : '$anzahlRichtig von ${richtigeReihenfolge.length} richtig sortiert',
+              ? t('✅ Perfekte Reihenfolge!')
+              : t('{a} von {b} richtig sortiert', {
+                  'a': '$anzahlRichtig',
+                  'b': '${richtigeReihenfolge.length}',
+                }),
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
@@ -1474,8 +1769,8 @@ class _ErgebnisAnsicht extends StatelessWidget {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Weiter',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            child: Text(t('Weiter'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -1538,7 +1833,7 @@ class _ErgebnisZeile extends StatelessWidget {
           ),
           if (!warRichtig) ...[
             const SizedBox(width: 4),
-            Text('(Platz $nutzerPlatz)',
+            Text(t('(Platz {n})', {'n': '$nutzerPlatz'}),
                 style: const TextStyle(fontSize: 10, color: Color(0xFF888888))),
           ],
         ],
@@ -1560,13 +1855,27 @@ SkalaErgebnis? _skalaFuerFrage(Frage frage) {
 // ── Gemeinsamer Zahlenformatierer (Mio./Mrd./Tsd.), Fallback falls keine
 // Kategorie-Skala verfügbar ist (z.B. Sortierspiel-Werte) ───────────────────
 
-String _formatGrosswert(double v, String einheit) {
-  if (einheit == 'Jahre') return '${v.toStringAsFixed(1)} $einheit';
+String _formatGrosswert(double v, String einheitDe) {
+  final einheit = t(einheitDe);
+  if (einheitDe == 'Jahre') return '${v.toStringAsFixed(1)} $einheit';
   final n = v.round();
   final abs = n.abs();
-  if (abs >= 1000000000) return '${(n / 1000000000).toStringAsFixed(1)} Mrd. $einheit';
-  if (abs >= 1000000) return '${(n / 1000000).toStringAsFixed(1)} Mio. $einheit';
-  if (abs >= 1000) return '${(n / 1000).toStringAsFixed(1)} Tsd. $einheit';
+  final en = LocaleService.istEnglisch;
+  if (abs >= 1000000000) {
+    return en
+        ? '${(n / 1000000000).toStringAsFixed(1)}B $einheit'
+        : '${(n / 1000000000).toStringAsFixed(1)} Mrd. $einheit';
+  }
+  if (abs >= 1000000) {
+    return en
+        ? '${(n / 1000000).toStringAsFixed(1)}M $einheit'
+        : '${(n / 1000000).toStringAsFixed(1)} Mio. $einheit';
+  }
+  if (abs >= 1000) {
+    return en
+        ? '${(n / 1000).toStringAsFixed(1)}K $einheit'
+        : '${(n / 1000).toStringAsFixed(1)} Tsd. $einheit';
+  }
   return '$n $einheit';
 }
 
@@ -1656,8 +1965,8 @@ class _PreisUI extends StatelessWidget {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Schätzung bestätigen',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            child: Text(t('Schätzung bestätigen'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -1681,7 +1990,7 @@ class _PreisUI extends StatelessWidget {
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
-        Text('Deine Schätzung: ${fmt(sliderWert)}',
+        Text(t('Deine Schätzung: {v}', {'v': fmt(sliderWert)}),
             style: const TextStyle(fontSize: 13, color: Color(0xFF888888))),
         const SizedBox(height: 20),
         Container(
@@ -1695,7 +2004,7 @@ class _PreisUI extends StatelessWidget {
           child: Column(
             children: [
               Text(
-                feedbackRichtig ? '✅ Richtig! (±20%)' : '❌ Daneben',
+                feedbackRichtig ? t('✅ Richtig! (±20%)') : t('❌ Daneben'),
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -1706,14 +2015,17 @@ class _PreisUI extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Tatsächlicher Wert: ${fmt(zielwert)}',
+                t('Tatsächlicher Wert: {v}', {'v': fmt(zielwert)}),
                 style: const TextStyle(
                     fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1a1a1a)),
               ),
               if (abweichungProzent != null) ...[
                 const SizedBox(height: 4),
                 Text(
-                  'Du lagst ${abweichungProzent.abs().toStringAsFixed(0)}% zu ${abweichungProzent > 0 ? "hoch" : "niedrig"}',
+                  t('Du lagst {p}% zu {richtung}', {
+                    'p': abweichungProzent.abs().toStringAsFixed(0),
+                    'richtung': abweichungProzent > 0 ? t('hoch') : t('niedrig'),
+                  }),
                   style: const TextStyle(fontSize: 13, color: Color(0xFF666666)),
                 ),
               ],
@@ -1732,8 +2044,8 @@ class _PreisUI extends StatelessWidget {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Weiter',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            child: Text(t('Weiter'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -1765,10 +2077,10 @@ class _UmrissBildUI extends StatelessWidget {
     final geoLoaded = geoRings.isNotEmpty;
     return Column(
       children: [
-        const Text(
-          'Welchem Land gehört dieser Umriss?',
+        Text(
+          t('Welchem Land gehört dieser Umriss?'),
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
         Container(
@@ -1781,12 +2093,12 @@ class _UmrissBildUI extends StatelessWidget {
           child: !geoLoaded
               ? const Center(child: CircularProgressIndicator(color: Color(0xFF2E7D32)))
               : rings.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Text('🗺️', style: TextStyle(fontSize: 52)),
-                        SizedBox(height: 8),
-                        Text('Kein Umriss verfügbar',
-                            style: TextStyle(
+                        const Text('🗺️', style: TextStyle(fontSize: 52)),
+                        const SizedBox(height: 8),
+                        Text(t('Kein Umriss verfügbar'),
+                            style: const TextStyle(
                                 color: Color(0xFF9E9C96),
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500)),
@@ -1835,19 +2147,19 @@ class _UmrissMultipleUI extends StatelessWidget {
     return Column(
       children: [
         Text(
-          'Welcher Umriss gehört zu ${co?.flagEmoji ?? ''} ${co?.name ?? frage.richtigeAntwort}?',
+          t('Welcher Umriss gehört zu {emoji} {name}?', {
+            'emoji': co?.flagEmoji ?? '',
+            'name': co?.name ?? frage.richtigeAntwort,
+          }),
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 20),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+        zweiSpaltenGrid(
+          childAspectRatio: 1.2,
           mainAxisSpacing: 10,
           crossAxisSpacing: 10,
-          childAspectRatio: 1.2,
-          children: frage.antwortOptionen.map((iso2) {
+          frage.antwortOptionen.map((iso2) {
             Color borderColor = Colors.transparent;
             double borderWidth = 0;
             if (showFeedback) {
@@ -1917,10 +2229,19 @@ class _UmrissPainter extends CustomPainter {
     return 0.5 - log((1 + s) / (1 - s)) / (4 * pi);
   }
 
+  // Mindest-Durchmesser (px) für winzige Insel-Ringe (z.B. einzelne Malediven-
+  // oder Kiribati-Atolle), die nach der Skalierung sonst unter 1px fallen und
+  // unsichtbar würden — solche Ringe zeichnen wir als kleinen Punkt statt als
+  // (nicht mehr erkennbaren) Pfad.
+  static const _minInselDurchmesser = 4.0;
+
   @override
   void paint(Canvas canvas, Size size) {
     if (rings.isEmpty) return;
-    const pad = 20.0;
+    // Padding proportional zur Canvas-Größe: bei den kleinen Grid-Kacheln des
+    // Multiple-Choice-Modus (~130x110px) frisst ein fixes 20px-Padding einen
+    // zu großen Anteil der Fläche; bei den großen Karten bleibt es bei ~20px.
+    final pad = (size.shortestSide * 0.09).clamp(8.0, 20.0);
     final proj = rings
         .map((r) => r.map((ll) => Offset(_mX(ll.dx), _mY(ll.dy))).toList())
         .toList();
@@ -1940,15 +2261,40 @@ class _UmrissPainter extends CustomPainter {
     final sc = min(avW / w, avH / h);
     final dX = pad + (avW - w * sc) / 2 - minX * sc;
     final dY = pad + (avH - h * sc) / 2 - minY * sc;
-    final fill = Paint()..color = color..style = PaintingStyle.fill;
+    // Kleine Renderflächen (Grid-Kacheln) bekommen einen dünneren Rand, damit
+    // er bei winzigen Ländern/Zwergstaaten nicht die Füllfläche überdeckt.
+    final strichstaerke = size.shortestSide < 130 ? 1.0 : 1.5;
+    final fill = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
     final stroke = Paint()
       ..color = color.withAlpha(178)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
+      ..strokeWidth = strichstaerke
+      ..isAntiAlias = true;
     for (final r in proj) {
       if (r.length < 3) continue;
+      double rMinX = r[0].dx, rMaxX = r[0].dx, rMinY = r[0].dy, rMaxY = r[0].dy;
+      for (final p in r) {
+        if (p.dx < rMinX) rMinX = p.dx;
+        if (p.dx > rMaxX) rMaxX = p.dx;
+        if (p.dy < rMinY) rMinY = p.dy;
+        if (p.dy > rMaxY) rMaxY = p.dy;
+      }
+      final renderedW = (rMaxX - rMinX) * sc;
+      final renderedH = (rMaxY - rMinY) * sc;
+      if (max(renderedW, renderedH) < _minInselDurchmesser) {
+        final cx = (rMinX + rMaxX) / 2 * sc + dX;
+        final cy = (rMinY + rMaxY) / 2 * sc + dY;
+        canvas.drawCircle(
+            Offset(cx, cy), _minInselDurchmesser / 2, fill..isAntiAlias = true);
+        continue;
+      }
       final path = Path()..moveTo(r[0].dx * sc + dX, r[0].dy * sc + dY);
-      for (final p in r.skip(1)) path.lineTo(p.dx * sc + dX, p.dy * sc + dY);
+      for (final p in r.skip(1)) {
+        path.lineTo(p.dx * sc + dX, p.dy * sc + dY);
+      }
       path.close();
       canvas.drawPath(path, fill);
       canvas.drawPath(path, stroke);

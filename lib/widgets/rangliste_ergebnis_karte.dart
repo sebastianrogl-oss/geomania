@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/rangliste_service.dart';
 
 // Zeigt im Ergebnis-Screen einer Tages-Challenge: eigene Punktzahl, Weltrang/
@@ -42,29 +43,19 @@ class _RanglisteErgebnisKarteState extends State<RanglisteErgebnisKarte> {
   @override
   void initState() {
     super.initState();
-    print('>>> RanglisteErgebnisKarte(${widget.challengeId}) initState gestartet');
     final top100Future = RanglisteService.ladeTagesRangliste(widget.challengeId)
         .timeout(const Duration(seconds: 8), onTimeout: () {
-      print('>>> ladeTagesRangliste TIMEOUT nach 8s (${widget.challengeId})');
       return <RanglistenEintrag>[];
     });
     final platzFuture = RanglisteService.ladeEigenenPlatzHeute(
             widget.challengeId, widget.eigenerWert)
         .timeout(const Duration(seconds: 8), onTimeout: () {
-      print('>>> ladeEigenenPlatzHeute TIMEOUT nach 8s (${widget.challengeId})');
       return null;
     });
     Future(() async {
-      print('>>> ${widget.challengeId}: warte auf ladeTagesRangliste...');
       final top100 = await top100Future;
-      print('>>> ${widget.challengeId}: ladeTagesRangliste fertig, '
-          '${top100.length} Einträge');
-      print('>>> ${widget.challengeId}: warte auf ladeEigenenPlatzHeute...');
       final platzInfo = await platzFuture;
-      print('>>> ${widget.challengeId}: ladeEigenenPlatzHeute fertig, '
-          'platzInfo=$platzInfo');
       if (!mounted) {
-        print('>>> ${widget.challengeId}: nicht mehr mounted, breche ab');
         return;
       }
       setState(() {
@@ -72,7 +63,6 @@ class _RanglisteErgebnisKarteState extends State<RanglisteErgebnisKarte> {
         _platzInfo = platzInfo;
         _geladen = true;
       });
-      print('>>> ${widget.challengeId}: setState aufgerufen, _geladen=true');
     });
   }
 
@@ -85,8 +75,6 @@ class _RanglisteErgebnisKarteState extends State<RanglisteErgebnisKarte> {
 
   @override
   Widget build(BuildContext context) {
-    print('>>> RanglisteErgebnisKarte(${widget.challengeId}) build() aufgerufen, '
-        '_geladen=$_geladen');
     if (!_geladen) return const SizedBox.shrink();
 
     final platzInfo = _platzInfo;
@@ -130,7 +118,7 @@ class _RanglisteErgebnisKarteState extends State<RanglisteErgebnisKarte> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text('Weltweiter Rang', style: _labelStyle),
+                    Text(t('Weltweiter Rang'), style: _labelStyle),
                     const SizedBox(height: 4),
                     RichText(
                       text: TextSpan(children: [
@@ -160,18 +148,18 @@ class _RanglisteErgebnisKarteState extends State<RanglisteErgebnisKarte> {
           const Divider(color: Color(0xFFEAEAE5)),
           const SizedBox(height: 14),
           if (platzInfo == null)
-            const Text('Noch keine Vergleichsdaten heute',
-                style: TextStyle(fontSize: 13, color: Color(0xFF888888)))
+            Text(t('Noch keine Vergleichsdaten heute'),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF888888)))
           else if (!zeigeKurve)
-            const Text('Noch zu wenige Mitspieler für eine Verteilung heute',
-                style: TextStyle(
+            Text(t('Noch zu wenige Mitspieler für eine Verteilung heute'),
+                style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF888888),
                     fontStyle: FontStyle.italic))
           else ...[
             Text(
-              'Du hast heute ${_prozentGeschlagen(platzInfo).toStringAsFixed(0)}% '
-              'der Spieler geschlagen!',
+              t('Du hast heute {p}% der Spieler geschlagen!',
+                  {'p': _prozentGeschlagen(platzInfo).toStringAsFixed(0)}),
               style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,

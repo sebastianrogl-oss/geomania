@@ -5,6 +5,7 @@
 
 import 'laender_daten.dart';
 import '../l10n/laendernamen_en.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/locale_service.dart';
 
 class CountryRanking {
@@ -258,7 +259,7 @@ const List<CountryRanking> countryRankings = [
 // Available ranking categories for the quiz
 class RankingCategory {
   final String id;
-  final String label;
+  final String labelDe;
   final String emoji;
   final String unit;
   final bool higherIsBetter;
@@ -266,113 +267,120 @@ class RankingCategory {
 
   const RankingCategory({
     required this.id,
-    required this.label,
+    required this.labelDe,
     required this.emoji,
     required this.unit,
     required this.higherIsBetter,
     required this.getValue,
   });
+
+  // Live-Getter statt gespeichertem Feld: rankingCategories ist eine
+  // top-level `final` Liste, beim ersten Zugriff einmalig ausgewertet — ein
+  // zur Ladezeit gebackenes t()-Ergebnis würde bei einem Sprachwechsel
+  // mitten in der App-Laufzeit stehen bleiben (gleiches Muster wie
+  // _SpielKategorie.label in station_session_service.dart).
+  String get label => t(labelDe);
 }
 
 final List<RankingCategory> rankingCategories = [
   RankingCategory(
-    id: 'gdpPerCapita', label: 'BIP pro Kopf', emoji: '💵',
+    id: 'gdpPerCapita', labelDe: 'BIP pro Kopf', emoji: '💵',
     unit: 'USD', higherIsBetter: true,
     getValue: (c) => c.gdpPerCapita,
   ),
   RankingCategory(
-    id: 'population', label: 'Bevölkerung', emoji: '👥',
+    id: 'population', labelDe: 'Bevölkerung', emoji: '👥',
     unit: 'Einwohner', higherIsBetter: true,
     getValue: (c) => c.population?.toDouble(),
   ),
   RankingCategory(
-    id: 'area', label: 'Fläche', emoji: '🗺️',
+    id: 'area', labelDe: 'Fläche', emoji: '🗺️',
     unit: 'km²', higherIsBetter: true,
     getValue: (c) => c.area,
   ),
   RankingCategory(
-    id: 'lifeExpectancy', label: 'Lebenserwartung', emoji: '❤️',
+    id: 'lifeExpectancy', labelDe: 'Lebenserwartung', emoji: '❤️',
     unit: 'Jahre', higherIsBetter: true,
     getValue: (c) => c.lifeExpectancy,
   ),
   RankingCategory(
-    id: 'minimumWage', label: 'Mindestlohn', emoji: '💼',
+    id: 'minimumWage', labelDe: 'Mindestlohn', emoji: '💼',
     unit: 'USD/Monat', higherIsBetter: true,
     getValue: (c) => c.minimumWageUsd,
   ),
   RankingCategory(
-    id: 'coastline', label: 'Küstenlinie', emoji: '🌊',
+    id: 'coastline', labelDe: 'Küstenlinie', emoji: '🌊',
     unit: 'km', higherIsBetter: true,
     getValue: (c) => (c.coastlineKm != null && c.coastlineKm! > 0) ? c.coastlineKm : null,
   ),
   RankingCategory(
-    id: 'gdpTotal', label: 'BIP gesamt', emoji: '🏦',
+    id: 'gdpTotal', labelDe: 'BIP gesamt', emoji: '🏦',
     unit: 'USD', higherIsBetter: true,
     getValue: (c) => (c.gdpPerCapita != null && c.population != null)
         ? c.gdpPerCapita! * c.population! : null,
   ),
   RankingCategory(
-    id: 'internet', label: 'Internetgeschwindigkeit', emoji: '🌐',
+    id: 'internet', labelDe: 'Internetgeschwindigkeit', emoji: '🌐',
     unit: 'Mbps', higherIsBetter: true,
     getValue: (c) => internetGeschwindigkeit[c.iso2],
   ),
   RankingCategory(
-    id: 'corruption', label: 'Korruptionsindex', emoji: '🏅',
+    id: 'corruption', labelDe: 'Korruptionsindex', emoji: '🏅',
     unit: '/ 100', higherIsBetter: true,
     getValue: (c) => korruptionsIndex[c.iso2],
   ),
   RankingCategory(
-    id: 'press_freedom', label: 'Pressefreiheitsindex', emoji: '📰',
+    id: 'press_freedom', labelDe: 'Pressefreiheitsindex', emoji: '📰',
     unit: '/ 100', higherIsBetter: true,
     getValue: (c) => pressefreiheit[c.iso2],
   ),
   RankingCategory(
-    id: 'happiness', label: 'Glücksindex', emoji: '😊',
+    id: 'happiness', labelDe: 'Glücksindex', emoji: '😊',
     unit: '/ 10', higherIsBetter: true,
     getValue: (c) => gluecksIndex[c.iso2],
   ),
   RankingCategory(
-    id: 'tourism', label: 'Tourismuseinnahmen', emoji: '✈️',
+    id: 'tourism', labelDe: 'Tourismuseinnahmen', emoji: '✈️',
     unit: 'Mrd. USD', higherIsBetter: true,
     getValue: (c) => tourismusEinnahmen[c.iso2],
   ),
   RankingCategory(
-    id: 'military', label: 'Militärausgaben', emoji: '🛡️',
+    id: 'military', labelDe: 'Militärausgaben', emoji: '🛡️',
     unit: 'Mrd. USD', higherIsBetter: true,
     getValue: (c) => militaerAusgaben[c.iso2],
   ),
   RankingCategory(
-    id: 'birth_rate', label: 'Geburtenrate', emoji: '👶',
+    id: 'birth_rate', labelDe: 'Geburtenrate', emoji: '👶',
     unit: 'Kinder/Frau', higherIsBetter: true,
     getValue: (c) => geburtenrate[c.iso2],
   ),
   RankingCategory(
-    id: 'forest', label: 'Waldanteil', emoji: '🌲',
+    id: 'forest', labelDe: 'Waldanteil', emoji: '🌲',
     unit: '%', higherIsBetter: true,
     getValue: (c) => waldanteil[c.iso2],
   ),
   RankingCategory(
-    id: 'alcohol', label: 'Alkoholkonsum', emoji: '🍺',
+    id: 'alcohol', labelDe: 'Alkoholkonsum', emoji: '🍺',
     unit: 'L/Kopf', higherIsBetter: true,
     getValue: (c) => alkoholkonsum[c.iso2],
   ),
   RankingCategory(
-    id: 'olympics', label: 'Olympia-Medaillen', emoji: '🥇',
+    id: 'olympics', labelDe: 'Olympia-Medaillen', emoji: '🥇',
     unit: 'Medaillen', higherIsBetter: true,
     getValue: (c) => olympiaMedaillen[c.iso2],
   ),
   RankingCategory(
-    id: 'highest_point', label: 'Höchster Punkt', emoji: '⛰️',
+    id: 'highest_point', labelDe: 'Höchster Punkt', emoji: '⛰️',
     unit: 'm', higherIsBetter: true,
     getValue: (c) => hoechsterPunkt[c.iso2],
   ),
   RankingCategory(
-    id: 'inflation', label: 'Inflationsrate', emoji: '📈',
+    id: 'inflation', labelDe: 'Inflationsrate', emoji: '📈',
     unit: '%', higherIsBetter: true,
     getValue: (c) => inflationsrate[c.iso2],
   ),
   RankingCategory(
-    id: 'debt', label: 'Staatsschulden', emoji: '💳',
+    id: 'debt', labelDe: 'Staatsschulden', emoji: '💳',
     unit: '% BIP', higherIsBetter: true,
     getValue: (c) => staatsschulden[c.iso2],
   ),

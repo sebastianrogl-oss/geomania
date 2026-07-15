@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/country_rankings.dart';
+import '../l10n/uebersetzungen.dart';
+import '../services/locale_service.dart';
 
 class RankingQuizScreen extends StatefulWidget {
   const RankingQuizScreen({super.key});
@@ -72,44 +74,40 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
 
   String _fmtValue(double v) {
     final cat = _category.id;
+    final en = LocaleService.istEnglisch;
+    String dec(double x, int decimals) {
+      final s = x.toStringAsFixed(decimals);
+      return en ? s : s.replaceAll('.', ',');
+    }
+    String thousands(int n) {
+      final sep = en ? ',' : '.';
+      final s = n.toString();
+      final buf = StringBuffer();
+      for (int i = 0; i < s.length; i++) {
+        if (i > 0 && (s.length - i) % 3 == 0) buf.write(sep);
+        buf.write(s[i]);
+      }
+      return buf.toString();
+    }
     if (cat == 'population') {
-      if (v >= 1e9) return '${(v / 1e9).toStringAsFixed(2).replaceAll('.', ',')} Mrd.';
-      if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(1).replaceAll('.', ',')} Mio.';
+      if (v >= 1e9) return '${dec(v / 1e9, 2)} ${en ? 'B' : 'Mrd.'}';
+      if (v >= 1e6) return '${dec(v / 1e6, 1)} ${en ? 'M' : 'Mio.'}';
       return '${v.toInt()}';
     }
     if (cat == 'area') {
       if (v >= 1e6) {
-        return '${(v / 1e6).toStringAsFixed(2).replaceAll('.', ',')} Mio. km²';
+        return '${dec(v / 1e6, 2)} ${en ? 'M' : 'Mio.'} km²';
       }
-      final s = v.toInt().toString();
-      // thousands separator
-      final buf = StringBuffer();
-      for (int i = 0; i < s.length; i++) {
-        if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-        buf.write(s[i]);
-      }
-      return '${buf.toString()} km²';
+      return '${thousands(v.toInt())} km²';
     }
     if (cat == 'gdpPerCapita') {
-      final s = v.toInt().toString();
-      final buf = StringBuffer();
-      for (int i = 0; i < s.length; i++) {
-        if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-        buf.write(s[i]);
-      }
-      return '\$$buf';
+      return '\$${thousands(v.toInt())}';
     }
-    if (cat == 'lifeExpectancy') return '${v.toStringAsFixed(1)} J.';
-    if (cat == 'co2') return '${v.toStringAsFixed(1)} t';
+    if (cat == 'lifeExpectancy') return '${dec(v, 1)} ${en ? 'yrs' : 'J.'}';
+    if (cat == 'co2') return '${dec(v, 1)} t';
     if (cat == 'coastline') {
-      if (v >= 10000) return '${(v / 1000).toStringAsFixed(0).replaceAll('.', ',')} Tkm';
-      final s = v.toInt().toString();
-      final buf = StringBuffer();
-      for (int i = 0; i < s.length; i++) {
-        if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-        buf.write(s[i]);
-      }
-      return '${buf.toString()} km';
+      if (v >= 10000) return '${dec(v / 1000, 0)} Tkm';
+      return '${thousands(v.toInt())} km';
     }
     if (cat == 'minimumWage') return '\$${v.toInt()}';
     if (cat == 'bigMac') return '\$${v.toStringAsFixed(2)}';
@@ -130,7 +128,7 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
   String get _catEmoji => _catEmojis[_category.id] ?? '📊';
 
   String get _directionLabel =>
-      _category.higherIsBetter ? '↑ Höchste zuerst' : '↓ Niedrigste zuerst';
+      _category.higherIsBetter ? t('↑ Höchste zuerst') : t('↓ Niedrigste zuerst');
 
   int _worldRank(CountryRanking c) {
     final sorted = countryRankings
@@ -145,8 +143,6 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
     return idx == -1 ? 9999 : idx + 1;
   }
 
-  String _fmtRank(int rank) => rank > 100 ? '#100+' : '#$rank';
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -158,8 +154,8 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Ranking-Quiz',
-            style: TextStyle(
+        title: Text(t('Ranking-Quiz'),
+            style: const TextStyle(
                 color: Color(0xFF1A1A1A),
                 fontSize: 17,
                 fontWeight: FontWeight.w700)),
@@ -206,10 +202,10 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
                           fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Ziehe die Länder in die richtige Reihenfolge',
+                Text(
+                  t('Ziehe die Länder in die richtige Reihenfolge'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: Color(0xFF888888),
                       fontSize: 12,
                       fontWeight: FontWeight.w500),
@@ -224,14 +220,14 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
             child: Row(
               children: [
                 const SizedBox(width: 40),
-                const Text('Platz',
-                    style: TextStyle(
+                Text(t('Platz'),
+                    style: const TextStyle(
                         color: Color(0xFF999999),
                         fontSize: 11,
                         fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text(
-                  _category.higherIsBetter ? '← größer' : '← kleiner',
+                  _category.higherIsBetter ? t('← größer') : t('← kleiner'),
                   style: const TextStyle(
                       color: Color(0xFF999999),
                       fontSize: 11,
@@ -254,9 +250,8 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
                 borderRadius: BorderRadius.circular(16),
                 child: child,
               ),
-              onReorder: (oldIndex, newIndex) {
+              onReorderItem: (oldIndex, newIndex) {
                 setState(() {
-                  if (newIndex > oldIndex) newIndex--;
                   final item = _shuffled.removeAt(oldIndex);
                   _shuffled.insert(newIndex, item);
                 });
@@ -286,7 +281,7 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
                     color: const Color(0xFF2E7D32),
                     borderRadius: BorderRadius.circular(16)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                child: const Text('Auswerten',
+                child: Text(t('Auswerten'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Colors.white,
@@ -301,7 +296,6 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
   }
 
   Widget _buildResult() {
-    final pct = (_score / _countryCount * 100).round();
     final perfect = _score == _countryCount;
     final emoji = perfect ? '🏆' : _score >= 2 ? '👍' : '📚';
 
@@ -314,13 +308,13 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
             Text(emoji, style: const TextStyle(fontSize: 64)),
             const SizedBox(height: 12),
             Text(
-              perfect ? 'Perfekt!' : _score >= 2 ? 'Gut gemacht!' : 'Weiter üben!',
+              perfect ? t('Perfekt!') : _score >= 2 ? t('Gut gemacht!') : t('Weiter üben!'),
               style: const TextStyle(
                   color: Color(0xFF1A1A1A),
                   fontSize: 24,
                   fontWeight: FontWeight.w800),
             ),
-            Text('$_score von $_countryCount Plätze korrekt',
+            Text(t('{n} von {total} Plätze korrekt', {'n': '$_score', 'total': '$_countryCount'}),
                 style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 14,
@@ -364,9 +358,9 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
                     color: const Color(0xFF2E7D32),
                     borderRadius: BorderRadius.circular(16)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                child: const Text('Nächste Runde',
+                child: Text(t('Nächste Runde'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.w700)),
@@ -381,7 +375,7 @@ class _RankingQuizScreenState extends State<RankingQuizScreen> {
                     color: const Color(0xFFEAEAE5),
                     borderRadius: BorderRadius.circular(16)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                child: const Text('Zurück',
+                child: Text(t('Zurück'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Color(0xFF888888),

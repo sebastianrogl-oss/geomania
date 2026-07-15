@@ -3,6 +3,8 @@ import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/abzeichen_data.dart';
 import '../data/country_rankings.dart';
+import '../l10n/uebersetzungen.dart';
+import '../services/locale_service.dart';
 import '../services/abzeichen_service.dart';
 import '../services/challenge_ergebnis_service.dart';
 import '../services/challenge_panel_signal.dart';
@@ -12,7 +14,11 @@ import '../services/daily_resume_service.dart';
 import '../services/tages_seed_service.dart';
 import '../services/rangliste_service.dart';
 import '../widgets/abzeichen_popup.dart';
+import '../widgets/challenge_ergebnis_header.dart';
+import '../widgets/challenge_fertig_button.dart';
 import '../widgets/rangliste_ergebnis_karte.dart';
+import '../widgets/rekord_badge.dart';
+import '../widgets/spiel_erklaerung.dart';
 
 // ── Runden-Historie (für die Game-Over-Liste) ──────────────────────────────
 
@@ -38,17 +44,18 @@ class _HigherLowerRunde {
   });
 
   Map<String, dynamic> toJson() => {
-        'land1Iso': land1Iso,
-        'land1Name': land1Name,
-        'land2Iso': land2Iso,
-        'land2Name': land2Name,
-        'wert1': wert1,
-        'wert2': wert2,
-        'wahlHoeher': wahlHoeher,
-        'warRichtig': warRichtig,
-      };
+    'land1Iso': land1Iso,
+    'land1Name': land1Name,
+    'land2Iso': land2Iso,
+    'land2Name': land2Name,
+    'wert1': wert1,
+    'wert2': wert2,
+    'wahlHoeher': wahlHoeher,
+    'warRichtig': warRichtig,
+  };
 
-  static _HigherLowerRunde fromJson(Map<String, dynamic> j) => _HigherLowerRunde(
+  static _HigherLowerRunde fromJson(Map<String, dynamic> j) =>
+      _HigherLowerRunde(
         land1Iso: j['land1Iso'] as String,
         land1Name: j['land1Name'] as String,
         land2Iso: j['land2Iso'] as String,
@@ -148,15 +155,16 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
 
     final zwischenstand = await DailyResumeService.laden(_kId);
     if (zwischenstand != null) {
-      final links = countryRankings
-          .cast<CountryRanking?>()
-          .firstWhere((c) => c?.iso2 == zwischenstand['leftIso2'], orElse: () => null);
-      final rechts = countryRankings
-          .cast<CountryRanking?>()
-          .firstWhere((c) => c?.iso2 == zwischenstand['rightIso2'], orElse: () => null);
+      final links = countryRankings.cast<CountryRanking?>().firstWhere(
+        (c) => c?.iso2 == zwischenstand['leftIso2'],
+        orElse: () => null,
+      );
+      final rechts = countryRankings.cast<CountryRanking?>().firstWhere(
+        (c) => c?.iso2 == zwischenstand['rightIso2'],
+        orElse: () => null,
+      );
       if (links != null && rechts != null) {
-        final historieRoh =
-            (zwischenstand['historie'] as List<dynamic>?) ?? [];
+        final historieRoh = (zwischenstand['historie'] as List<dynamic>?) ?? [];
         final historie = historieRoh
             .map((e) => _HigherLowerRunde.fromJson(e as Map<String, dynamic>))
             .toList();
@@ -191,10 +199,9 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
 
   void _generiereSeedLaender() {
     final rng = Random(TagesSeedService.seedFuer(_kId));
-    _seedLaender = countryRankings
-        .where((c) => _category.getValue(c) != null)
-        .toList()
-      ..shuffle(rng);
+    _seedLaender =
+        countryRankings.where((c) => _category.getValue(c) != null).toList()
+          ..shuffle(rng);
   }
 
   void _startGame() {
@@ -218,11 +225,14 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
       return _seedLaender[_naechsterSeedIdx++];
     }
     final rng = Random();
-    final pool = countryRankings
-        .where((c) =>
-            _category.getValue(c) != null && c.iso2 != _rightCountry.iso2)
-        .toList()
-      ..shuffle(rng);
+    final pool =
+        countryRankings
+            .where(
+              (c) =>
+                  _category.getValue(c) != null && c.iso2 != _rightCountry.iso2,
+            )
+            .toList()
+          ..shuffle(rng);
     return pool.first;
   }
 
@@ -239,19 +249,22 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
 
     final leftVal = _category.getValue(_leftCountry)!;
     final rightVal = _category.getValue(_rightCountry)!;
-    final bool correct = leftVal == rightVal ||
+    final bool correct =
+        leftVal == rightVal ||
         (guessHigher ? rightVal > leftVal : rightVal < leftVal);
 
-    _historie.add(_HigherLowerRunde(
-      land1Iso: _leftCountry.iso2,
-      land1Name: _leftCountry.name,
-      land2Iso: _rightCountry.iso2,
-      land2Name: _rightCountry.name,
-      wert1: leftVal,
-      wert2: rightVal,
-      wahlHoeher: guessHigher,
-      warRichtig: correct,
-    ));
+    _historie.add(
+      _HigherLowerRunde(
+        land1Iso: _leftCountry.iso2,
+        land1Name: _leftCountry.name,
+        land2Iso: _rightCountry.iso2,
+        land2Name: _rightCountry.name,
+        wert1: leftVal,
+        wert2: rightVal,
+        wahlHoeher: guessHigher,
+        warRichtig: correct,
+      ),
+    );
 
     setState(() {
       _answered = true;
@@ -280,7 +293,10 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
   }
 
   Future<List<Abzeichen>> _speichereErgebnis() async {
-    final neuerRekord = await ChallengeRekordService.setzeFallsBesser(_kId, _score);
+    final neuerRekord = await ChallengeRekordService.setzeFallsBesser(
+      _kId,
+      _score,
+    );
     await ChallengeRekordService.speichereHeutigePunkte(_kId, _score);
     await ChallengeRekordService.summeErhoehen(_kId, _score.toDouble());
     await ChallengeErgebnisService.speichern(_kId, {
@@ -289,8 +305,10 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
       'historie': _historie.map((e) => e.toJson()).toList(),
     });
     _rekord = await ChallengeRekordService.getRekord(_kId);
-    await RanglisteService.ergebnisSpeichern(
-        challengeId: 'higherlower', wert: _score);
+    await RanglisteService.ergebnisSpeichernMitBereinigung(
+      challengeId: 'higherlower',
+      wert: _score,
+    );
     await DailyChallenge.markDone(_kId);
     await DailyResumeService.loeschen(_kId);
     // "Perfekt" hat für Higher-or-Lower kein natürliches Maximum (Serie ohne
@@ -301,44 +319,90 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
   }
 
   String _fmt(double v) {
+    final en = LocaleService.istEnglisch;
+    String dec(int decimals) {
+      final s = v.toStringAsFixed(decimals);
+      return en ? s : s.replaceAll('.', ',');
+    }
+
+    String decOf(double x, int decimals) {
+      final s = x.toStringAsFixed(decimals);
+      return en ? s : s.replaceAll('.', ',');
+    }
+
     switch (_category.id) {
       case 'population':
-        if (v >= 1e9) return '${(v / 1e9).toStringAsFixed(2).replaceAll('.', ',')} Mrd.';
-        if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(1).replaceAll('.', ',')} Mio.';
+        if (v >= 1e9) return '${decOf(v / 1e9, 2)} ${en ? 'B' : 'Mrd.'}';
+        if (v >= 1e6) return '${decOf(v / 1e6, 1)} ${en ? 'M' : 'Mio.'}';
         return _fmtInt(v.toInt());
       case 'area':
-        if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(2).replaceAll('.', ',')} Mio. km²';
+        if (v >= 1e6) return '${decOf(v / 1e6, 2)} ${en ? 'M' : 'Mio.'} km²';
         return '${_fmtInt(v.toInt())} km²';
-      case 'gdpPerCapita':    return '\$ ${_fmtInt(v.toInt())}';
+      case 'gdpPerCapita':
+        return '\$ ${_fmtInt(v.toInt())}';
       case 'gdpTotal':
-        if (v >= 1e12) return '\$ ${(v / 1e12).toStringAsFixed(1).replaceAll('.', ',')} Bio.';
-        if (v >= 1e9) return '\$ ${(v / 1e9).toStringAsFixed(0)} Mrd.';
-        return '\$ ${(v / 1e6).toStringAsFixed(0)} Mio.';
-      case 'lifeExpectancy':  return '${v.toStringAsFixed(1)} Jahre';
-      case 'coastline':       return '${_fmtInt(v.toInt())} km';
-      case 'minimumWage':     return '\$ ${_fmtInt(v.toInt())}/Mo.';
-      case 'internet':        return '${v.round()} Mbps';
-      case 'corruption':      return '${v.round()} / 100';
-      case 'press_freedom':   return '${v.round()} / 100';
-      case 'happiness':       return v.toStringAsFixed(2).replaceAll('.', ',');
-      case 'tourism':         return '${v.round()} Mrd. \$';
-      case 'military':        return '${v.round()} Mrd. \$';
-      case 'birth_rate':      return '${v.toStringAsFixed(1).replaceAll('.', ',')} K/Frau';
-      case 'forest':          return '${v.round()} %';
-      case 'alcohol':         return '${v.toStringAsFixed(1).replaceAll('.', ',')} L/Kopf';
-      case 'olympics':        return '${v.toInt()} Medaillen';
-      case 'highest_point':   return '${_fmtInt(v.toInt())} m';
-      case 'inflation':       return '${v.toStringAsFixed(1).replaceAll('.', ',')} %';
-      case 'debt':            return '${v.toStringAsFixed(1).replaceAll('.', ',')} % BIP';
-      default:                return '${v.toStringAsFixed(1)} ${_category.unit}';
+        if (v >= 1e12) return '\$ ${decOf(v / 1e12, 1)} ${en ? 'T' : 'Bio.'}';
+        if (v >= 1e9) {
+          return '\$ ${(v / 1e9).toStringAsFixed(0)} ${en ? 'B' : 'Mrd.'}';
+        }
+        return '\$ ${(v / 1e6).toStringAsFixed(0)} ${en ? 'M' : 'Mio.'}';
+      case 'lifeExpectancy':
+        return '${dec(1)} ${en ? 'years' : 'Jahre'}';
+      case 'coastline':
+        return '${_fmtInt(v.toInt())} km';
+      case 'minimumWage':
+        return '\$ ${_fmtInt(v.toInt())}/${en ? 'mo' : 'Mo.'}';
+      case 'internet':
+        return '${v.round()} Mbps';
+      case 'corruption':
+        return '${v.round()} / 100';
+      case 'press_freedom':
+        return '${v.round()} / 100';
+      case 'happiness':
+        return dec(2);
+      case 'tourism':
+        return _fmtGerundetOderZweiDezimal(v, '${en ? 'B' : 'Mrd.'} \$');
+      case 'military':
+        return _fmtGerundetOderZweiDezimal(v, '${en ? 'B' : 'Mrd.'} \$');
+      case 'birth_rate':
+        return '${dec(1)} ${en ? 'children/woman' : 'K/Frau'}';
+      case 'forest':
+        return '${v.round()} %';
+      case 'alcohol':
+        return '${dec(1)} ${en ? 'L/capita' : 'L/Kopf'}';
+      case 'olympics':
+        return '${v.toInt()} ${en ? 'medals' : 'Medaillen'}';
+      case 'highest_point':
+        return '${_fmtInt(v.toInt())} m';
+      case 'inflation':
+        return '${dec(1)} %';
+      case 'debt':
+        return '${dec(1)} % ${en ? 'GDP' : 'BIP'}';
+      default:
+        return '${dec(1)} ${_category.unit}';
     }
   }
 
+  // Ganzzahlige Rundung würde bei sehr kleinen Werten (z.B. Tourismus-
+  // einnahmen/Militärausgaben winziger Länder) fälschlich "0" anzeigen,
+  // obwohl der Wert ungleich null ist — dann fest auf 2 Nachkommastellen
+  // ausweichen, sonst ganzzahlig runden wie gewohnt.
+  String _fmtGerundetOderZweiDezimal(double v, String einheit) {
+    final en = LocaleService.istEnglisch;
+    if (v == 0) return '0 $einheit';
+    if (v.round() == 0) {
+      final s = v.toStringAsFixed(2);
+      return '${en ? s : s.replaceAll('.', ',')} $einheit';
+    }
+    return '${v.round()} $einheit';
+  }
+
   String _fmtInt(int n) {
+    final sep = LocaleService.istEnglisch ? ',' : '.';
     final s = n.toString();
     final buf = StringBuffer();
     for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write(sep);
       buf.write(s[i]);
     }
     return buf.toString();
@@ -360,11 +424,13 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
 
   Widget _buildGame() {
     final leftVal = _fmt(_category.getValue(_leftCountry)!);
-    final rightVal = _answered ? _fmt(_category.getValue(_rightCountry)!) : null;
+    final rightVal = _answered
+        ? _fmt(_category.getValue(_rightCountry)!)
+        : null;
     final rightBg = _answered
         ? (_lastCorrect == true
-            ? const Color(0xFFE8F5E9)
-            : const Color(0xFFFFEBEE))
+              ? const Color(0xFFE8F5E9)
+              : const Color(0xFFFFEBEE))
         : const Color(0xFFF5F5F0);
 
     return Column(
@@ -379,10 +445,14 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: const Color(0xFFEAEAE5),
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.arrow_back_rounded,
-                      color: Color(0xFF1A1A1A), size: 20),
+                    color: const Color(0xFFEAEAE5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: Color(0xFF1A1A1A),
+                    size: 20,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -390,42 +460,77 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Higher or Lower',
-                        style: TextStyle(
-                            color: Color(0xFF1A1A1A),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800)),
-                    Text(_category.label,
-                        style: const TextStyle(
-                            color: Color(0xFF888888),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500)),
+                    Text(
+                      t('Higher or Lower'),
+                      style: const TextStyle(
+                        color: Color(0xFF1A1A1A),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      _category.label,
+                      style: const TextStyle(
+                        color: Color(0xFF888888),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                     if (_rekord != null)
-                      Text('Rekord: $_rekord',
-                          style: const TextStyle(
-                              color: Color(0xFFF9A825),
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700)),
+                      Text(
+                        t('Rekord: {n}', {'n': '$_rekord'}),
+                        style: const TextStyle(
+                          color: Color(0xFFF9A825),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                   ],
                 ),
               ),
               // Score (aktuelle Serie)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
-                    color:
-                        const Color(0xFFF9A825).withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(12)),
-                child: Row(children: [
-                  const Text('🏆', style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 4),
-                  Text('$_score',
+                  color: const Color(0xFFF9A825).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Text('🏆', style: TextStyle(fontSize: 13)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$_score',
                       style: const TextStyle(
-                          color: Color(0xFFF9A825),
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800)),
-                ]),
+                        color: Color(0xFFF9A825),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              ErklaerungButton(
+                titel: t('Higher or Lower — Spielregeln'),
+                farbe: const Color(0xFF4A9E4A),
+                abschnitte: [
+                  t(
+                    'Du siehst zwei Länder mit derselben Kategorie (z.B. Bevölkerung, Fläche, BIP pro Kopf). Bei einem Land ist der Wert bereits sichtbar.',
+                  ),
+                  t(
+                    'Tippe auf das untere, verdeckte Land, wenn du glaubst, dass sein Wert HÖHER ist als der des oberen Landes — oder tippe auf das obere Land, wenn du glaubst, dass es NIEDRIGER ist.',
+                  ),
+                  t(
+                    'Bei richtiger Antwort geht es mit einem neuen Land weiter und deine Serie (🏆) wächst um 1. Bei einer falschen Antwort endet die Runde.',
+                  ),
+                  t(
+                    'Ziel: eine möglichst lange Serie richtiger Antworten in Folge erreichen. Dein bester Wert wird als Rekord gespeichert.',
+                  ),
+                ],
               ),
             ],
           ),
@@ -442,7 +547,8 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                     duration: const Duration(milliseconds: 250),
                     child: _RevealedPanel(
                       key: ValueKey(
-                          'L_${_leftCountry.iso2}_${_category.id}_$_score'),
+                        'L_${_leftCountry.iso2}_${_category.id}_$_score',
+                      ),
                       country: _leftCountry,
                       value: leftVal,
                       label: _category.label,
@@ -454,18 +560,29 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  const Divider(height: 1, thickness: 1, color: Color(0xFFD0D0CB)),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Color(0xFFD0D0CB),
+                  ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                        color: const Color(0xFF1A1A1A),
-                        borderRadius: BorderRadius.circular(20)),
-                    child: const Text('VS',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 2)),
+                      color: const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'VS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -475,7 +592,8 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                   child: _answered
                       ? _RevealedPanel(
                           key: ValueKey(
-                              'R_rev_${_rightCountry.iso2}_${_category.id}_$_score'),
+                            'R_rev_${_rightCountry.iso2}_${_category.id}_$_score',
+                          ),
                           country: _rightCountry,
                           value: rightVal!,
                           label: _category.label,
@@ -484,7 +602,8 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                         )
                       : _HiddenPanel(
                           key: ValueKey(
-                              'R_hid_${_rightCountry.iso2}_${_category.id}_$_score'),
+                            'R_hid_${_rightCountry.iso2}_${_category.id}_$_score',
+                          ),
                           country: _rightCountry,
                           label: _category.label,
                           onTap: () => _guess(true),
@@ -501,117 +620,80 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
   // ── Game Over ─────────────────────────────────────────────────────────────
 
   Widget _buildGameOver() {
-    final emoji = _score >= 15 ? '🏆' : _score >= 8 ? '👍' : '📚';
     final neuerRekord = _score > 0 && _score >= (_rekord ?? 0);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 40, 28, 28),
-      child: Column(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 72)),
-          const SizedBox(height: 16),
-          const Text('Spiel vorbei!',
-              style: TextStyle(
-                  color: Color(0xFF1A1A1A),
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text('Kategorie: ${_category.label}',
-              style: const TextStyle(
-                  color: Color(0xFF888888),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
-
-          if (_rekord != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                  color: const Color(0xFFEAEAE5),
-                  borderRadius: BorderRadius.circular(10)),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('🏆 Rekord:',
-                      style: TextStyle(
-                          color: Color(0xFF888888),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(width: 6),
-                  Text('$_rekord Richtige in Folge',
-                      style: const TextStyle(
-                          color: Color(0xFFF9A825),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800)),
-                ],
+    return Column(
+      children: [
+        ChallengeErgebnisHeader(
+          titel: t('Higher or Lower'),
+          kategorie: _category.label,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 8, 28, 0),
+          child: Column(
+            children: [
+              RekordBadge(
+                neuerRekord: neuerRekord,
+                rekordText: _rekord != null
+                    ? t('{n} Richtige in Folge', {'n': '$_rekord'})
+                    : null,
               ),
-            ),
-          ],
-
-          const SizedBox(height: 20),
-
-          RanglisteErgebnisKarte(
-            challengeId: 'higherlower',
-            eigenerWert: _score,
-            punkteLabel: 'Richtige Antworten',
-            farbe: const Color(0xFF4A9E4A),
-            punkteAnzeige: Text('$_score',
-                style: const TextStyle(
+              const SizedBox(height: 16),
+              RanglisteErgebnisKarte(
+                challengeId: 'higherlower',
+                eigenerWert: _score,
+                punkteLabel: t('Richtige Antworten'),
+                farbe: const Color(0xFF4A9E4A),
+                punkteAnzeige: Text(
+                  '$_score',
+                  style: const TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF1A1A1A))),
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+              ),
+            ],
           ),
-
-          if (neuerRekord) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3CD),
-                  borderRadius: BorderRadius.circular(12)),
-              child: const Text('🏆 Neuer Rekord!',
-                  style: TextStyle(
-                      color: Color(0xFF856404),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800)),
-            ),
-          ],
-
-          if (_historie.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Verlauf',
-                  style: const TextStyle(
-                      color: Color(0xFF1A1A1A),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800)),
-            ),
-            const SizedBox(height: 8),
-            for (final r in _historie)
-              _HigherLowerRundenKarte(runde: r, format: _fmt),
-          ],
-          const SizedBox(height: 28),
-          GestureDetector(
-            onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                  color: const Color(0xFF4A9E4A),
-                  borderRadius: BorderRadius.circular(16)),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: const Text('Weiter',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700)),
+        ),
+        const SizedBox(height: 12),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 28),
+          child: Divider(color: Color(0xFFD0CEC8)),
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(28, 4, 28, 20),
+            child: Column(
+              children: [
+                if (_historie.isNotEmpty) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      t('Verlauf'),
+                      style: const TextStyle(
+                        color: Color(0xFF1A1A1A),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final r in _historie)
+                    _HigherLowerRundenKarte(runde: r, format: _fmt),
+                ],
+                const SizedBox(height: 8),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 0, 28, 20),
+          child: ChallengeFertigButton(
+              onTap: () => ChallengePanelSignal.zurueckZumPanel(context)),
+        ),
+      ],
     );
   }
 }
@@ -645,37 +727,49 @@ class _RevealedPanel extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: CountryFlag.fromCountryCode(country.iso2,
-                width: 72, height: 48),
+            child: CountryFlag.fromCountryCode(
+              country.iso2,
+              width: 72,
+              height: 48,
+            ),
           ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(country.name,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: Color(0xFF1A1A1A),
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800)),
+            child: Text(
+              country.name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF1A1A1A),
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
           const SizedBox(height: 4),
-          Text(label,
-              style: const TextStyle(
-                  color: Color(0xFF888888),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF888888),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           const SizedBox(height: 12),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(14)),
-            child: Text(value,
-                style: const TextStyle(
-                    color: Color(0xFF1A1A1A),
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800)),
+              color: Colors.white.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF1A1A1A),
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
           if (isCorrect != null) ...[
             const SizedBox(height: 10),
@@ -715,34 +809,45 @@ class _HigherLowerRundenKarte extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.check_circle,
-                color: Color(0xFF4A9E4A), size: 18),
+            const Icon(Icons.check_circle, color: Color(0xFF4A9E4A), size: 18),
             const SizedBox(width: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(3),
-              child: CountryFlag.fromCountryCode(runde.land1Iso,
-                  width: 22, height: 15),
+              child: CountryFlag.fromCountryCode(
+                runde.land1Iso,
+                width: 22,
+                height: 15,
+              ),
             ),
             const SizedBox(width: 4),
-            const Text('vs',
-                style: TextStyle(
-                    color: Color(0xFF888888),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600)),
+            const Text(
+              'vs',
+              style: TextStyle(
+                color: Color(0xFF888888),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(width: 4),
             ClipRRect(
               borderRadius: BorderRadius.circular(3),
-              child: CountryFlag.fromCountryCode(runde.land2Iso,
-                  width: 22, height: 15),
+              child: CountryFlag.fromCountryCode(
+                runde.land2Iso,
+                width: 22,
+                height: 15,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text('${runde.land1Name} vs ${runde.land2Name}',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Color(0xFF1A1A1A),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+              child: Text(
+                '${runde.land1Name} vs ${runde.land2Name}',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF1A1A1A),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
@@ -752,20 +857,23 @@ class _HigherLowerRundenKarte extends StatelessWidget {
     // Der Fehler, der das Spiel beendet hat — deutlich hervorgehoben statt
     // gleich wie die richtigen Runden dargestellt, damit auf einen Blick
     // erkennbar ist, WO die Serie endete und WARUM.
-    final deineWahl = runde.wahlHoeher ? 'höher' : 'niedriger';
-    final tatsaechlich = runde.wahlHoeher ? 'niedriger' : 'höher';
+    final deineWahl = runde.wahlHoeher ? t('höher') : t('niedriger');
+    final tatsaechlich = runde.wahlHoeher ? t('niedriger') : t('höher');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 4),
-          child: Text('Hier war der Fehler',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFFE53935),
-                  letterSpacing: 0.5)),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            t('Hier war der Fehler'),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFE53935),
+              letterSpacing: 0.5,
+            ),
+          ),
         ),
         Container(
           width: double.infinity,
@@ -777,8 +885,9 @@ class _HigherLowerRundenKarte extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                  color: const Color(0xFFE53935).withValues(alpha: 0.2),
-                  blurRadius: 8),
+                color: const Color(0xFFE53935).withValues(alpha: 0.2),
+                blurRadius: 8,
+              ),
             ],
           ),
           child: Row(
@@ -794,36 +903,53 @@ class _HigherLowerRundenKarte extends StatelessWidget {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(3),
-                          child: CountryFlag.fromCountryCode(runde.land1Iso,
-                              width: 28, height: 19),
+                          child: CountryFlag.fromCountryCode(
+                            runde.land1Iso,
+                            width: 28,
+                            height: 19,
+                          ),
                         ),
                         const SizedBox(width: 6),
-                        const Text('vs',
-                            style: TextStyle(
-                                color: Color(0xFF888888),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700)),
+                        const Text(
+                          'vs',
+                          style: TextStyle(
+                            color: Color(0xFF888888),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         const SizedBox(width: 6),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(3),
-                          child: CountryFlag.fromCountryCode(runde.land2Iso,
-                              width: 28, height: 19),
+                          child: CountryFlag.fromCountryCode(
+                            runde.land2Iso,
+                            width: 28,
+                            height: 19,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
                     Text(
-                        'Deine Wahl: $deineWahl — Richtig wäre: $tatsaechlich',
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFFE53935))),
+                      t('Deine Wahl: {a} — Richtig wäre: {b}', {
+                        'a': deineWahl,
+                        'b': tatsaechlich,
+                      }),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFE53935),
+                      ),
+                    ),
                     const SizedBox(height: 2),
                     Text(
-                        '${runde.land1Name}: ${format(runde.wert1)} · '
-                        '${runde.land2Name}: ${format(runde.wert2)}',
-                        style: const TextStyle(
-                            fontSize: 11, color: Color(0xFF888888))),
+                      '${runde.land1Name}: ${format(runde.wert1)} · '
+                      '${runde.land2Name}: ${format(runde.wert2)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF888888),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -860,40 +986,52 @@ class _HiddenPanel extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: CountryFlag.fromCountryCode(country.iso2,
-                width: 72, height: 48),
-          ),
+              borderRadius: BorderRadius.circular(6),
+              child: CountryFlag.fromCountryCode(
+                country.iso2,
+                width: 72,
+                height: 48,
+              ),
+            ),
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(country.name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: Color(0xFF1A1A1A),
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800)),
+              child: Text(
+                country.name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF1A1A1A),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
             const SizedBox(height: 4),
-            Text(label,
-                style: const TextStyle(
-                    color: Color(0xFF555555),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF555555),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
               decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(14),
-                  border:
-                      Border.all(color: const Color(0xFFD0D0CB), width: 1)),
-              child: const Text('?  ?  ?',
-                  style: TextStyle(
-                      color: Color(0xFF999999),
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 6)),
+                color: Colors.white.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFD0D0CB), width: 1),
+              ),
+              child: const Text(
+                '?  ?  ?',
+                style: TextStyle(
+                  color: Color(0xFF999999),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 6,
+                ),
+              ),
             ),
           ],
         ),

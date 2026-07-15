@@ -212,6 +212,16 @@ class FortschrittService {
     return {'idx': idx, 'aktivJson': json};
   }
 
+  /// Ist [stationId] bereits abgeschlossen? Genutzt von
+  /// FragenGenerator.ermittleTatsaechlichenModus(), damit ein Replay einer
+  /// bereits abgeschlossenen Station immer ihren ursprünglich zugewiesenen
+  /// Modus behält, statt bei ausgeschöpftem Pool zu variieren (Pensionierung
+  /// bleibt weiterhin aktiv für den ERSTEN, noch nicht abgeschlossenen Zug).
+  static Future<bool> istStationAbgeschlossen(String stationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('$_sDone$stationId') ?? false;
+  }
+
   /// Löscht den Zwischen-Stand (z.B. wenn Station neu gestartet wird).
   static Future<void> stationZuruecksetzen(String stationId) async {
     final prefs = await SharedPreferences.getInstance();
@@ -340,6 +350,37 @@ class FortschrittService {
         lernwelten.where((w) => w.reihenfolge == welt.reihenfolge + 1);
     if (next.isEmpty) return;
     await prefs.setBool('$_wFrei${next.first.id}', true);
+  }
+
+  // ── Werbe-Freischaltung (AdService) ────────────────────────────────────────
+  //
+  // Alternativer Freischalt-Weg neben der normalen, fortschritts-basierten
+  // Reihenfolge (naechsteWeltFreischalten): schaltet die ANGEGEBENE Welt
+  // direkt frei, unabhängig davon, ob die vorherige Welt schon fertig ist —
+  // nötig, damit man z.B. Nordamerika direkt per Werbung freischalten kann,
+  // ohne erst Südamerika durchspielen zu müssen.
+
+  static const _wWerbung = 'kontinent_werbungen_';
+
+  static Future<int> kontinentWerbungenAngesehen(String weltId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('$_wWerbung$weltId') ?? 0;
+  }
+
+  /// Erhöht den Werbe-Zähler einer Welt um 1 und schaltet sie bei Erreichen
+  /// von [kontinentWerbungenNoetig] direkt frei. Gibt den neuen Zählerstand
+  /// zurück.
+  static const kontinentWerbungenNoetig = 3;
+
+  static Future<int> kontinentWerbungErhoehen(String weltId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final neuerStand =
+        (prefs.getInt('$_wWerbung$weltId') ?? 0).clamp(0, kontinentWerbungenNoetig) + 1;
+    await prefs.setInt('$_wWerbung$weltId', neuerStand);
+    if (neuerStand >= kontinentWerbungenNoetig) {
+      await prefs.setBool('$_wFrei$weltId', true);
+    }
+    return neuerStand;
   }
 
   // ── Einzel-Abfragen ───────────────────────────────────────────────────────
@@ -477,7 +518,8 @@ class FortschrittService {
     final statusMap         = <String, StationDetails>{};
 
     for (final welt in lernwelten) {
-      final weltFrei = true; // alle Welten freigeschaltet
+      final weltFrei =
+          welt.reihenfolge == 1 || (prefs.getBool('$_wFrei${welt.id}') ?? false);
       if (weltFrei) freieWelten.add(welt.id);
 
       for (int ai = 0; ai < welt.abschnitte.length; ai++) {
@@ -529,30 +571,33 @@ class FortschrittService {
 
   // ── Reset ──────────────────────────────────────────────────────────────────
 
-  // "Alles zurücksetzen" betrifft Lernpfad UND Tages-Challenges (Rekorde,
-  // Streaks, "heute gespielt", Portfolio-Kapital, Abzeichen) — ein echter
-  // Neustart. Das Löschen der lokalen "heute gespielt"-Keys (z.B. 'daily_',
-  // 'ch_heute_') zwingt danach zu einer erneuten Runde, falls man eine
-  // Challenge heute schon gespielt hatte — das ist inzwischen unproblematisch:
-  // RanglisteService.ladeEigenenPlatzHeute() vergleicht für die Platz-
-  // Berechnung gegen den tatsächlich in Firestore gespeicherten Wert, nicht
-  // gegen den lokalen Session-Wert, daher bleibt die Rangliste-Anzeige auch
-  // nach einem erzwungenen Wiederholungsversuch korrekt.
+  // "Alles zurücksetzen" betrifft NUR den Lernpfad (Stationen, Abschnitte,
+  // Welten, Round-Robin-Tracker, per Werbung freigeschaltete Kontinente) —
+  // Tages-Challenge-Statistiken (Rekorde, Streaks, "heute gespielt",
+  // Anzahl/Ø-Werte, Portfolio-Kapital/-Verlauf) bleiben davon bewusst
+  // unberührt (siehe Einstellungen-Screen). Frühere Fassungen löschten hier
+  // zusätzlich 'ch_rekord_', 'ch_heute_', 'ch_resume_', 'daily_', 'pf_',
+  // 'streak_', 'letzterSpieltag_', 'spieltage_', 'anzahlGespielt_',
+  // 'summePunkte_' und 'besteStreak_' — das war zu breit gefasst und hat
+  // Tages-Challenge-Daten mitgelöscht, obwohl der dafür zuständige
+  // Firestore-Aufruf (RanglisteService.loescheEigeneRanglistendaten())
+  // bereits an anderer Stelle entfernt wurde.
   static Future<void> allesDatenZuruecksetzen() async {
     final prefs = await SharedPreferences.getInstance();
+    // 'abzeichen_freigeschaltet' bewusst NICHT mit gelöscht: Abzeichen können
+    // sowohl durch Lernpfad-Fortschritt als auch durch Challenge-Statistiken
+    // (Streak, Rekord, ...) ausgelöst werden — Letztere bleiben beim Reset
+    // erhalten, ein bereits verdientes Abzeichen darf also nicht verschwinden.
+    // Ein rein Lernpfad-bedingtes Abzeichen (z.B. "Kontinent abgeschlossen")
+    // würde ohnehin erst wieder freigeschaltet, sobald sein Kontext erneut
+    // zutrifft — bis dahin bleibt es einfach bestehen.
     final toRemove = prefs.getKeys().where((k) =>
         k.startsWith('lp_') ||
-        k.startsWith('ch_rekord_') ||
-        k.startsWith('ch_heute_') ||
-        k.startsWith('daily_') ||
-        k.startsWith('pf_') ||
-        k.startsWith('streak_') ||
-        k.startsWith('letzterSpieltag_') ||
-        k.startsWith('spieltage_') ||
-        k.startsWith('anzahlGespielt_') ||
-        k.startsWith('summePunkte_') ||
-        k.startsWith('besteStreak_') ||
-        k == 'abzeichen_freigeschaltet').toList();
+        // Werbe-Fortschritt fürs Kontinent-Freischalten (siehe AdService/
+        // _KontinentFreischaltenDialog) — eigenes Präfix, nicht 'lp_', sonst
+        // bleiben die "X von 3 angesehen"-Punkte nach einem Reset stehen,
+        // obwohl der Kontinent selbst wieder gesperrt ist.
+        k.startsWith('kontinent_werbungen_')).toList();
     for (final k in toRemove) {
       await prefs.remove(k);
     }
@@ -571,7 +616,11 @@ class FortschrittService {
     if (welt == null) return;
     final prefs = await SharedPreferences.getInstance();
 
-    final toRemove = <String>{'$_wFrei$weltId', '$_wDone$weltId'};
+    final toRemove = <String>{
+      '$_wFrei$weltId',
+      '$_wDone$weltId',
+      '$_wWerbung$weltId',
+    };
     for (final a in welt.abschnitte) {
       toRemove.addAll({'$_aFrei${a.id}', '$_aDone${a.id}', '$_aWdh${a.id}'});
       for (final s in a.stationen) {
@@ -675,22 +724,4 @@ class FortschrittService {
     await prefs.remove(_ordKey(weltId, modusKey));
   }
 
-  // ── Test-Modus: alles freischalten ────────────────────────────────────────
-
-  /// Schaltet jeden Abschnitt und jede Station in jeder Welt frei (markiert
-  /// sie als abgeschlossen, damit sie sofort anklickbar UND beliebig oft neu
-  /// spielbar sind) — nur zum Durchtesten aller Quiz-Modi, kein normaler
-  /// Spielfortschritt. Mit "Fortschritt zurücksetzen" wieder rückgängig.
-  static Future<void> allesFreischalten() async {
-    final prefs = await SharedPreferences.getInstance();
-    for (final w in lernwelten) {
-      for (final a in w.abschnitte) {
-        await prefs.setBool('$_aFrei${a.id}', true);
-        for (final s in a.stationen) {
-          await prefs.setBool('$_sDone${s.id}', true);
-        }
-      }
-    }
-    resetSignal.value++;
-  }
 }

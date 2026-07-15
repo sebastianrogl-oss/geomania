@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/countries.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/stats_service.dart';
 
 class QuizScreen extends StatefulWidget {
@@ -96,8 +97,8 @@ class _QuizScreenState extends State<QuizScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Hauptstädte-Quiz',
-            style: TextStyle(
+        title: Text(t('Hauptstädte-Quiz'),
+            style: const TextStyle(
                 color: Color(0xFF1A1A1A),
                 fontSize: 17,
                 fontWeight: FontWeight.w700)),
@@ -146,7 +147,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     ),
                   ),
             const SizedBox(height: 6),
-            Text('Frage ${_current + 1} von $_totalQ',
+            Text(t('Frage {n} von {total}', {'n': '${_current + 1}', 'total': '$_totalQ'}),
                 style: const TextStyle(
                     color: Color(0xFF888888),
                     fontSize: 12,
@@ -166,8 +167,8 @@ class _QuizScreenState extends State<QuizScreen> {
                   Text(country.flagEmoji,
                       style: const TextStyle(fontSize: 60)),
                   const SizedBox(height: 12),
-                  const Text('Was ist die Hauptstadt von',
-                      style: TextStyle(
+                  Text(t('Was ist die Hauptstadt von'),
+                      style: const TextStyle(
                           color: Color(0xFF888888),
                           fontSize: 13,
                           fontWeight: FontWeight.w500)),
@@ -212,7 +213,7 @@ class _QuizScreenState extends State<QuizScreen> {
             const Spacer(),
             Text(emoji, style: const TextStyle(fontSize: 72)),
             const SizedBox(height: 20),
-            Text('$_score / $_totalQ richtig',
+            Text(t('{score} / {total} richtig', {'score': '$_score', 'total': '$_totalQ'}),
                 style: const TextStyle(
                     color: Color(0xFF1A1A1A),
                     fontSize: 28,
@@ -220,10 +221,10 @@ class _QuizScreenState extends State<QuizScreen> {
             const SizedBox(height: 8),
             Text(
               percentage >= 80
-                  ? 'Ausgezeichnet! Du bist ein Geo-Profi!'
+                  ? t('Ausgezeichnet! Du bist ein Geo-Profi!')
                   : percentage >= 50
-                      ? 'Gut gemacht! Weiter üben!'
-                      : 'Nicht schlecht – nochmal versuchen!',
+                      ? t('Gut gemacht! Weiter üben!')
+                      : t('Nicht schlecht – nochmal versuchen!'),
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: Color(0xFF888888),
@@ -266,9 +267,9 @@ class _QuizScreenState extends State<QuizScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: const Text('Nochmal spielen',
+                  child: Text(t('Nochmal spielen'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w700)),
@@ -284,7 +285,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                child: const Text('Zurück',
+                child: Text(t('Zurück'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Color(0xFF888888),

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/country_rankings.dart';
+import '../l10n/uebersetzungen.dart';
 import '../services/abzeichen_service.dart';
 import '../services/challenge_ergebnis_service.dart';
 import '../services/challenge_panel_signal.dart';
@@ -11,7 +12,11 @@ import '../services/daily_resume_service.dart';
 import '../services/tages_seed_service.dart';
 import '../services/rangliste_service.dart';
 import '../widgets/abzeichen_popup.dart';
+import '../widgets/challenge_ergebnis_header.dart';
+import '../widgets/challenge_fertig_button.dart';
 import '../widgets/rangliste_ergebnis_karte.dart';
+import '../widgets/rekord_badge.dart';
+import '../widgets/spiel_erklaerung.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -446,7 +451,8 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
       },
     });
     if (_neuerRekord) _rekord = pts;
-    await RanglisteService.ergebnisSpeichern(challengeId: 'ranking', wert: pts);
+    await RanglisteService.ergebnisSpeichernMitBereinigung(
+        challengeId: 'ranking', wert: pts);
     await DailyChallenge.markDone(_kId);
     await DailyResumeService.loeschen(_kId);
     final neueAbzeichen = await AbzeichenService.pruefeNachChallengeAbschluss(
@@ -463,12 +469,67 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
   int _gesamtPunkte() =>
       _zuordnungen.values.fold(0, (sum, z) => sum + z.punkte);
 
-  // iso2 → katId: vollständiges bipartites Matching über Rang<100-Kanten.
-  // Kein Zwei-Phasen-Fallback mehr nötig — _baue() garantiert bereits bei
-  // der Ziehung, dass eine vollständige Zuordnung existiert.
+  // iso2 → katId: Kuhn's Algorithmus oben liefert nur IRGENDEIN gültiges
+  // Matching (jedes Land bekommt eine Kategorie mit Rang < 100), aber nicht
+  // zwingend das mit der höchsten Gesamtpunktzahl — ein Land könnte einer
+  // Kategorie mit Rang 87 zugeordnet werden, obwohl es in einer anderen,
+  // noch freien Kategorie Rang 3 hätte. Bei 8 Ländern × 8 Kategorien (nur
+  // 8! = 40.320 Permutationen) ist vollständiges Backtracking mit Pruning
+  // im Millisekundenbereich und liefert garantiert das Maximum.
   Map<String, String> _berechneIdealeKonstellation() {
-    final graph = _guteKategorienGraph(_laender, _tagesKats);
-    return _bipartitesMatching(_laender, _tagesKats, graph);
+    return _berechneOptimaleIdealeKonstellation(_laender, _tagesKats);
+  }
+
+  Map<String, String> _berechneOptimaleIdealeKonstellation(
+      List<CountryRanking> laender, List<RankingCategory> kategorien) {
+    Map<String, String>? besteLoesung;
+    var besteGesamtpunkte = -1;
+
+    void backtracking(
+        List<CountryRanking> uebrigeLaender,
+        Set<String> verwendeteKategorien,
+        Map<String, String> aktuelleZuordnung,
+        int aktuellePunkte) {
+      if (uebrigeLaender.isEmpty) {
+        if (aktuellePunkte > besteGesamtpunkte) {
+          besteGesamtpunkte = aktuellePunkte;
+          besteLoesung = Map.from(aktuelleZuordnung);
+        }
+        return;
+      }
+
+      // Pruning: selbst wenn jedes verbleibende Land die vollen 100 Punkte
+      // (Rang 1) bekäme, kann dieser Zweig die aktuell beste Lösung nicht
+      // mehr schlagen -> abbrechen.
+      final maxNochErreichbar = aktuellePunkte + uebrigeLaender.length * 100;
+      if (maxNochErreichbar <= besteGesamtpunkte) return;
+
+      final land = uebrigeLaender.first;
+      final restLaender = uebrigeLaender.skip(1).toList();
+
+      // _baue() garantiert bereits bei der Ziehung (_istGueltigeKombination),
+      // dass für JEDES Land mindestens eine Rang<100-Kategorie frei bleibt,
+      // egal in welcher Reihenfolge zugeordnet wird — kein Fallback auf
+      // Rang>=100 nötig, das würde die #100+-Garantie aus dem letzten Fix
+      // brechen.
+      for (final kat in kategorien) {
+        if (verwendeteKategorien.contains(kat.id)) continue;
+        final weltrang = _weltrang(land, kat);
+        if (weltrang >= 100) continue;
+
+        aktuelleZuordnung[land.iso2] = kat.id;
+        verwendeteKategorien.add(kat.id);
+
+        backtracking(restLaender, verwendeteKategorien, aktuelleZuordnung,
+            aktuellePunkte + _berechnePunkte(weltrang));
+
+        aktuelleZuordnung.remove(land.iso2);
+        verwendeteKategorien.remove(kat.id);
+      }
+    }
+
+    backtracking(laender, <String>{}, {}, 0);
+    return besteLoesung ?? {};
   }
 
   @override
@@ -506,6 +567,17 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
                         color: Color(0xFF1A1A1A), size: 20),
                   ),
                 ),
+                const Spacer(),
+                ErklaerungButton(
+                  titel: t('Ranking-Quiz — Spielregeln'),
+                  farbe: const Color(0xFF7C3AED),
+                  abschnitte: [
+                    t('Für jedes angezeigte Land musst du eine passende Kategorie wählen (z.B. "Größte Fläche", "Meiste Einwohner").'),
+                    t('Tippe auf die Kategorie, in der du glaubst, dass dieses Land weltweit am besten platziert ist — je näher an Platz 1, desto mehr Punkte.'),
+                    t('Jede Kategorie kann nur einmal vergeben werden. Ist sie schon belegt, musst du beim nächsten Land eine andere wählen.'),
+                    t('Nach allen Ländern siehst du die Auflösung mit deiner tatsächlichen Punktzahl im Vergleich zur bestmöglichen Zuordnung.'),
+                  ],
+                ),
               ],
             ),
           ),
@@ -527,12 +599,12 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
     final fertig = _aktuellerIndex >= _laender.length;
 
     if (fertig) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         child: Center(
           child: Text(
-            'Alle Länder zugeordnet!',
-            style: TextStyle(
+            t('Alle Länder zugeordnet!'),
+            style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
                 color: Color(0xFF1A1A1A)),
@@ -621,9 +693,9 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Wähle die beste Kategorie:',
-            style: TextStyle(fontSize: 13, color: Color(0xFF888888)),
+          Text(
+            t('Wähle die beste Kategorie:'),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
           ),
         ],
       ),
@@ -729,33 +801,22 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header
+          ChallengeErgebnisHeader(titel: t('Ranking-Quiz')),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Ergebnis',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF1A1A1A))),
-                const SizedBox(height: 4),
-                if (_neuerRekord)
-                  const Text('Neuer Rekord!',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFF9A825)))
-                else if (_rekord != null)
-                  Text('Rekord: $_rekord Pkt.',
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF888888))),
+                RekordBadge(
+                  neuerRekord: _neuerRekord,
+                  rekordText:
+                      _rekord != null ? t('{n} Pkt.', {'n': '$_rekord'}) : null,
+                ),
                 const SizedBox(height: 16),
                 RanglisteErgebnisKarte(
                   challengeId: 'ranking',
                   eigenerWert: gesamtPunkte,
-                  punkteLabel: 'Gesamtpunktzahl',
+                  punkteLabel: t('Gesamtpunktzahl'),
                   farbe: const Color(0xFF7C3AED),
                   punkteAnzeige: RichText(
                     text: TextSpan(children: [
@@ -848,8 +909,8 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                   children: [
-                                    const Text('Deine Wahl',
-                                        style: TextStyle(
+                                    Text(t('Deine Wahl'),
+                                        style: const TextStyle(
                                             fontSize: 10,
                                             color: Color(0xFF888888),
                                             fontWeight: FontWeight.w600)),
@@ -870,21 +931,21 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                   children: [
-                                    const Text('Ideal',
-                                        style: TextStyle(
+                                    Text(t('Ideal'),
+                                        style: const TextStyle(
                                             fontSize: 10,
                                             color: Color(0xFF888888),
                                             fontWeight: FontWeight.w600)),
                                     const SizedBox(height: 4),
                                     if (korrekt)
-                                      const Row(
+                                      Row(
                                         children: [
-                                          Icon(Icons.check_circle_rounded,
+                                          const Icon(Icons.check_circle_rounded,
                                               color: Color(0xFF4A9E4A),
                                               size: 16),
-                                          SizedBox(width: 6),
-                                          Text('Korrekt!',
-                                              style: TextStyle(
+                                          const SizedBox(width: 6),
+                                          Text(t('Korrekt!'),
+                                              style: const TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w700,
                                                   color: Color(0xFF4A9E4A))),
@@ -911,25 +972,11 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             child: Column(
               children: [
-                GestureDetector(
-                  onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
-                  child: Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                        color: const Color(0xFF4A9E4A),
-                        borderRadius: BorderRadius.circular(16)),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: const Text('Weiter',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ),
+                ChallengeFertigButton(
+                    onTap: () => ChallengePanelSignal.zurueckZumPanel(context)),
                 const SizedBox(height: 12),
-                const Text('Morgen wieder verfügbar',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
+                Text(t('Morgen wieder verfügbar'),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
               ],
             ),
           ),

@@ -372,7 +372,8 @@
       "Bash(tee /c/Users/sebas/AppData/Local/Temp/claude/phone_debug_run.log)",
       "Bash(firebase firestore:get *)",
       "Bash(tee /c/Users/sebas/AppData/Local/Temp/claude/phone_debug_run2.log)",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(git remote *)"
     ]
   }
 }

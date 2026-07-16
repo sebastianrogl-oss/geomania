@@ -7,7 +7,7 @@ import '../services/locale_service.dart';
 /// Vor Release auf das tatsächliche Launch-/Testdatum zurückgesetzt, damit
 /// die erste ab jetzt gespielte Runde wieder korrekt als "Ausgabe #1" zählt,
 /// statt einer aus der Testphase bereits hochgezählten Nummer.
-final kChallengesStartDatum = DateTime(2026, 7, 15);
+final kChallengesStartDatum = DateTime(2026, 7, 17);
 
 const _kMonatsnamenDe = [
   'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',

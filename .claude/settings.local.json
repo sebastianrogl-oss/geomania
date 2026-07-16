@@ -373,7 +373,9 @@
       "Bash(firebase firestore:get *)",
       "Bash(tee /c/Users/sebas/AppData/Local/Temp/claude/phone_debug_run2.log)",
       "Bash(echo \"exit:$?\")",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(identify /c/Users/sebas/geomania/assets/icons/app_icon.png)"
     ]
   }
 }

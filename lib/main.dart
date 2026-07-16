@@ -1,8 +1,10 @@
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'firebase_options.dart';
 import 'services/ad_service.dart';
 import 'services/auth_service.dart';
@@ -14,6 +16,21 @@ import 'screens/profil_screen.dart';
 import 'screens/anzeigename_screen.dart';
 import 'theme/app_theme.dart';
 import 'l10n/uebersetzungen.dart';
+
+// ATT (App Tracking Transparency) ist nur auf iOS von Apple vorgeschrieben —
+// Android nutzt weiterhin ausschließlich das bestehende Google-UMP-Consent.
+Future<void> pruefeATTFallsIOS() async {
+  if (!Platform.isIOS) return;
+
+  final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+
+  if (status == TrackingStatus.notDetermined) {
+    // Kurze Verzögerung von Apple empfohlen (System braucht kurz Zeit nach
+    // App-Start, bevor der native Dialog zuverlässig angezeigt wird).
+    await Future.delayed(const Duration(milliseconds: 500));
+    await AppTrackingTransparency.requestTrackingAuthorization();
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,6 +72,10 @@ void main() async {
       // für Nutzer in EEA/UK/Schweiz, sonst kehrt sofort zurück) — erst
       // danach darf AdMob initialisiert werden.
       await AdService.pruefeUndZeigeConsent();
+      // Auf iOS zusätzlich zum UMP-Formular: Apples eigener ATT-Dialog, ohne
+      // den Google AdMob laut App-Store-Datenschutzangaben keine
+      // Geräte-ID-/Werbedaten für Tracking nutzen darf.
+      await pruefeATTFallsIOS();
       await MobileAds.instance.initialize();
       // Interstitial früh vorladen, damit es beim ersten Trigger (siehe
       // AdService.pruefeUndZeigeInterstitial) sofort bereitsteht statt erst

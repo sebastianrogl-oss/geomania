@@ -375,7 +375,8 @@
       "Bash(echo \"exit:$?\")",
       "Bash(git remote *)",
       "Bash(git push *)",
-      "Bash(identify /c/Users/sebas/geomania/assets/icons/app_icon.png)"
+      "Bash(identify /c/Users/sebas/geomania/assets/icons/app_icon.png)",
+      "Bash(env)"
     ]
   }
 }

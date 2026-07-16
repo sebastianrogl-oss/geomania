@@ -22,13 +22,20 @@ import 'l10n/uebersetzungen.dart';
 Future<void> pruefeATTFallsIOS() async {
   if (!Platform.isIOS) return;
 
-  final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+  try {
+    final status = await AppTrackingTransparency.trackingAuthorizationStatus;
 
-  if (status == TrackingStatus.notDetermined) {
-    // Kurze Verzögerung von Apple empfohlen (System braucht kurz Zeit nach
-    // App-Start, bevor der native Dialog zuverlässig angezeigt wird).
-    await Future.delayed(const Duration(milliseconds: 500));
-    await AppTrackingTransparency.requestTrackingAuthorization();
+    if (status == TrackingStatus.notDetermined) {
+      // Kurze Verzögerung von Apple empfohlen (System braucht kurz Zeit nach
+      // App-Start, bevor der native Dialog zuverlässig angezeigt wird).
+      await Future.delayed(const Duration(milliseconds: 500));
+      await AppTrackingTransparency.requestTrackingAuthorization();
+    }
+  } catch (e, stack) {
+    // Darf den App-Start unter keinen Umständen zum Absturz bringen — ATT
+    // ist ein optionaler Consent-Schritt, kein Blocker für die Kernfunktion.
+    debugPrint('ATT Fehler (nicht kritisch): $e');
+    debugPrint('Stack: $stack');
   }
 }
 

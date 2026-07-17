@@ -9,22 +9,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// nach abgeschlossenen Lernpfad-Stationen, sowie Rewarded-Ads für
 /// Kontinent- und Profilbild-Freischaltung.
 ///
-/// iOS nutzt die echten Ad-Unit-IDs. Android bleibt vorerst bei den
-/// Google TEST-IDs, bis die echten Android-Ad-Units eingerichtet sind
-/// (siehe auch APPLICATION_ID in AndroidManifest.xml).
+/// Beide Plattformen nutzen die echten Ad-Unit-IDs (siehe auch
+/// APPLICATION_ID in AndroidManifest.xml / GADApplicationIdentifier in
+/// Info.plist).
 class AdService {
   static String get _rewardedAdUnitId {
     if (!kIsWeb && Platform.isIOS) {
       return 'ca-app-pub-4580295867570231/9086346625';
     }
-    return 'ca-app-pub-3940256099942544/5224354917';
+    return 'ca-app-pub-4580295867570231/7023169929';
   }
 
   static String get _interstitialAdUnitId {
     if (!kIsWeb && Platform.isIOS) {
       return 'ca-app-pub-4580295867570231/9684992288';
     }
-    return 'ca-app-pub-3940256099942544/1033173712';
+    return 'ca-app-pub-4580295867570231/8176469497';
   }
 
   static RewardedAd? _rewardedAd;

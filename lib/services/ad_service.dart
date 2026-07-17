@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -8,13 +9,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// nach abgeschlossenen Lernpfad-Stationen, sowie Rewarded-Ads für
 /// Kontinent- und Profilbild-Freischaltung.
 ///
-/// TEST-IDs — vor Play-Store-Release gegen echte AdMob Ad-Unit-IDs
-/// austauschen (siehe auch APPLICATION_ID in AndroidManifest.xml).
+/// iOS nutzt die echten Ad-Unit-IDs. Android bleibt vorerst bei den
+/// Google TEST-IDs, bis die echten Android-Ad-Units eingerichtet sind
+/// (siehe auch APPLICATION_ID in AndroidManifest.xml).
 class AdService {
-  static const String _rewardedAdUnitId =
-      'ca-app-pub-3940256099942544/5224354917';
-  static const String _interstitialAdUnitId =
-      'ca-app-pub-3940256099942544/1033173712';
+  static String get _rewardedAdUnitId {
+    if (!kIsWeb && Platform.isIOS) {
+      return 'ca-app-pub-4580295867570231/9086346625';
+    }
+    return 'ca-app-pub-3940256099942544/5224354917';
+  }
+
+  static String get _interstitialAdUnitId {
+    if (!kIsWeb && Platform.isIOS) {
+      return 'ca-app-pub-4580295867570231/9684992288';
+    }
+    return 'ca-app-pub-3940256099942544/1033173712';
+  }
 
   static RewardedAd? _rewardedAd;
   static InterstitialAd? _interstitialAd;

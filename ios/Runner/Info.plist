@@ -52,7 +52,7 @@
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Diese Kennung wird verwendet, um dir relevantere Werbung anzuzeigen.</string>
 	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<string>ca-app-pub-4580295867570231~8188197920</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

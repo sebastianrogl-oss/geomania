@@ -49,8 +49,6 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>Diese Kennung wird verwendet, um dir relevantere Werbung anzuzeigen.</string>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-4580295867570231~8188197920</string>
 	<key>UILaunchStoryboardName</key>

@@ -92,6 +92,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
   int _score = 0;
   bool _answered = false;
   bool? _lastCorrect;
+  bool _rundungsGleichstand = false;
   bool _gameOver = false;
 
   int? _rekord;
@@ -249,8 +250,16 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
 
     final leftVal = _category.getValue(_leftCountry)!;
     final rightVal = _category.getValue(_rightCountry)!;
+    // Rundungs-Gleichstand: der Spieler sieht nur die GERUNDETE Zahl (_fmt) —
+    // weichen die Rohwerte nur minimal ab, sodass beide auf denselben
+    // angezeigten Wert runden, wirkt jede Entscheidung für ihn willkürlich.
+    // Dann zählt JEDE Antwort als richtig, statt nur die Richtung des
+    // unsichtbaren Rohwert-Unterschieds.
+    final rundungsGleichstand =
+        leftVal != rightVal && _fmt(leftVal) == _fmt(rightVal);
     final bool correct =
         leftVal == rightVal ||
+        rundungsGleichstand ||
         (guessHigher ? rightVal > leftVal : rightVal < leftVal);
 
     _historie.add(
@@ -269,6 +278,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
     setState(() {
       _answered = true;
       _lastCorrect = correct;
+      _rundungsGleichstand = rundungsGleichstand;
     });
 
     Future.delayed(const Duration(milliseconds: 1100), () async {
@@ -599,6 +609,9 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                           label: _category.label,
                           bgColor: rightBg,
                           isCorrect: _lastCorrect,
+                          hinweis: _rundungsGleichstand
+                              ? t('Fast identisch! Beide Werte zählen als richtig.')
+                              : null,
                         )
                       : _HiddenPanel(
                           key: ValueKey(
@@ -706,6 +719,7 @@ class _RevealedPanel extends StatelessWidget {
   final String label;
   final Color bgColor;
   final bool? isCorrect;
+  final String? hinweis;
 
   const _RevealedPanel({
     super.key,
@@ -714,6 +728,7 @@ class _RevealedPanel extends StatelessWidget {
     required this.label,
     required this.bgColor,
     this.isCorrect,
+    this.hinweis,
   });
 
   @override
@@ -777,6 +792,21 @@ class _RevealedPanel extends StatelessWidget {
                   ? const Color(0xFF4A9E4A)
                   : const Color(0xFFE57373),
               size: 28,
+            ),
+          ],
+          if (hinweis != null) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                hinweis!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF4A9E4A),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ],

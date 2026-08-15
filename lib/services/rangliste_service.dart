@@ -7,6 +7,25 @@ import 'profilbild_service.dart';
 class RanglisteService {
   static final _db = FirebaseFirestore.instance;
 
+  // Standard-Competition-Ranking ("1224"-Methode): gleiche Werte bekommen
+  // denselben Rang, der nächste abweichende Wert überspringt entsprechend
+  // viele Ränge (z.B. 1000/900/900/800 -> Rang 1/2/2/4, nicht 1/2/2/3 oder
+  // 1/2/3/4). [absteigendSortiert] muss bereits nach Wert absteigend
+  // sortiert sein (z.B. via Firestore orderBy) — dann lässt sich der Rang
+  // rein aus der Position der ERSTEN gleichwertigen Zeile ableiten, ohne für
+  // jede Zeile die gesamte Liste erneut zu durchsuchen.
+  static List<int> _berechneRaenge(List<num> absteigendSortiert) {
+    final raenge = <int>[];
+    for (var i = 0; i < absteigendSortiert.length; i++) {
+      if (i > 0 && absteigendSortiert[i] == absteigendSortiert[i - 1]) {
+        raenge.add(raenge[i - 1]);
+      } else {
+        raenge.add(i + 1);
+      }
+    }
+    return raenge;
+  }
+
   static String get _heutigerTag => tagString(DateTime.now());
 
   /// Firestore-Collection-Key im Format 'JJJJMMTT' für ein beliebiges Datum
@@ -120,6 +139,8 @@ class RanglisteService {
           .orderBy('punkte', descending: true)
           .limit(100)
           .get();
+      final raenge = _berechneRaenge(
+          q.docs.map((d) => d.data()['punkte'] as num? ?? 0).toList());
       return q.docs.asMap().entries.map((e) {
         // Über .data() (eine reguläre Map) statt über den []-Operator auf
         // dem QueryDocumentSnapshot selbst zugreifen: Firestore wirft bei
@@ -129,7 +150,7 @@ class RanglisteService {
         // diese Felder noch nicht haben.
         final d = e.value.data();
         return RanglistenEintrag(
-          rang: e.key + 1,
+          rang: raenge[e.key],
           uid: d['uid'] ?? '',
           name: d['anzeigename'] ?? 'Spieler',
           wert: d['punkte'] ?? 0,
@@ -237,10 +258,12 @@ class RanglisteService {
           .orderBy('kapital', descending: true)
           .limit(100)
           .get();
+      final raenge = _berechneRaenge(
+          q.docs.map((d) => d.data()['kapital'] as num? ?? 0).toList());
       return q.docs.asMap().entries.map((e) {
         final d = e.value.data();
         return RanglistenEintrag(
-          rang: e.key + 1,
+          rang: raenge[e.key],
           uid: d['uid'] ?? '',
           name: d['anzeigename'] ?? 'Spieler',
           wert: d['kapital'] ?? 0,
@@ -255,6 +278,38 @@ class RanglisteService {
     }
   }
 
+  // Eigener Platz + Teilnehmerzahl im Portfolio-Gesamt-Ranking (All-Time) —
+  // dasselbe Prinzip wie ladeEigenenPlatzHeute(), funktioniert also auch
+  // außerhalb der angezeigten Top 100. Nutzt das im 'spieler'-Dokument
+  // gepflegte portfolioKapital als aktuellen Wert (siehe
+  // portfolioKapitalSpeichern), da dieser Aufruf unabhängig von einer
+  // gerade laufenden Spielrunde funktionieren soll.
+  static Future<({int platz, int gesamt})?> ladeEigenenPlatzPortfolio() async {
+    final uid = AuthService.uid;
+    if (uid == null) return null;
+    try {
+      final coll = _db.collection('portfolio_alltime');
+
+      final gesamtSnap = await coll.count().get();
+      final gesamt = gesamtSnap.count ?? 0;
+      if (gesamt == 0) return null;
+
+      final eigenesDoc = await coll.doc(uid).get();
+      final gespeichertesKapital = eigenesDoc.data()?['kapital'] as num?;
+      if (gespeichertesKapital == null) return null;
+
+      final besserSnap = await coll
+          .where('kapital', isGreaterThan: gespeichertesKapital)
+          .count()
+          .get();
+      final platz = (besserSnap.count ?? 0) + 1;
+
+      return (platz: platz, gesamt: gesamt);
+    } catch (e) {
+      print('Portfolio-Platz laden Fehler: $e');
+      return null;
+    }
+  }
 }
 
 class RanglistenEintrag {

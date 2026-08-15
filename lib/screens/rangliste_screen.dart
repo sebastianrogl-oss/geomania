@@ -44,6 +44,10 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
   int _portfolioSubTab = 0; // 0 = Heute, 1 = Gesamt (Alltime)
   late Future<List<RanglistenEintrag>> _future;
   String? _eigenesProfilbild;
+  // Eigener Platz im Portfolio-Gesamt-Ranking, auch außerhalb der
+  // angezeigten Top 100 (siehe RanglisteService.ladeEigenenPlatzPortfolio).
+  // Nur für den "Gesamt"-Unterreiter relevant, sonst immer null.
+  ({int platz, int gesamt})? _eigenerPlatzPortfolio;
 
   // 14-Tage-Historie der Tages-Ranglisten (nicht für Portfolio "Gesamt").
   // Auf Mitternacht normalisiert, damit die Tage-Differenz-Vergleiche unten
@@ -68,9 +72,21 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
 
   Future<List<RanglistenEintrag>> _ladeAktuelle() {
     if (_challenge == _Challenge.portfolio && _portfolioSubTab == 1) {
+      _ladeEigenenPlatzPortfolio();
       return RanglisteService.ladePortfolioAlltime();
     }
+    _eigenerPlatzPortfolio = null;
     return RanglisteService.ladeTagesRangliste(_challenge.id, tag: _angezeigterTag);
+  }
+
+  // Läuft separat/parallel zur Top-100-Liste, damit ein langsamer/fehlender
+  // eigener Platz (z.B. noch nie Portfolio gespielt) die Anzeige der Liste
+  // selbst nicht verzögert oder blockiert.
+  Future<void> _ladeEigenenPlatzPortfolio() async {
+    final platz = await RanglisteService.ladeEigenenPlatzPortfolio();
+    if (mounted && _challenge == _Challenge.portfolio && _portfolioSubTab == 1) {
+      setState(() => _eigenerPlatzPortfolio = platz);
+    }
   }
 
   void _wechsleChallenge(_Challenge c) {
@@ -257,17 +273,34 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
                         children: [_LeererZustand(vergangenerTag: vergangenerTag)],
                       );
                     }
+                    // Eigener Platz außerhalb der sichtbaren Top 100 — nur
+                    // im Portfolio-"Gesamt"-Tab relevant, und nur wenn die
+                    // eigene uid nicht bereits in der Liste selbst auftaucht.
+                    final zeigeEigenenPlatz = _challenge == _Challenge.portfolio &&
+                        _portfolioSubTab == 1 &&
+                        _eigenerPlatzPortfolio != null &&
+                        !liste.any((e) => e.istIch) &&
+                        _eigenerPlatzPortfolio!.platz > liste.length;
+
                     return ListView.separated(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                      itemCount: liste.length,
+                      itemCount: liste.length + (zeigeEigenenPlatz ? 1 : 0),
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, i) => _RangZeile(
-                        eintrag: liste[i],
-                        istGeld: _istGeld,
-                        mitVorzeichen: _istPortfolioHeute,
-                        eigenesProfilbild: _eigenesProfilbild,
-                      ),
+                      itemBuilder: (context, i) {
+                        if (i >= liste.length) {
+                          return _EigenerPlatzZeile(
+                            platz: _eigenerPlatzPortfolio!.platz,
+                            gesamt: _eigenerPlatzPortfolio!.gesamt,
+                          );
+                        }
+                        return _RangZeile(
+                          eintrag: liste[i],
+                          istGeld: _istGeld,
+                          mitVorzeichen: _istPortfolioHeute,
+                          eigenesProfilbild: _eigenesProfilbild,
+                        );
+                      },
                     );
                   },
                 ),
@@ -359,6 +392,41 @@ class _SubTabPill extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w700),
         ),
+      ),
+    );
+  }
+}
+
+// ── Eigener Platz außerhalb der Top 100 ─────────────────────────────────────
+
+class _EigenerPlatzZeile extends StatelessWidget {
+  final int platz;
+  final int gesamt;
+
+  const _EigenerPlatzZeile({required this.platz, required this.gesamt});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F8F0),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF4A9E4A), width: 2.0),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.person_pin_circle_rounded,
+              color: Color(0xFF4A9E4A), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              t('Dein Platz: #{p} von {g}', {'p': '$platz', 'g': '$gesamt'}),
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A)),
+            ),
+          ),
+        ],
       ),
     );
   }

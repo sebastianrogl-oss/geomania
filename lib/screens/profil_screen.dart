@@ -137,23 +137,24 @@ class _ProfilScreenState extends State<ProfilScreen> {
   double _kategorieFortschritt(Set<LernModus> modi) =>
       _lpSnap?.modiFortschritt(modi) ?? 0.0;
 
-  // ── Tages-Challenge-Statistikfelder ("Ø Punkte"/"Ø Rendite" + "Rekord") ──────
+  // ── Tages-Challenge-Statistikfelder ("Gesamt Punkte"/"Gesamt Rendite" +
+  // "Rekord") — zeigt den INSGESAMT über alle gespielten Tage aufsummierten
+  // Wert (aus summePunkte_*, siehe ChallengeRekordService.summeErhoehen),
+  // NICHT den Durchschnitt und NICHT nur den heutigen Wert.
 
-  double _avg(String id) {
-    final anzahl = _challengeAnzahlGespielt[id] ?? 0;
-    if (anzahl == 0) return 0;
-    return (_challengeSumme[id] ?? 0) / anzahl;
-  }
+  String _summePunkteText(String id) =>
+      (_challengeAnzahlGespielt[id] ?? 0) == 0
+          ? '—'
+          : (_challengeSumme[id] ?? 0).round().toString();
 
-  String _avgPunkteText(String id) =>
-      (_challengeAnzahlGespielt[id] ?? 0) == 0 ? '—' : _avg(id).round().toString();
-
-  String _avgRenditeText(String id) =>
-      (_challengeAnzahlGespielt[id] ?? 0) == 0 ? '—' : fmtProzent(_avg(id));
+  String _summeRenditeText(String id) =>
+      (_challengeAnzahlGespielt[id] ?? 0) == 0
+          ? '—'
+          : fmtProzent(_challengeSumme[id] ?? 0);
 
   String _rekordText(String id) {
     // Portfolio zeigt nur die Prozent-Rendite (kein Dollar-Betrag mehr) —
-    // konsistent mit _avgRenditeText, das ebenfalls rein prozentual ist.
+    // konsistent mit _summeRenditeText, das ebenfalls rein prozentual ist.
     if (id == 'portfolio') {
       final prozent = _portfolioRekordProzent;
       return prozent == null ? '—' : fmtProzent(prozent);
@@ -333,8 +334,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
               titleColor: const Color(0xFF5A3D00),
               streak: _challengeStreaks['preis'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['preis'] ?? 0,
-              statWert1: _avgPunkteText('preis'),
-              statLabel1: t('Ø Punkte'),
+              statWert1: _summePunkteText('preis'),
+              statLabel1: t('Gesamt Punkte'),
               statWert2: _rekordText('preis'),
               spieltage: _spieltage['preis'] ?? const {},
               titelVersatz: -3,
@@ -348,8 +349,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
               titleColor: const Color(0xFF1A3D1A),
               streak: _challengeStreaks['higher_lower'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['higher_lower'] ?? 0,
-              statWert1: _avgPunkteText('higher_lower'),
-              statLabel1: t('Ø geschafft'),
+              statWert1: _summePunkteText('higher_lower'),
+              statLabel1: t('Gesamt geschafft'),
               statWert2: _rekordText('higher_lower'),
               spieltage: _spieltage['higher_lower'] ?? const {},
             ),
@@ -362,8 +363,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
               titleColor: const Color(0xFF3B1A6B),
               streak: _challengeStreaks['ranking_game'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['ranking_game'] ?? 0,
-              statWert1: _avgPunkteText('ranking_game'),
-              statLabel1: t('Ø Punkte'),
+              statWert1: _summePunkteText('ranking_game'),
+              statLabel1: t('Gesamt Punkte'),
               statWert2: _rekordText('ranking_game'),
               spieltage: _spieltage['ranking_game'] ?? const {},
             ),
@@ -376,8 +377,8 @@ class _ProfilScreenState extends State<ProfilScreen> {
               titleColor: const Color(0xFF1A3A6B),
               streak: _challengeStreaks['portfolio'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['portfolio'] ?? 0,
-              statWert1: _avgRenditeText('portfolio'),
-              statLabel1: t('Ø Rendite'),
+              statWert1: _summeRenditeText('portfolio'),
+              statLabel1: t('Gesamt Rendite'),
               statWert2: _rekordText('portfolio'),
               spieltage: _spieltage['portfolio'] ?? const {},
               titelVersatz: -3,

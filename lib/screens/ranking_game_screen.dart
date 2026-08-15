@@ -407,8 +407,15 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
   int _weltrang(CountryRanking land, RankingCategory kat) {
     final wert = kat.getValue(land);
     if (wert == null || wert <= 0) return 999;
+    // Bei "niedriger ist besser"-Kategorien (z.B. Inflation, Staatsschulden)
+    // zählt Rang 1, wer den niedrigsten Wert hat -> Vergleichsrichtung dreht
+    // sich um, statt wie sonst "wie viele Länder haben einen höheren Wert".
     return countryRankings
-            .where((c) => (kat.getValue(c) ?? 0) > wert)
+            .where((c) {
+              final v = kat.getValue(c);
+              if (v == null) return false;
+              return kat.higherIsBetter ? v > wert : v < wert;
+            })
             .length +
         1;
   }

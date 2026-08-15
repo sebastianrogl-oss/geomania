@@ -615,6 +615,11 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   }
 
   Future<void> _stationFertig() async {
+    // DEBUG (Bug 2 — Stationsbutton-Bug nach Level 5): jeden Schritt dieses
+    // Ablaufs protokollieren, um zu sehen, ob/wo der Ablauf nach der 5.
+    // Station hängen bleibt (Verdacht: await auf den Interstitial-Trigger).
+    // ignore: avoid_print
+    print('[StationFertig] gestartet für Station ${widget.station?.id}');
     _stopCountdown();
     setState(() => _showFeedback = false);
 
@@ -623,8 +628,12 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // Tagesdifferenz-Berechnung braucht — danach aufgerufen würde die
     // Streak nie erhöht werden (Differenz wäre immer 0).
     await FortschrittService.streakAktualisieren();
+    // ignore: avoid_print
+    print('[StationFertig] streakAktualisieren() fertig');
 
     if (widget.istWiederholungsrunde) {
+      // ignore: avoid_print
+      print('[StationFertig] Zweig: istWiederholungsrunde -> wiederholungAbschliessen');
       await FortschrittService.wiederholungAbschliessen(
           widget.wiederholungsAbschnittId!);
       if (!mounted) return;
@@ -643,23 +652,37 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       _session!.falscheAntworten,
       falscheFragenJson: _session!.falscheFragenAlsJson(),
     );
+    // ignore: avoid_print
+    print('[StationFertig] stationAbschliessen() fertig');
 
     // Kontinent-/Meilenstein-Abzeichen hängen am Lernpfad-Fortschritt, nicht
     // an Tages-Challenges -> hier prüfen, statt erst beim nächsten Challenge-
     // Abschluss (sonst würde ein neues Abzeichen erst viel später auffallen).
     final neueAbzeichen = await AbzeichenService.pruefeNachLernpfadFortschritt();
+    // ignore: avoid_print
+    print('[StationFertig] pruefeNachLernpfadFortschritt() fertig, '
+        'neueAbzeichen=${neueAbzeichen.length}, mounted=$mounted');
     if (mounted && neueAbzeichen.isNotEmpty) {
       await AbzeichenPopup.zeigen(context, neueAbzeichen);
+      // ignore: avoid_print
+      print('[StationFertig] AbzeichenPopup.zeigen() fertig');
     }
     if (!mounted) return;
 
     // Nach JEDEM Stationsabschluss (nie mitten in einer laufenden Frage) —
     // zeigt selbst nur, wenn genug Stationen + genug Zeit seit der letzten
     // Anzeige vergangen sind (siehe AdService.pruefeUndZeigeInterstitial).
+    // ignore: avoid_print
+    print('[StationFertig] rufe AdService.pruefeUndZeigeInterstitial() auf...');
     await AdService.pruefeUndZeigeInterstitial();
+    // ignore: avoid_print
+    print('[StationFertig] AdService.pruefeUndZeigeInterstitial() zurückgekehrt, mounted=$mounted');
     if (!mounted) return;
 
-    if (!FortschrittService.istLetzteStationImAbschnitt(widget.station!.id)) {
+    final letzteStation = FortschrittService.istLetzteStationImAbschnitt(widget.station!.id);
+    // ignore: avoid_print
+    print('[StationFertig] istLetzteStationImAbschnitt=$letzteStation');
+    if (!letzteStation) {
       if (mounted) Navigator.pop(context);
       return;
     }
@@ -668,6 +691,8 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     final abschnittId = _abschnittId();
     final wdhNoetig =
         await FortschrittService.wiederholungNoetig(abschnittId);
+    // ignore: avoid_print
+    print('[StationFertig] letzte Station im Abschnitt $abschnittId, wdhNoetig=$wdhNoetig');
 
     if (!wdhNoetig) {
       await FortschrittService.wiederholungAbschliessen(abschnittId);
@@ -681,6 +706,8 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     }
 
     // Wiederholungsrunde starten
+    // ignore: avoid_print
+    print('[StationFertig] Wiederholungsrunde wird jetzt AUTOMATISCH gestartet (Bug 4)');
     final falscheJson =
         await FortschrittService.sammelFalscheFragenFuerAbschnitt(abschnittId);
     if (!mounted) return;
@@ -702,6 +729,8 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         ),
       ),
     );
+    // ignore: avoid_print
+    print('[StationFertig] Navigator.push zur Wiederholungsrunde zurückgekehrt, mounted=$mounted');
     if (mounted) Navigator.pop(context);
   }
 

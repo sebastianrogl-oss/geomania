@@ -446,7 +446,15 @@ class FortschrittService {
     final prefs = await SharedPreferences.getInstance();
     final letzteStr = prefs.getString(_kLetzteAkt);
     final heute = DateTime.now();
-    int streak = prefs.getInt(_kStreak) ?? 0;
+    final alterStreak = prefs.getInt(_kStreak) ?? 0;
+    int streak = alterStreak;
+
+    // DEBUG (Bug 1 — Streak-Untersuchung): kompletter Zustand des
+    // Lernpfad-weiten Streaks (separat vom Streak je Tages-Challenge in
+    // ChallengeRekordService) bei jedem Aufruf aus station_quiz_screen.dart.
+    // ignore: avoid_print
+    print('[LP-Streak] VOR Update: alterStreak=$alterStreak, '
+        'letzteAktivitaet=$letzteStr, heute=$heute');
 
     if (letzteStr != null) {
       final letzte = DateTime.parse(letzteStr);
@@ -454,14 +462,25 @@ class FortschrittService {
           DateTime(heute.year, heute.month, heute.day)
               .difference(DateTime(letzte.year, letzte.month, letzte.day))
               .inDays;
-      if (diff == 0) return;
+      // ignore: avoid_print
+      print('[LP-Streak] letzteAktivitaet geparst=$letzte, diff=$diff Tage');
+      if (diff == 0) {
+        // ignore: avoid_print
+        print('[LP-Streak] diff==0 (schon heute aktualisiert) -> keine Änderung');
+        return;
+      }
       streak = diff == 1 ? streak + 1 : 1;
     } else {
       streak = 1;
+      // ignore: avoid_print
+      print('[LP-Streak] keine letzteAktivitaet gespeichert -> neuerStreak=1');
     }
 
     await prefs.setInt(_kStreak, streak);
     await prefs.setString(_kLetzteAkt, heute.toIso8601String());
+    // ignore: avoid_print
+    print('[LP-Streak] NACH Update: gespeicherter Streak=$streak, '
+        'gespeicherte letzteAktivitaet=${heute.toIso8601String()}');
   }
 
   // ── Abzeichen ─────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/ad_service.dart';
 import '../services/auth_service.dart';
@@ -23,11 +24,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _anzeigename = '';
   bool _sound = true;
   bool _vibration = true;
+  // Fallback, falls PackageInfo.fromPlatform() fehlschlägt (z.B. Plugin auf
+  // der Plattform nicht verfügbar) — besser eine plausible als gar keine
+  // Versionsangabe.
+  String _appVersion = '1.0.2';
 
   @override
   void initState() {
     super.initState();
     _load();
+    _ladeAppVersion();
     // Sprachwechsel von hier aus soll den Screen selbst sofort neu
     // aufbauen (z.B. der Checkmark bei Deutsch/English), nicht erst nach
     // einem Neustart der ganzen App.
@@ -53,6 +59,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _sound = sound;
       _vibration = vibration;
     });
+  }
+
+  // Liest die Versionsnummer zur Laufzeit aus den nativen Plattform-Metadaten
+  // (bei jedem Build automatisch aus pubspec.yaml übernommen) statt sie hier
+  // fest zu codieren — muss bei zukünftigen Versions-Updates nie mehr von
+  // Hand angepasst werden.
+  Future<void> _ladeAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() => _appVersion = info.version);
+    } catch (_) {
+      // Fallback-Wert in _appVersion bleibt bestehen — kein Absturz.
+    }
   }
 
   // ── Sprache ────────────────────────────────────────────────────────────────
@@ -353,7 +373,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _Zeile(
                 icon: Icons.info_outline_rounded,
                 title: t('Version'),
-                subtitle: '1.0.0',
+                subtitle: _appVersion,
               ),
               const _Trenner(),
               _Zeile(

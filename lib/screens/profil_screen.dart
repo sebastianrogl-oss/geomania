@@ -232,10 +232,15 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           ),
                           child: ClipOval(
                             child: ProfilbildService.istWeitformat(_profilbild)
-                                ? FractionallySizedBox(
-                                    widthFactor: 0.9,
-                                    heightFactor: 0.9,
-                                    child: Image.asset(_profilbild, fit: BoxFit.cover),
+                                // BoxFit.cover cropte bei den breiten Globus-/Coin-
+                                // Illustrationen (677x369) zu viel vom Rand weg -
+                                // bei "winken" fiel dadurch die ausgestreckte Hand
+                                // teilweise weg. Fix: wie im Auswahl-Screen
+                                // (weiter unten) BoxFit.contain + Skalierung, das
+                                // zeigt den kompletten Bildinhalt unbeschnitten.
+                                ? Transform.scale(
+                                    scale: 1.25,
+                                    child: Image.asset(_profilbild, fit: BoxFit.contain),
                                   )
                                 : Padding(
                                     padding: const EdgeInsets.all(16),

@@ -544,10 +544,12 @@ class _GreenHeader extends StatelessWidget {
               decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
               child: ClipOval(
                 child: ProfilbildService.istWeitformat(profilbild)
-                    ? FractionallySizedBox(
-                        widthFactor: 0.9,
-                        heightFactor: 0.9,
-                        child: Image.asset(profilbild, fit: BoxFit.cover),
+                    // Siehe profil_screen.dart: BoxFit.cover schnitt bei
+                    // "winken" die Hand ab, contain+Skalierung zeigt sie
+                    // vollständig.
+                    ? Transform.scale(
+                        scale: 1.25,
+                        child: Image.asset(profilbild, fit: BoxFit.contain),
                       )
                     : Padding(
                         padding: const EdgeInsets.all(4),

@@ -1,4 +1,3 @@
-import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../../data/portfolio_daten.dart';
 import '../../l10n/uebersetzungen.dart';
@@ -16,6 +15,7 @@ import '../../services/auth_service.dart';
 import '../../services/rangliste_service.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/abzeichen_popup.dart';
+import '../../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../../widgets/portfolio_flagge.dart';
 import 'portfolio_aufloesung_screen.dart';
 
@@ -602,7 +602,7 @@ class _PortfolioInvestierenScreenState
               child: SizedBox(
                 width: double.infinity,
                 height: 60.rpx(context),
-                child: CountryFlag.fromCountryCode(iso,
+                child: zeigeFlagge(iso,
                     width: double.infinity, height: 60.rpx(context)),
               ),
             )

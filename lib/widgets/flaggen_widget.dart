@@ -1,7 +1,52 @@
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
-/// Zeigt die echte Flagge eines Landes via country_flags-Paket.
+/// ZENTRALE Stelle für jedes Flaggen-Rendering im Projekt — alle Screens/
+/// Widgets sollen hierüber gehen statt CountryFlag.fromCountryCode direkt
+/// aufzurufen, damit Sonderfälle wie Kosovo an genau einer Stelle behandelt
+/// werden.
+///
+/// Kosovo (XK) hat keinen offiziellen ISO-3166-1-Alpha-2-Code. Das Paket
+/// country_flags (Version 2.2.0) kennt "XK" deshalb nicht in seiner
+/// FlagCode-Zuordnungstabelle (siehe flag_code.dart im Paket) und würde
+/// nur einen weißen Platzhalter mit Fragezeichen zeigen — obwohl die Flaggen-
+/// Grafik im Paket selbst sogar vorhanden ist, nur eben nicht darüber
+/// erreichbar. Fix: eigenes SVG-Asset (gemeinfreie Flagge von Wikimedia
+/// Commons) für genau diesen Code.
+///
+/// Geprüfte weitere Sonderfälle: Taiwan (TW) ist in der FlagCode-Tabelle
+/// des Pakets enthalten und funktioniert bereits korrekt, keine weitere
+/// Sonderbehandlung nötig.
+Widget zeigeFlagge(
+  String iso, {
+  required double width,
+  required double height,
+  double borderRadius = 0,
+}) {
+  final code = iso.toUpperCase();
+  if (code == 'XK') {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: SvgPicture.asset(
+          'assets/flags/xk.svg',
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
+  }
+  return CountryFlag.fromCountryCode(
+    code,
+    width: width,
+    height: height,
+    borderRadius: borderRadius,
+  );
+}
+
+/// Zeigt die echte Flagge eines Landes via zeigeFlagge().
 /// Fallback auf Unicode-Flaggen-Emoji wenn der Code ungültig ist.
 ///
 /// countryCode: ISO 3166-1 alpha-2, z.B. "DE", "FR", "US"
@@ -25,14 +70,7 @@ class FlaggenWidget extends StatelessWidget {
     if (!RegExp(r'^[A-Z]{2}$').hasMatch(code)) {
       return _EmojiFlag(code: code, width: width, height: height, borderRadius: borderRadius);
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: CountryFlag.fromCountryCode(
-        code,
-        height: height,
-        width: width,
-      ),
-    );
+    return zeigeFlagge(code, width: width, height: height, borderRadius: borderRadius);
   }
 }
 

@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/abzeichen_data.dart';
 import '../data/country_rankings.dart';
@@ -16,6 +15,7 @@ import '../services/rangliste_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/challenge_ergebnis_header.dart';
 import '../widgets/challenge_fertig_button.dart';
+import '../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../widgets/rangliste_ergebnis_karte.dart';
 import '../widgets/rekord_badge.dart';
 import '../widgets/spiel_erklaerung.dart';
@@ -725,13 +725,11 @@ class _RevealedPanel extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: CountryFlag.fromCountryCode(
-              country.iso2,
-              width: 72,
-              height: 48,
-            ),
+          zeigeFlagge(
+            country.iso2,
+            width: 72,
+            height: 48,
+            borderRadius: 6,
           ),
           const SizedBox(height: 8),
           Padding(
@@ -811,13 +809,11 @@ class _HigherLowerRundenKarte extends StatelessWidget {
           children: [
             const Icon(Icons.check_circle, color: Color(0xFF4A9E4A), size: 18),
             const SizedBox(width: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: CountryFlag.fromCountryCode(
-                runde.land1Iso,
-                width: 22,
-                height: 15,
-              ),
+            zeigeFlagge(
+              runde.land1Iso,
+              width: 22,
+              height: 15,
+              borderRadius: 3,
             ),
             const SizedBox(width: 4),
             const Text(
@@ -829,13 +825,11 @@ class _HigherLowerRundenKarte extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: CountryFlag.fromCountryCode(
-                runde.land2Iso,
-                width: 22,
-                height: 15,
-              ),
+            zeigeFlagge(
+              runde.land2Iso,
+              width: 22,
+              height: 15,
+              borderRadius: 3,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -901,13 +895,11 @@ class _HigherLowerRundenKarte extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: CountryFlag.fromCountryCode(
-                            runde.land1Iso,
-                            width: 28,
-                            height: 19,
-                          ),
+                        zeigeFlagge(
+                          runde.land1Iso,
+                          width: 28,
+                          height: 19,
+                          borderRadius: 3,
                         ),
                         const SizedBox(width: 6),
                         const Text(
@@ -919,13 +911,11 @@ class _HigherLowerRundenKarte extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: CountryFlag.fromCountryCode(
-                            runde.land2Iso,
-                            width: 28,
-                            height: 19,
-                          ),
+                        zeigeFlagge(
+                          runde.land2Iso,
+                          width: 28,
+                          height: 19,
+                          borderRadius: 3,
                         ),
                       ],
                     ),
@@ -985,13 +975,11 @@ class _HiddenPanel extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: CountryFlag.fromCountryCode(
-                country.iso2,
-                width: 72,
-                height: 48,
-              ),
+            zeigeFlagge(
+              country.iso2,
+              width: 72,
+              height: 48,
+              borderRadius: 6,
             ),
             const SizedBox(height: 8),
             Padding(

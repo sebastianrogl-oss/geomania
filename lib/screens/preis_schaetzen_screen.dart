@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/country_rankings.dart';
 import '../l10n/uebersetzungen.dart';
@@ -15,6 +14,7 @@ import '../services/skala_service.dart';
 import '../services/rangliste_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/challenge_fertig_button.dart';
+import '../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../widgets/rangliste_ergebnis_karte.dart';
 import '../widgets/rekord_badge.dart';
 import '../widgets/spiel_erklaerung.dart';
@@ -622,11 +622,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                   const EdgeInsets.symmetric(vertical: 22, horizontal: 20),
               child: Column(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: CountryFlag.fromCountryCode(q.land.iso2,
-                        width: 80, height: 54),
-                  ),
+                  zeigeFlagge(q.land.iso2, width: 80, height: 54, borderRadius: 6),
                   const SizedBox(height: 10),
                   Text(q.land.name,
                       textAlign: TextAlign.center,
@@ -1026,11 +1022,7 @@ class _ErgebnisZeile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: CountryFlag.fromCountryCode(ergebnis.landIso,
-                width: 36, height: 24),
-          ),
+          zeigeFlagge(ergebnis.landIso, width: 36, height: 24, borderRadius: 4),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

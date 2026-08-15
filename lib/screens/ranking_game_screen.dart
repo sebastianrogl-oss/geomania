@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/country_rankings.dart';
 import '../l10n/uebersetzungen.dart';
@@ -15,6 +14,7 @@ import '../widgets/abzeichen_popup.dart';
 import '../widgets/challenge_ergebnis_header.dart';
 import '../widgets/challenge_fertig_button.dart';
 import '../widgets/rangliste_ergebnis_karte.dart';
+import '../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../widgets/rekord_badge.dart';
 import '../widgets/spiel_erklaerung.dart';
 
@@ -125,13 +125,11 @@ class _KatButtonState extends State<_KatButton> {
                   color: const Color(0xFFD0CEC8),
                 ),
                 if (widget.flagIso2 != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: CountryFlag.fromCountryCode(
-                      widget.flagIso2!,
-                      width: 24,
-                      height: 16,
-                    ),
+                  zeigeFlagge(
+                    widget.flagIso2!,
+                    width: 24,
+                    height: 16,
+                    borderRadius: 2,
                   ),
                   const SizedBox(width: 5),
                 ],
@@ -672,13 +670,11 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
                   ],
                 ),
                 child: Center(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: CountryFlag.fromCountryCode(
-                      land.iso2,
-                      width: 64,
-                      height: 42,
-                    ),
+                  child: zeigeFlagge(
+                    land.iso2,
+                    width: 64,
+                    height: 42,
+                    borderRadius: 4,
                   ),
                 ),
               ),
@@ -732,13 +728,11 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
     final zeigeRang = !(versteckeHundertPlus && z.rang >= 100);
     return Row(
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: CountryFlag.fromCountryCode(
-            z.land.iso2,
-            width: 32,
-            height: 22,
-          ),
+        zeigeFlagge(
+          z.land.iso2,
+          width: 32,
+          height: 22,
+          borderRadius: 3,
         ),
         const SizedBox(width: 8),
         Expanded(

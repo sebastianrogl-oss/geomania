@@ -1,5 +1,5 @@
-import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
+import 'flaggen_widget.dart' show zeigeFlagge;
 
 /// Länderflagge mit dünnem, dezenten Rand — hebt weißlastige Flaggen (z.B.
 /// Japan) vom weißen Kartenhintergrund ab. Einheitliche Darstellung für alle
@@ -19,7 +19,7 @@ class PortfolioFlagge extends StatelessWidget {
     this.radius = 6,
   });
 
-  // CountryFlag.fromCountryCode rendert intern IMMER mit BoxFit.contain
+  // zeigeFlagge()/CountryFlag.fromCountryCode rendert intern IMMER mit BoxFit.contain
   // (nicht überschreibbar) — bei abweichendem Flaggen-Seitenverhältnis bleibt
   // dadurch transparenter Rand links/rechts oder oben/unten übrig, wodurch
   // der Rahmen sichtbar außerhalb der eigentlichen Flagge zu schweben scheint
@@ -43,7 +43,7 @@ class PortfolioFlagge extends StatelessWidget {
         borderRadius: BorderRadius.circular((radius - 1).clamp(0, radius)),
         child: FittedBox(
           fit: BoxFit.cover,
-          child: CountryFlag.fromCountryCode(iso,
+          child: zeigeFlagge(iso,
               width: _referenzGroesse, height: _referenzGroesse),
         ),
       ),

@@ -496,9 +496,15 @@ class _ProfilbildIcon extends StatelessWidget {
           ? _platzhalter
           : ClipOval(
               child: ProfilbildService.istWeitformat(pfad)
-                  ? Image.asset(pfad,
-                      fit: BoxFit.cover,
-                      errorBuilder: (c, e, s) => _platzhalter)
+                  // Siehe profil_screen.dart: BoxFit.cover schnitt bei
+                  // "winken" die Hand ab, contain+Skalierung zeigt sie
+                  // vollständig.
+                  ? Transform.scale(
+                      scale: 1.25,
+                      child: Image.asset(pfad,
+                          fit: BoxFit.contain,
+                          errorBuilder: (c, e, s) => _platzhalter),
+                    )
                   : Padding(
                       padding: const EdgeInsets.all(3),
                       child: Image.asset(pfad,

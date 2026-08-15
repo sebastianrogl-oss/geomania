@@ -1,9 +1,9 @@
-import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import '../data/portfolio_daten.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/portfolio_engine.dart';
 import '../utils/portfolio_format.dart';
+import '../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../widgets/portfolio_land_karte.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -275,10 +275,7 @@ class PortfolioBeispielScreen extends StatelessWidget {
                 Row(
                   children: flaggen.map((iso) => Padding(
                     padding: const EdgeInsets.only(right: 5),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(3),
-                      child: CountryFlag.fromCountryCode(iso, width: 24, height: 16),
-                    ),
+                    child: zeigeFlagge(iso, width: 24, height: 16, borderRadius: 3),
                   )).toList(),
                 ),
               ],
@@ -339,10 +336,7 @@ class PortfolioBeispielScreen extends StatelessWidget {
             children: beitraege.map((b) => Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: CountryFlag.fromCountryCode(b.iso, width: 22, height: 15),
-                ),
+                zeigeFlagge(b.iso, width: 22, height: 15, borderRadius: 3),
                 const SizedBox(width: 5),
                 Text('${landName(b.iso)} ${b.anteilProzent}%',
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),

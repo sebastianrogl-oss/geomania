@@ -1265,7 +1265,7 @@ class _GrenzkettenRoute extends StatelessWidget {
           Text(routeText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           if (erklaerung != null) ...[
             const SizedBox(height: 8),
-            Text(erklaerung,
+            Text(t(erklaerung),
                 style: const TextStyle(fontSize: 12, color: Color(0xFF555555), height: 1.3)),
           ],
         ],
@@ -1627,10 +1627,10 @@ class _SortierListe extends StatelessWidget {
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
-        const Text(
-          '↑ Größtes oben  |  Kleinstes unten ↓',
+        Text(
+          t('↑ Größtes oben  |  Kleinstes unten ↓'),
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 12, color: Color(0xFF888888)),
+          style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
         ),
         const SizedBox(height: 16),
         SizedBox(

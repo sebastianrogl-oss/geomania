@@ -14,6 +14,7 @@ import 'uebersetzungen_lernen.dart';
 import 'uebersetzungen_quiz.dart';
 import 'laender_fakten_en.dart';
 import 'laender_gebaeude_en.dart';
+import 'laender_grenzketten_en.dart';
 import 'uebersetzungen_lernpfad.dart';
 import 'uebersetzungen_lernwelten.dart';
 import 'uebersetzungen_mapquiz.dart';
@@ -82,6 +83,7 @@ final Map<String, String> uebersetzungen = {
   ...uebersetzungenProfil,
   ...laenderFaktenEn,
   ...laenderGebaeudeEn,
+  ...laenderGrenzkettenEn,
   ...wirtschaftssektorenFrageEn,
   ...wirtschaftssektorenEn,
   ...uebersetzungenWirtschaftssektoren,

@@ -26,6 +26,7 @@ const Map<String, String> uebersetzungenStationQuiz = {
   'Reihenfolge prüfen': 'Check order',
   'Weiter': 'Next',
 
+  '↑ Größtes oben  |  Kleinstes unten ↓': '↑ Largest on top  |  Smallest at bottom ↓',
   'Richtig (nach {kategorie}, größte zuerst):': 'Correct (by {kategorie}, largest first):',
   'Richtige Reihenfolge:': 'Correct order:',
   '✅ Perfekte Reihenfolge!': '✅ Perfect order!',

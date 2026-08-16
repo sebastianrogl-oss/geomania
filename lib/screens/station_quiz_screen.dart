@@ -672,12 +672,15 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // Nach JEDEM Stationsabschluss (nie mitten in einer laufenden Frage) —
     // zeigt selbst nur, wenn genug Stationen + genug Zeit seit der letzten
     // Anzeige vergangen sind (siehe AdService.pruefeUndZeigeInterstitial).
+    // BEWUSST NICHT awaited: die Werbe-Anzeige ist rein optional und darf
+    // die Navigation zur nächsten Station niemals verzögern oder (bei einem
+    // Fehler) blockieren — beide Vorgänge laufen unabhängig voneinander.
+    // pruefeUndZeigeInterstitial()/zeigeInterstitialFallsBereit() fangen
+    // etwaige Fehler intern ab, ein nicht awaiteter Fehler dort führt daher
+    // nicht zu einer unbehandelten Exception.
     // ignore: avoid_print
-    print('[StationFertig] rufe AdService.pruefeUndZeigeInterstitial() auf...');
-    await AdService.pruefeUndZeigeInterstitial();
-    // ignore: avoid_print
-    print('[StationFertig] AdService.pruefeUndZeigeInterstitial() zurückgekehrt, mounted=$mounted');
-    if (!mounted) return;
+    print('[StationFertig] triggere AdService.pruefeUndZeigeInterstitial() (nicht awaited)');
+    unawaited(AdService.pruefeUndZeigeInterstitial());
 
     final letzteStation = FortschrittService.istLetzteStationImAbschnitt(widget.station!.id);
     // ignore: avoid_print

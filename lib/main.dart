@@ -56,10 +56,13 @@ void main() async {
       // danach darf AdMob initialisiert werden.
       await AdService.pruefeUndZeigeConsent();
       await MobileAds.instance.initialize();
-      // Interstitial früh vorladen, damit es beim ersten Trigger (siehe
-      // AdService.pruefeUndZeigeInterstitial) sofort bereitsteht statt erst
-      // nachzuladen und die Anzeige zu verpassen.
+      // Interstitial UND Rewarded Ad früh vorladen, damit beide beim ersten
+      // Trigger (siehe AdService.pruefeUndZeigeInterstitial bzw.
+      // zeigeRewardedAd) sofort bereitstehen statt erst synchron
+      // nachzuladen — das war beim Rewarded Ad zu langsam und führte zu
+      // "Werbung nicht verfügbar".
       AdService.ladeInterstitialAd();
+      AdService.ladeRewardedAd();
     });
   }
 }

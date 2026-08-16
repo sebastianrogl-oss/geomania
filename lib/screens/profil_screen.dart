@@ -285,7 +285,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                       const Text('🔥',
                           style: TextStyle(fontSize: 14)),
                       const SizedBox(width: 4),
-                      Text(t('{n} Tage Streak', {'n': '$_streak'}),
+                      Text(t('Lernpfad-Streak: {n} Tage', {'n': '$_streak'}),
                           style: const TextStyle(
                               color: Color(0xFFF9A825),
                               fontSize: 13,
@@ -1014,7 +1014,9 @@ class _ChallengeRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      streak > 0 ? t('🔥 {n} Tage in Folge', {'n': '$streak'}) : t('Noch keine Serie'),
+                      streak > 0
+                          ? t('🔥 Challenge-Streak: {n} Tage in Folge', {'n': '$streak'})
+                          : t('Noch keine Serie'),
                       style: const TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF888888)),
                     ),

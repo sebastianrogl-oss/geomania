@@ -185,19 +185,16 @@ class AdService {
       },
     );
 
-    final vorShow = DateTime.now();
-    // ignore: avoid_print
-    print('[Ad/Interstitial] rufe await _interstitialAd!.show() auf...');
+    // Ein Fehler beim Anzeigen (z.B. Ad zwischenzeitlich verbraucht, keine
+    // aktive Activity im richtigen Moment) darf NIEMALS die aufrufende
+    // Navigation zur nächsten Station blockieren — Interstitials sind rein
+    // optional. Deshalb hier bewusst NICHT erneut werfen, nur loggen.
     try {
       await _interstitialAd!.show();
+    } catch (e, stack) {
       // ignore: avoid_print
-      print('[Ad/Interstitial] show() zurückgekehrt nach '
-          '${DateTime.now().difference(vorShow).inMilliseconds}ms (OHNE Exception)');
-    } catch (e, st) {
-      // ignore: avoid_print
-      print('[Ad/Interstitial] show() warf EXCEPTION nach '
-          '${DateTime.now().difference(vorShow).inMilliseconds}ms: $e\n$st');
-      rethrow;
+      print('Interstitial Fehler (nicht kritisch): $e\n$stack');
+      _interstitialAd = null;
     }
   }
 

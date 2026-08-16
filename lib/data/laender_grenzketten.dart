@@ -46,23 +46,14 @@ const List<GrenzkettenRaetsel> grenzkettenRaetsel = [
     erklaerung: 'Der direkte Landweg führt über Spanien, Frankreich und '
         'Deutschland — Italien liegt nicht auf dieser Route.',
   ),
-  GrenzkettenRaetsel(
-    vonLandIso: 'DE',
-    nachLandIso: 'TR',
-    mussDurchIso: ['PL', 'RU', 'GE'],
-    keinTransitIso: 'UA',
-    kontinent: 'europa',
-    erklaerung: 'Von Deutschland führt der kürzeste Landweg über Polen, '
-        'Russland und Georgien in die Türkei — die Ukraine wird dabei '
-        'nicht durchquert.',
-  ),
-  GrenzkettenRaetsel(
-    vonLandIso: 'FR',
-    nachLandIso: 'NO',
-    mussDurchIso: ['DE', 'PL', 'RU'],
-    keinTransitIso: 'SE',
-    kontinent: 'europa',
-  ),
+  // DE→TR und FR→NO (bis August 2026 hier): beide nutzten PL→RU als Kanten-
+  // Übergang der Route. Seit die Kaliningrad-bedingte PL/RU-Nachbarschaft aus
+  // laender_nachbarn.dart entfernt wurde (siehe Konsistenz mit dem Umriss-
+  // Quiz, das Kaliningrad bereits per Flächenfilter ausschließt), ist der
+  // kürzeste Weg zwischen beiden Länderpaaren 5 statt 4 Kanten lang und nicht
+  // mehr eindeutig (mehrere gleich kurze Routen) — beide Einträge entfernt,
+  // da sich das Puzzle-Format (genau 3 Zwischenländer, eindeutiger kürzester
+  // Weg) sonst nicht mehr erfüllen lässt.
   GrenzkettenRaetsel(
     vonLandIso: 'DK',
     nachLandIso: 'PT',
@@ -100,13 +91,8 @@ const List<GrenzkettenRaetsel> grenzkettenRaetsel = [
     keinTransitIso: 'DE',
     kontinent: 'europa',
   ),
-  GrenzkettenRaetsel(
-    vonLandIso: 'EE',
-    nachLandIso: 'FR',
-    mussDurchIso: ['RU', 'PL', 'DE'],
-    keinTransitIso: 'BY',
-    kontinent: 'europa',
-  ),
+  // EE→FR (bis August 2026 hier): nutzte RU→PL als Kanten-Übergang, aus
+  // demselben Grund wie oben entfernt.
   GrenzkettenRaetsel(
     vonLandIso: 'HR',
     nachLandIso: 'NO',

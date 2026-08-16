@@ -7,11 +7,6 @@ const Map<String, String> laenderGrenzkettenEn = {
           'Deutschland — Italien liegt nicht auf dieser Route.':
       'The direct land route runs through Spain, France, and '
           "Germany — Italy isn't on this route.",
-  'Von Deutschland führt der kürzeste Landweg über Polen, '
-          'Russland und Georgien in die Türkei — die Ukraine wird dabei '
-          'nicht durchquert.':
-      'From Germany, the shortest land route to Turkey runs through '
-          "Poland, Russia, and Georgia — Ukraine isn't crossed along the way.",
   'Von Finnland aus geht es über Russland, die Ukraine und '
           'Ungarn nach Kroatien — Polen liegt nicht auf dieser Route.':
       'From Finland, the route to Croatia runs through Russia, Ukraine, '

@@ -102,6 +102,15 @@ class AdService {
     }
 
     bool wurdeBelohnt = false;
+    // show() löst seine Future auf, sobald der native Anzeigebefehl abgesetzt
+    // wurde — NICHT wenn der Nutzer die Ad fertig angesehen hat (bestätigt im
+    // Paket-Quellcode: RewardedAd.show() ruft nur
+    // instanceManager.showAdWithoutView() auf, dessen Future sich sofort nach
+    // dem nativen Show-Aufruf auflöst). Reward und Dismiss kommen über
+    // separate, spätere Callbacks. Deshalb hier per Completer auf das
+    // tatsächliche Ende (Dismiss oder Fehlschlag) warten, statt auf await
+    // show() selbst.
+    final fertig = Completer<bool>();
     _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
         // ignore: avoid_print
@@ -109,29 +118,32 @@ class AdService {
         ad.dispose();
         _rewardedAd = null;
         ladeRewardedAd(); // nächste Rewarded-Ad direkt vorladen
+        if (!fertig.isCompleted) fertig.complete(wurdeBelohnt);
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         // ignore: avoid_print
         print('[Ad/Rewarded] onAdFailedToShowFullScreenContent: $error');
         ad.dispose();
         _rewardedAd = null;
+        if (!fertig.isCompleted) fertig.complete(false);
       },
     );
 
     // ignore: avoid_print
-    print('[Ad/Rewarded] rufe await _rewardedAd!.show() auf...');
-    await _rewardedAd!.show(
+    print('[Ad/Rewarded] rufe _rewardedAd!.show() auf...');
+    unawaited(_rewardedAd!.show(
       onUserEarnedReward: (ad, reward) {
         // ignore: avoid_print
         print('[Ad/Rewarded] onUserEarnedReward: type=${reward.type}, amount=${reward.amount}');
         wurdeBelohnt = true;
         onBelohnt();
       },
-    );
+    ));
 
+    final ergebnis = await fertig.future;
     // ignore: avoid_print
-    print('[Ad/Rewarded] zeigeRewardedAd() beendet, wurdeBelohnt=$wurdeBelohnt');
-    return wurdeBelohnt;
+    print('[Ad/Rewarded] zeigeRewardedAd() beendet, wurdeBelohnt=$ergebnis');
+    return ergebnis;
   }
 
   // ── INTERSTITIAL ────────────────────────────────────────────────────────

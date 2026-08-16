@@ -229,20 +229,39 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   void _bestaetigen() {
     final q = _fragen[_idx];
     final real = q.kat.getValue(q.land)!;
+    final sk = _skala!;
+
+    // Rundungs-Gleichstand: der Spieler sieht auf dem Slider NUR den
+    // formatierten/gerundeten Wert (sk.format), nicht den Rohwert. Runden
+    // Schätzung und echter Wert auf denselben angezeigten Text, wirkt eine
+    // als "falsch" gewertete Antwort willkürlich, obwohl der Spieler optisch
+    // exakt getroffen hat. Nutzt bewusst denselben Formatierer wie die
+    // Anzeige (nicht eine separat geschätzte Nachkommastellen-Zahl), damit
+    // die Toleranz nie von der tatsächlich sichtbaren Rundung abweicht —
+    // gleiches Prinzip wie der Rundungs-Gleichstand in higher_lower_screen.dart.
+    final rundungsGleichstand =
+        _sliderVal != real && sk.format(_sliderVal) == sk.format(real);
+
     // Abweichung relativ zur gezeigten Skalenbreite (nicht zum echten Wert)
-    // -> macht die Schwierigkeit über alle Kategorien/Länder fair
+    // -> macht die Schwierigkeit über alle Kategorien/Länder EINHEITLICH fair
     // vergleichbar, statt Länder mit großen absoluten Werten zu bevorzugen
     // und Zwergstaaten/kleine Werte unfair zu bestrafen. Nutzt exakt dieselbe
-    // Skala, die auch für die Slider-Marker-Positionierung gilt.
-    final skalaBreite = _skala!.max - _skala!.min;
-    final dev = _istProzentKategorie(q.kat.id)
-        ? (_sliderVal - real).abs()
+    // Skala, die auch für die Slider-Marker-Positionierung gilt. Gilt jetzt
+    // AUCH für die Prozent-Kategorien (Inflation, Waldanteil, Korruption,
+    // Pressefreiheit) — die vorherige Sonderbehandlung mit fester absoluter
+    // Prozentpunkte-Toleranz war über verschiedene Prozent-Kategorien nicht
+    // fair vergleichbar (3 Punkte Abweichung bei "Kinder pro Frau", Skala
+    // 0-7, ist etwas völlig anderes als 3 Punkte bei "Inflation", Skala kann
+    // durch ein Ausreißer-Land 0-70 breit sein). Die skalen-relative Methode
+    // berücksichtigt automatisch, wie breit die jeweils gezogene Runden-Skala
+    // tatsächlich ist.
+    final skalaBreite = sk.max - sk.min;
+    final dev = rundungsGleichstand
+        ? 0.0
         : skalaBreite <= 0
             ? 0.0
-            : ((_sliderVal - real).abs() / skalaBreite * 100).clamp(0.0, 999.0);
-    final pts = _istProzentKategorie(q.kat.id)
-        ? _punkteProzentKategorie(dev)
-        : _punkteFuer(dev);
+            : ((_sliderVal - real).abs() / skalaBreite * 100).clamp(0.0, 100.0);
+    final pts = rundungsGleichstand ? 100 : _punkteFuer(dev);
     _ptsCtrl.forward(from: 0);
     setState(() {
       _beantwortet = true;
@@ -260,27 +279,13 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     });
   }
 
-  // Kategorien mit fester 0-100-Skala (Prozent/Index-Punkte): eine relative
-  // Abweichung ((schaetzung-real)/real*100) explodiert bei kleinen realen
-  // Werten (z.B. 12 % Waldanteil -> 250 % "Abweichung" bei nur 30 echten
-  // Prozentpunkten Differenz). Hier zählt stattdessen die ABSOLUTE Differenz
-  // in Prozentpunkten, weil das die tatsächliche "Daneben-Distanz" auf der
-  // Skala widerspiegelt. Zentral in SkalaService definiert (auch für die
-  // Rundenskalen-Clamp-Logik dort genutzt) statt einer zweiten, hier
-  // separat gepflegten Liste.
+  // Kategorien mit fester 0-100-Skala (Prozent/Index-Punkte) — wird NICHT
+  // mehr für die Abweichungs-/Punkteberechnung genutzt (die ist jetzt für
+  // alle Kategorien einheitlich skalen-relativ, siehe _bestaetigen()),
+  // sondern ausschließlich noch für die reine Werte-Anzeige/Rundenskalen-
+  // Clamp-Logik in SkalaService (Grenzen der Rundenskala bleiben bei
+  // Prozent-Kategorien auf 0-100 begrenzt).
   bool _istProzentKategorie(String id) => SkalaService.istProzentKategorie(id);
-
-  int _punkteProzentKategorie(double abweichungPunkte) {
-    if (abweichungPunkte <= 1) return 100;
-    if (abweichungPunkte <= 3) return 90;
-    if (abweichungPunkte <= 5) return 80;
-    if (abweichungPunkte <= 10) return 60;
-    if (abweichungPunkte <= 15) return 45;
-    if (abweichungPunkte <= 20) return 30;
-    if (abweichungPunkte <= 30) return 15;
-    if (abweichungPunkte <= 40) return 5;
-    return 0;
-  }
 
   Future<void> _weiter() async {
     if (_idx + 1 >= _fragen.length) {
@@ -325,21 +330,24 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   }
 
   // dev = Abweichung in Prozent der gezeigten Skalenbreite (siehe
-  // _bestaetigen). Schwellenwerte bewusst so gewählt, dass sie sich bei
-  // einer Frage in der Mitte der Skala ähnlich "anfühlen" wie die frühere,
-  // auf relative Abweichung vom echten Wert kalibrierte Kurve — gelten jetzt
-  // aber gleichermaßen fair für jede Position auf der Skala.
+  // _bestaetigen). Kontinuierliche Exponentialkurve statt fester Stufen:
+  // vorher sprang die Punktzahl z.B. von 0,5% bis 1,5% Abweichung konstant
+  // bei 95 — 0,6% und 1,4% Abweichung wurden also IDENTISCH bewertet, obwohl
+  // 1,4% mehr als doppelt so weit daneben liegt. Mit 100*exp(-dev/17) zählt
+  // jede einzelne Abweichungs-Einheit spürbar, statt in Sprüngen zu springen.
+  //
+  // Divisor 17 wurde per Least-Squares gegen die alte Stufen-Funktion an den
+  // Referenzpunkten [0,1,3,5,8,12,18,25,35,50]% kalibriert (kleinster
+  // quadratischer Fehler bei D≈16,9, auf 17 gerundet) — trifft die alten
+  // ungefähren Eckpunkte weiterhin (0%→100, ~5%→75, ~12%→49, ~18%→35 exakt,
+  // ~35%→13), fühlt sich also insgesamt weder strenger noch großzügiger an
+  // als vorher, differenziert aber jeden Zwischenwert fein statt stufig:
+  //   dev   0%   1%   3%   5%   8%  12%  18%  25%  35%  50%
+  //   alt  100   95   88   78   65   50   35   20    8    0
+  //   neu  100   94   84   75   62   49   35   23   13    5
   int _punkteFuer(double dev) {
-    if (dev <= 0.5) return 100;
-    if (dev <= 1.5) return 95;
-    if (dev <= 3) return 88;
-    if (dev <= 5) return 78;
-    if (dev <= 8) return 65;
-    if (dev <= 12) return 50;
-    if (dev <= 18) return 35;
-    if (dev <= 25) return 20;
-    if (dev <= 35) return 8;
-    return 0;
+    final punkte = 100 * exp(-dev / 17);
+    return punkte.round().clamp(0, 100);
   }
 
   String _labelFuer(int p) {
@@ -815,19 +823,17 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                           ),
                           const SizedBox(height: 14),
 
-                          // Deviation row
+                          // Deviation row — jetzt für ALLE Kategorien
+                          // einheitlich skalen-relativ (siehe _bestaetigen()).
                           Center(
                             child: Text(
-                              _istProzentKategorie(q.kat.id)
-                                  ? t('Abweichung: {n} Prozentpunkte',
-                                      {'n': '${_abweichung.round()}'})
-                                  : t('Abweichung: {n} % der Skala', {
-                                      'n': LocaleService.istEnglisch
-                                          ? _abweichung.toStringAsFixed(1)
-                                          : _abweichung
-                                              .toStringAsFixed(1)
-                                              .replaceAll('.', ','),
-                                    }),
+                              t('Abweichung: {n} % der Skala', {
+                                'n': LocaleService.istEnglisch
+                                    ? _abweichung.toStringAsFixed(1)
+                                    : _abweichung
+                                        .toStringAsFixed(1)
+                                        .replaceAll('.', ','),
+                              }),
                               style: TextStyle(
                                   color: _farbe(_letztePts),
                                   fontSize: 13,
@@ -1011,13 +1017,13 @@ class _ErgebnisZeile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final abweichungText = ergebnis.istProzentKategorie
-        ? t('{n} Prozentpunkte daneben', {'n': '${ergebnis.abweichung.round()}'})
-        : t('{n} % der Skala daneben', {
-            'n': LocaleService.istEnglisch
-                ? ergebnis.abweichung.toStringAsFixed(1)
-                : ergebnis.abweichung.toStringAsFixed(1).replaceAll('.', ','),
-          });
+    // Jetzt für ALLE Kategorien einheitlich skalen-relativ (siehe
+    // _bestaetigen() in _PreisSchaetzenScreenState).
+    final abweichungText = t('{n} % der Skala daneben', {
+      'n': LocaleService.istEnglisch
+          ? ergebnis.abweichung.toStringAsFixed(1)
+          : ergebnis.abweichung.toStringAsFixed(1).replaceAll('.', ','),
+    });
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(

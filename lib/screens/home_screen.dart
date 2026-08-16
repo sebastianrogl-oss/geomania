@@ -425,8 +425,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (_) => _WeltUebersichtSheet(
         snap: _snap,
         aktivWelt: _aktivWelt,
-        onWelt: (w) {
+        onWelt: (w) async {
           Navigator.pop(context);
+          // Snapshot neu laden: eine Welt kann gerade erst per Werbung
+          // freigeschaltet worden sein (siehe _KontinentFreischaltenDialog) —
+          // ohne diesen Reload bleibt _snap auf dem Stand vor der
+          // Freischaltung, wodurch die erste Station als gesperrt gilt und
+          // ein erneutes Öffnen von "Alle Welten" den Freischalt-Dialog
+          // erneut zeigt.
+          await _load();
+          if (!mounted) return;
           setState(() => _aktivWelt = w);
           _ladeTatsaechlicheModi(w);
         },
@@ -2345,12 +2353,6 @@ class _WeltUebersichtSheet extends StatefulWidget {
 }
 
 class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
-  // Welten, die WÄHREND dieser Sheet-Sitzung per Werbung freigeschaltet
-  // wurden — widget.snap selbst wird nicht neu geladen (der Aufrufer hat
-  // keinen Reload-Hook dafür), daher hier lokal nachgeführt, damit die
-  // Freischaltung sofort sichtbar wird, ohne das Sheet neu zu öffnen.
-  final Set<String> _zusaetzlichFreigeschaltet = {};
-
   @override
   Widget build(BuildContext context) {
     final snap = widget.snap;
@@ -2390,9 +2392,7 @@ class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
               child: Column(
                 children: lernwelten.map((w) {
                   final frei =
-                      snap?.istWeltFrei(w.id) ??
-                      (w.reihenfolge == 1 ||
-                          _zusaetzlichFreigeschaltet.contains(w.id));
+                      snap?.istWeltFrei(w.id) ?? (w.reihenfolge == 1);
                   final fortschritt = snap?.weltFortschritt(w.id) ?? 0.0;
                   final istAktiv = w.id == widget.aktivWelt.id;
                   return GestureDetector(
@@ -2405,12 +2405,7 @@ class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
                             builder: (_) => _KontinentFreischaltenDialog(
                               weltId: w.id,
                               weltName: w.name,
-                              onFreigeschaltet: () {
-                                setState(
-                                  () => _zusaetzlichFreigeschaltet.add(w.id),
-                                );
-                                widget.onWelt(w);
-                              },
+                              onFreigeschaltet: () => widget.onWelt(w),
                             ),
                           ),
                     child: Container(

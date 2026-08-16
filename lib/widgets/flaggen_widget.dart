@@ -33,7 +33,19 @@ Widget zeigeFlagge(
         height: height,
         child: SvgPicture.asset(
           'assets/flags/xk.svg',
-          fit: BoxFit.cover,
+          // BoxFit.contain statt .cover: alle anderen Flaggen (country_flags-
+          // Paket, via jovial_svg ScalableImageWidget) nutzen standardmäßig
+          // .contain, nicht .cover — das erzeugt bei jeder Box, deren
+          // Seitenverhältnis nicht exakt 4:3 ist (praktisch überall im
+          // Projekt), einen transparenten Rand um die Flagge, wodurch die
+          // äußere ClipRRect-Rundung dort nur unsichtbaren Transparenz-
+          // Bereich statt echter Flaggenfarbe wegschneidet. Mit .cover füllte
+          // Kosovo als einziges Land seine Box randlos aus -> als einzige
+          // Flagge war die Rundung an echter Farbe sichtbar (siehe
+          // Pixel-Messung: .cover ließ die linke Kante bei y=Mitte sofort auf
+          // Alpha=255 springen, .contain bei den Paket-Flaggen erst nach
+          // ~17px). .contain gleicht das an.
+          fit: BoxFit.contain,
         ),
       ),
     );

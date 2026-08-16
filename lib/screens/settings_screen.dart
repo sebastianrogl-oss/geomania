@@ -1,12 +1,16 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../data/countries.dart';
+import '../data/lernpfad_data.dart';
 import '../services/ad_service.dart';
 import '../services/auth_service.dart';
 import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/locale_service.dart';
 import '../l10n/uebersetzungen.dart';
+import 'station_quiz_screen.dart';
 
 const _bg = Color(0xFFF5F4F0);
 const _textDark = Color(0xFF1A1A1A);
@@ -297,6 +301,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  // ── DEBUG: Testmodus (nur kDebugMode, nie im Release-Build) ────────────────
+  //
+  // Erlaubt Entwicklern, eine EXAKTE Land+Modus-Kombination direkt zu öffnen
+  // statt eine zufällige Frage aus dem Lernpfad ziehen zu müssen — z.B. um
+  // gezielt zu prüfen, wie ein bestimmtes Land (z.B. Kosovo, Taiwan) in einem
+  // bestimmten Quiz-Modus (z.B. Umriss-Quiz) dargestellt wird.
+  Future<void> _testmodusOeffnen() async {
+    final ergebnis = await showDialog<(String, LernModus)>(
+      context: context,
+      builder: (_) => const _DebugTestmodusDialog(),
+    );
+    if (ergebnis == null || !mounted) return;
+    final (land, modus) = ergebnis;
+
+    // Synthetische Station mit einem einzigen Land als Pool statt einer
+    // echten Lernpfad-Station — dadurch zieht der Fragen-Generator
+    // (station_session_service.dart) IMMER genau dieses Land, keine
+    // Zufallsauswahl. Eine eindeutige, zeitgestempelte ID sorgt dafür, dass
+    // nie eine alte gespeicherte Debug-Session wiederverwendet wird UND dass
+    // stationKontext()/_pensionierterErsatz() diese ID nicht kennt (kein
+    // Lernpfad-Eintrag) — die Pensionierungs-Substitution greift dadurch
+    // nicht, der gewählte Modus bleibt garantiert exakt erhalten.
+    final debugStation = LernStation(
+      id: 'debug_testmodus_${DateTime.now().millisecondsSinceEpoch}',
+      modus: modus,
+      fragenAnzahl: 5,
+      laenderCodes: [land],
+      kategorien: const [],
+      schwierigkeitsgrad: 2,
+    );
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => StationQuizScreen(station: debugStation)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -356,6 +398,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ]),
             const SizedBox(height: 24),
+
+            // Nur im Debug-Build sichtbar — niemals im Release, siehe
+            // _testmodusOeffnen()-Kommentar.
+            if (kDebugMode) ...[
+              _SectionHeader(t('DEBUG')),
+              _Card(children: [
+                _Zeile(
+                  icon: Icons.bug_report_rounded,
+                  title: t('Testmodus: bestimmtes Land/Modus öffnen'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _testmodusOeffnen,
+                ),
+              ]),
+              const SizedBox(height: 24),
+            ],
 
             _SectionHeader(t('LERNFORTSCHRITT')),
             _Card(children: [
@@ -561,6 +618,75 @@ class _SwitchZeile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── DEBUG: Testmodus-Dialog (nur kDebugMode) ────────────────────────────────
+//
+// Zwei Dropdowns (Land + Quiz-Modus) + Bestätigen-Button. Gibt bei
+// Bestätigung ein (iso2, LernModus)-Record zurück, das
+// _SettingsScreenState._testmodusOeffnen() direkt in eine synthetische
+// LernStation umsetzt — kein Bezug zu echten Lernpfad-Daten, rein für
+// Entwickler-Zwecke.
+class _DebugTestmodusDialog extends StatefulWidget {
+  const _DebugTestmodusDialog();
+
+  @override
+  State<_DebugTestmodusDialog> createState() => _DebugTestmodusDialogState();
+}
+
+class _DebugTestmodusDialogState extends State<_DebugTestmodusDialog> {
+  late String _land = countries.first.iso2;
+  late LernModus _modus = LernModus.values.first;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('🐞 Testmodus: Land/Modus öffnen'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Nur im Debug-Build sichtbar. Öffnet die Kombination '
+                'direkt, ohne Bezug zum echten Lernpfad-Fortschritt.',
+                style: TextStyle(fontSize: 12, color: _textMid)),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _land,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Land'),
+              items: [
+                for (final c in countries)
+                  DropdownMenuItem(value: c.iso2, child: Text('${c.name} (${c.iso2})')),
+              ],
+              onChanged: (v) => setState(() => _land = v!),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<LernModus>(
+              initialValue: _modus,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Quiz-Modus'),
+              items: [
+                for (final m in LernModus.values)
+                  DropdownMenuItem(value: m, child: Text(lernModusLabel(m))),
+              ],
+              onChanged: (v) => setState(() => _modus = v!),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, (_land, _modus)),
+          child: const Text('Öffnen'),
+        ),
+      ],
     );
   }
 }

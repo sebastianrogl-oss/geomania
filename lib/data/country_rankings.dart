@@ -376,16 +376,12 @@ final List<RankingCategory> rankingCategories = [
   ),
   RankingCategory(
     id: 'inflation', labelDe: 'Inflationsrate', emoji: '📈',
-    // Niedrigere Inflation gilt als das bessere/gesündere wirtschaftliche
-    // Ergebnis -> Rang 1 = niedrigster Wert, nicht höchster.
-    unit: '%', higherIsBetter: false,
+    unit: '%', higherIsBetter: true,
     getValue: (c) => inflationsrate[c.iso2],
   ),
   RankingCategory(
     id: 'debt', labelDe: 'Staatsschulden', emoji: '💳',
-    // Niedrigere Staatsverschuldung gilt als das bessere Ergebnis -> Rang 1
-    // = niedrigster Wert, nicht höchster.
-    unit: '% BIP', higherIsBetter: false,
+    unit: '% BIP', higherIsBetter: true,
     getValue: (c) => staatsschulden[c.iso2],
   ),
 ];

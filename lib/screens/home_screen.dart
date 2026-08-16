@@ -22,27 +22,27 @@ import 'ranking_game_screen.dart';
 import 'station_quiz_screen.dart';
 
 IconData _modusIcon(LernModus m) => switch (m) {
-  LernModus.flaggenQuizBild      => Icons.flag_rounded,
-  LernModus.flaggenQuizMultiple  => Icons.flag_rounded,
+  LernModus.flaggenQuizBild => Icons.flag_rounded,
+  LernModus.flaggenQuizMultiple => Icons.flag_rounded,
   LernModus.hauptstaedteMultiple => Icons.account_balance_rounded,
-  LernModus.hauptstaedteEingabe  => Icons.account_balance_rounded,
-  LernModus.waehrungsQuiz        => Icons.monetization_on_rounded,
-  LernModus.sortierSpiel         => Icons.sort_rounded,
-  LernModus.preisSchaetzen       => Icons.sell_rounded,
-  LernModus.wirtschaftssektoren  => Icons.factory_rounded,
-  LernModus.umrissBild           => Icons.map_rounded,
-  LernModus.umrissMultiple       => Icons.map_rounded,
-  LernModus.flaggenQuizEingabe   => Icons.flag_rounded,
-  LernModus.umrissEingabe        => Icons.map_rounded,
-  LernModus.nachbarland          => Icons.explore_rounded,
-  LernModus.bipGesamt            => Icons.trending_up_rounded,
-  LernModus.flaeche              => Icons.crop_square_rounded,
-  LernModus.extremFrage          => Icons.emoji_events_rounded,
-  LernModus.waehrungZuLand       => Icons.monetization_on_rounded,
-  LernModus.extremFrageLeicht    => Icons.emoji_events_rounded,
-  LernModus.zufallsFakt          => Icons.lightbulb_rounded,
-  LernModus.bekanntesGebaeude    => Icons.temple_buddhist_rounded,
-  LernModus.grenzkettenRaetsel   => Icons.route_rounded,
+  LernModus.hauptstaedteEingabe => Icons.account_balance_rounded,
+  LernModus.waehrungsQuiz => Icons.monetization_on_rounded,
+  LernModus.sortierSpiel => Icons.sort_rounded,
+  LernModus.preisSchaetzen => Icons.sell_rounded,
+  LernModus.wirtschaftssektoren => Icons.factory_rounded,
+  LernModus.umrissBild => Icons.map_rounded,
+  LernModus.umrissMultiple => Icons.map_rounded,
+  LernModus.flaggenQuizEingabe => Icons.flag_rounded,
+  LernModus.umrissEingabe => Icons.map_rounded,
+  LernModus.nachbarland => Icons.explore_rounded,
+  LernModus.bipGesamt => Icons.trending_up_rounded,
+  LernModus.flaeche => Icons.crop_square_rounded,
+  LernModus.extremFrage => Icons.emoji_events_rounded,
+  LernModus.waehrungZuLand => Icons.monetization_on_rounded,
+  LernModus.extremFrageLeicht => Icons.emoji_events_rounded,
+  LernModus.zufallsFakt => Icons.lightbulb_rounded,
+  LernModus.bekanntesGebaeude => Icons.temple_buddhist_rounded,
+  LernModus.grenzkettenRaetsel => Icons.route_rounded,
 };
 
 class _Anims {
@@ -83,6 +83,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Kommentar bei FragenGenerator._pensionierterErsatz). Fallback auf
   // station.modus, solange diese Map noch nicht (neu) geladen ist.
   Map<String, LernModus> _tatsaechlicheModi = {};
+  // Für welche Abschnitte der aktiven Welt gerade eine Wiederholungsrunde
+  // aussteht (alle regulären Stationen fertig, aber die Wiederholung noch
+  // nicht abgeschlossen) — steuert, ob die Geschenk-Kachel (_MeilensteinBtn)
+  // antippbar ist. Siehe _ladeWiederholungStatus().
+  Map<String, bool> _wiederholungAktivProAbschnitt = {};
   String _profilbild = ProfilbildService.standard;
   bool _panelOffen = false;
   final ScrollController _pfadScrollController = ScrollController();
@@ -106,24 +111,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _panelSlide = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _panelCtrl, curve: Curves.easeOut));
+    _panelSlide = Tween<Offset>(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _panelCtrl, curve: Curves.easeOut));
     _anims = _Anims(
-      ringScale: Tween<double>(begin: 1.0, end: 1.2).animate(
-        CurvedAnimation(parent: _rippleCtrl, curve: Curves.easeOut),
-      ),
-      ringOpacity: Tween<double>(begin: 1.0, end: 0.0).animate(
-        CurvedAnimation(parent: _rippleCtrl, curve: Curves.easeOut),
-      ),
+      ringScale: Tween<double>(
+        begin: 1.0,
+        end: 1.2,
+      ).animate(CurvedAnimation(parent: _rippleCtrl, curve: Curves.easeOut)),
+      ringOpacity: Tween<double>(
+        begin: 1.0,
+        end: 0.0,
+      ).animate(CurvedAnimation(parent: _rippleCtrl, curve: Curves.easeOut)),
       ring2Scale: Tween<double>(begin: 1.0, end: 1.2).animate(
         CurvedAnimation(
-            parent: _rippleCtrl,
-            curve: const Interval(0.33, 1.0, curve: Curves.easeOut)),
+          parent: _rippleCtrl,
+          curve: const Interval(0.33, 1.0, curve: Curves.easeOut),
+        ),
       ),
       ring2Opacity: Tween<double>(begin: 1.0, end: 0.0).animate(
         CurvedAnimation(
-            parent: _rippleCtrl,
-            curve: const Interval(0.33, 1.0, curve: Curves.easeOut)),
+          parent: _rippleCtrl,
+          curve: const Interval(0.33, 1.0, curve: Curves.easeOut),
+        ),
       ),
     );
     _load();
@@ -195,6 +206,50 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _doneChallenges = done;
     });
     _ladeTatsaechlicheModi(aktiv);
+    _ladeWiederholungStatus(aktiv, snap);
+  }
+
+  // Prüft für jeden Abschnitt der übergebenen Welt, ob dessen reguläre
+  // Stationen bereits vollständig abgeschlossen sind, die Wiederholung
+  // dieses Abschnitts aber noch aussteht — nur dann wird die Geschenk-
+  // Kachel (_MeilensteinBtn) antippbar (siehe FortschrittService.
+  // wiederholungNoetig). Läuft separat/parallel zum Haupt-Snapshot, analog
+  // zu _ladeTatsaechlicheModi().
+  Future<void> _ladeWiederholungStatus(
+    LernWelt welt,
+    LernpfadSnapshot snap,
+  ) async {
+    final eintraege = <MapEntry<String, bool>>[];
+    for (final a in welt.abschnitte) {
+      final alleStationenFertig =
+          a.stationen.isNotEmpty &&
+          a.stationen.every((s) => snap.detailsFor(s.id).istAbgeschlossen);
+      if (alleStationenFertig && !snap.istAbschnittAbgeschlossen(a.id)) {
+        final noetig = await FortschrittService.wiederholungNoetig(a.id);
+        eintraege.add(MapEntry(a.id, noetig));
+      }
+    }
+    if (!mounted) return;
+    setState(() => _wiederholungAktivProAbschnitt = Map.fromEntries(eintraege));
+  }
+
+  // Wird beim Antippen der Geschenk-Kachel ausgelöst (statt wie zuvor
+  // automatisch nach Stations-Abschluss) — sammelt die falsch beantworteten
+  // Fragen des Abschnitts und startet die Wiederholungsrunde.
+  Future<void> _wiederholungTippen(LernAbschnitt abschnitt) async {
+    final falscheFragen =
+        await FortschrittService.sammelFalscheFragenFuerAbschnitt(abschnitt.id);
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StationQuizScreen.wiederholung(
+          wiederholungsAbschnittId: abschnitt.id,
+          wiederholungsFragenJson: falscheFragen,
+        ),
+      ),
+    );
+    _load();
   }
 
   // Berechnet für jede Station der übergebenen Welt den Modus, der beim
@@ -204,12 +259,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // trotz vieler Stationen).
   Future<void> _ladeTatsaechlicheModi(LernWelt welt) async {
     final alleStationen = welt.abschnitte.expand((a) => a.stationen).toList();
-    final eintraege = await Future.wait(alleStationen.map((s) async {
-      final gespeichert = await StationSession.laden(s.id);
-      final modus = gespeichert?.aktuelleFrage?.modus ??
-          await FragenGenerator.ermittleTatsaechlichenModus(s);
-      return MapEntry(s.id, modus);
-    }));
+    final eintraege = await Future.wait(
+      alleStationen.map((s) async {
+        final gespeichert = await StationSession.laden(s.id);
+        final modus =
+            gespeichert?.aktuelleFrage?.modus ??
+            await FragenGenerator.ermittleTatsaechlichenModus(s);
+        return MapEntry(s.id, modus);
+      }),
+    );
     if (!mounted) return;
     setState(() => _tatsaechlicheModi = Map.fromEntries(eintraege));
   }
@@ -245,7 +303,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           titel: t('Das große Schätzen'),
           startDatum: kChallengesStartDatum,
           spielScreenBuilder: (_) => const PreisSchaetzenScreen(),
-          ergebnisScreenBuilder: (_) => const PreisSchaetzenScreen(nurAnsicht: true),
+          ergebnisScreenBuilder: (_) =>
+              const PreisSchaetzenScreen(nurAnsicht: true),
           istHeuteGespielt: () async =>
               (await ChallengeRekordService.getHeutigePunkte('preis')) != null,
         );
@@ -258,9 +317,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           titel: t('Higher or Lower'),
           startDatum: kChallengesStartDatum,
           spielScreenBuilder: (_) => const HigherLowerScreen(),
-          ergebnisScreenBuilder: (_) => const HigherLowerScreen(nurAnsicht: true),
+          ergebnisScreenBuilder: (_) =>
+              const HigherLowerScreen(nurAnsicht: true),
           istHeuteGespielt: () async =>
-              (await ChallengeRekordService.getHeutigePunkte('higher_lower')) != null,
+              (await ChallengeRekordService.getHeutigePunkte('higher_lower')) !=
+              null,
         );
         break;
       case 'ranking_game':
@@ -271,9 +332,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           titel: t('Ranking Game'),
           startDatum: kChallengesStartDatum,
           spielScreenBuilder: (_) => const RankingGameScreen(),
-          ergebnisScreenBuilder: (_) => const RankingGameScreen(nurAnsicht: true),
+          ergebnisScreenBuilder: (_) =>
+              const RankingGameScreen(nurAnsicht: true),
           istHeuteGespielt: () async =>
-              (await ChallengeRekordService.getHeutigePunkte('ranking_game')) != null,
+              (await ChallengeRekordService.getHeutigePunkte('ranking_game')) !=
+              null,
         );
         break;
       case 'portfolio':
@@ -289,7 +352,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               (await PortfolioService.ladeStatus()).heuteGespielt,
         );
         break;
-      default: return;
+      default:
+        return;
     }
     await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
     _load();
@@ -326,7 +390,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Frage, sonst greift dieselbe Pensionierungs-Prüfung wie beim
     // eigentlichen Start (FragenGenerator.generiereFragenFuerStation).
     final gespeichert = await StationSession.laden(station.id);
-    final tatsaechlicherModus = gespeichert?.aktuelleFrage?.modus ??
+    final tatsaechlicherModus =
+        gespeichert?.aktuelleFrage?.modus ??
         await FragenGenerator.ermittleTatsaechlichenModus(station);
 
     if (!mounted) return;
@@ -342,7 +407,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Navigator.pop(context);
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => StationQuizScreen(station: station)),
+            MaterialPageRoute(
+              builder: (_) => StationQuizScreen(station: station),
+            ),
           );
           _load();
         },
@@ -387,8 +454,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     await Future.delayed(const Duration(milliseconds: 100));
     if (!mounted || !_pfadScrollController.hasClients) return;
     final viewportHoehe = _pfadScrollController.position.viewportDimension;
-    final ziel = (zielY - viewportHoehe / 2)
-        .clamp(0.0, _pfadScrollController.position.maxScrollExtent);
+    final ziel = (zielY - viewportHoehe / 2).clamp(
+      0.0,
+      _pfadScrollController.position.maxScrollExtent,
+    );
     await _pfadScrollController.animateTo(
       ziel,
       duration: const Duration(milliseconds: 800),
@@ -434,7 +503,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       top: -9999,
                       child: Wrap(
                         children: ['🔥', '⭐', '🎁']
-                            .map((e) => Text(e, style: const TextStyle(fontSize: 1)))
+                            .map(
+                              (e) =>
+                                  Text(e, style: const TextStyle(fontSize: 1)),
+                            )
                             .toList(),
                       ),
                     ),
@@ -447,9 +519,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             aktuelleStationId: _aktuelleStation?.id,
                             anims: _anims,
                             onStationTap: _stationTippen,
+                            onWiederholungTap: _wiederholungTippen,
                             scrollController: _pfadScrollController,
                             onAktuelleStationY: _handleAktuelleStationY,
                             tatsaechlicheModi: _tatsaechlicheModi,
+                            wiederholungAktivProAbschnitt:
+                                _wiederholungAktivProAbschnitt,
                           ),
                     // 2. Dunkler Overlay (schließt Panel beim Antippen)
                     if (_panelOffen)
@@ -507,12 +582,13 @@ class _GreenHeader extends StatelessWidget {
   final int punkte;
   final String profilbild;
   final VoidCallback? onProfilTap;
-  const _GreenHeader(
-      {required this.weltEmoji,
-      required this.streak,
-      required this.punkte,
-      required this.profilbild,
-      this.onProfilTap});
+  const _GreenHeader({
+    required this.weltEmoji,
+    required this.streak,
+    required this.punkte,
+    required this.profilbild,
+    this.onProfilTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -520,7 +596,13 @@ class _GreenHeader extends StatelessWidget {
       height: 56,
       decoration: const BoxDecoration(
         color: Color(0xFF4A9E4A),
-        boxShadow: [BoxShadow(color: Color(0x33000000), offset: Offset(0, 4), blurRadius: 8)],
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x33000000),
+            offset: Offset(0, 4),
+            blurRadius: 8,
+          ),
+        ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -529,19 +611,35 @@ class _GreenHeader extends StatelessWidget {
           const SizedBox(width: 16),
           const Text('🔥', style: TextStyle(fontSize: 18)),
           const SizedBox(width: 4),
-          Text('$streak',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+          Text(
+            '$streak',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
           const SizedBox(width: 16),
           const Text('⭐', style: TextStyle(fontSize: 18)),
           const SizedBox(width: 4),
-          Text('$punkte',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+          Text(
+            '$punkte',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
           const Spacer(),
           GestureDetector(
             onTap: onProfilTap,
             child: Container(
-              width: 38, height: 38,
-              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+              width: 38,
+              height: 38,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
               child: ClipOval(
                 child: ProfilbildService.istWeitformat(profilbild)
                     // Siehe profil_screen.dart: BoxFit.cover schnitt bei
@@ -570,7 +668,11 @@ class _WeltBanner extends StatelessWidget {
   final LernWelt welt;
   final LernAbschnitt abschnitt;
   final VoidCallback onUebersicht;
-  const _WeltBanner({required this.welt, required this.abschnitt, required this.onUebersicht});
+  const _WeltBanner({
+    required this.welt,
+    required this.abschnitt,
+    required this.onUebersicht,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -584,16 +686,28 @@ class _WeltBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                    t('Welt {n} — {name}',
-                        {'n': '${welt.reihenfolge}', 'name': t(welt.name)}),
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                  t('Welt {n} — {name}', {
+                    'n': '${welt.reihenfolge}',
+                    'name': t(welt.name),
+                  }),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 1),
                 Text(
-                    t('Abschnitt {n} — {titel}',
-                        {'n': '${abschnitt.stufe}', 'titel': t(abschnitt.titel)}),
-                    style: const TextStyle(
-                        color: Color(0xFFA8D5A2), fontSize: 12, fontWeight: FontWeight.w600)),
+                  t('Abschnitt {n} — {titel}', {
+                    'n': '${abschnitt.stufe}',
+                    'titel': t(abschnitt.titel),
+                  }),
+                  style: const TextStyle(
+                    color: Color(0xFFA8D5A2),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -610,9 +724,14 @@ class _WeltBanner extends StatelessWidget {
                 children: [
                   const Icon(Icons.map_outlined, color: Colors.white, size: 15),
                   const SizedBox(width: 4),
-                  Text(t('Welten'),
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                  Text(
+                    t('Welten'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -631,12 +750,16 @@ class _Pfad extends StatelessWidget {
   final String? aktuelleStationId;
   final _Anims anims;
   final void Function(LernStation) onStationTap;
+  final void Function(LernAbschnitt) onWiederholungTap;
   final ScrollController scrollController;
   final void Function(double y) onAktuelleStationY;
   // Tatsächlich zu spielender Modus je Station-ID (siehe
   // _HomeScreenState._ladeTatsaechlicheModi) — fällt auf station.modus
   // zurück, solange die Map für diese Station noch nicht befüllt ist.
   final Map<String, LernModus> tatsaechlicheModi;
+  // Siehe _HomeScreenState._ladeWiederholungStatus() — steuert, ob die
+  // Geschenk-Kachel für den jeweiligen Abschnitt antippbar ist.
+  final Map<String, bool> wiederholungAktivProAbschnitt;
 
   const _Pfad({
     required this.welt,
@@ -644,14 +767,18 @@ class _Pfad extends StatelessWidget {
     required this.aktuelleStationId,
     required this.anims,
     required this.onStationTap,
+    required this.onWiederholungTap,
     required this.scrollController,
     required this.onAktuelleStationY,
     required this.tatsaechlicheModi,
+    required this.wiederholungAktivProAbschnitt,
   });
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (_, constraints) => _buildStack(constraints.maxWidth));
+    return LayoutBuilder(
+      builder: (_, constraints) => _buildStack(constraints.maxWidth),
+    );
   }
 
   Widget _buildStack(double w) {
@@ -683,20 +810,28 @@ class _Pfad extends StatelessWidget {
       final aFrei = snap.istAbschnittFrei(a.id);
       final aDone = snap.istAbschnittAbgeschlossen(a.id);
 
-      final doneInSection =
-          a.stationen.where((s) => snap.detailsFor(s.id).istAbgeschlossen).length;
-      final sectionProgress =
-          a.stationen.isNotEmpty ? doneInSection / a.stationen.length : 0.0;
+      final doneInSection = a.stationen
+          .where((s) => snap.detailsFor(s.id).istAbgeschlossen)
+          .length;
+      final sectionProgress = a.stationen.isNotEmpty
+          ? doneInSection / a.stationen.length
+          : 0.0;
 
       if (ai > 0) {
         final bY = y + bannerBeforeGap;
-        overlays.add(Positioned(
-          left: 16,
-          right: 16,
-          top: bY,
-          height: bannerH,
-          child: _AbschnittTrenner(abschnitt: a, istFrei: aFrei, istDone: aDone),
-        ));
+        overlays.add(
+          Positioned(
+            left: 16,
+            right: 16,
+            top: bY,
+            height: bannerH,
+            child: _AbschnittTrenner(
+              abschnitt: a,
+              istFrei: aFrei,
+              istDone: aDone,
+            ),
+          ),
+        );
         y = bY + bannerH + bannerAfterGap;
       }
 
@@ -721,41 +856,54 @@ class _Pfad extends StatelessWidget {
         if (istAktuell) {
           // START-Blase nur auf der allerersten Station, solange sie nicht abgeschlossen
           if (globalStationIdx == 0) {
-            overlays.add(Positioned(
-              left: cx - 55,
-              top: y - 106,
-              width: 110,
-              child: _StartSprechblase(istGestartet: details.istGestartet),
-            ));
+            overlays.add(
+              Positioned(
+                left: cx - 55,
+                top: y - 106,
+                width: 110,
+                child: _StartSprechblase(istGestartet: details.istGestartet),
+              ),
+            );
           }
-          overlays.add(Positioned(
-            left: cx - 45,
-            top: y - 45,
-            child: _ActiveBtn(
-              modus: angezeigterModus,
-              anims: anims,
-              onTap: () => onStationTap(s),
-              sectionProgress: sectionProgress,
+          overlays.add(
+            Positioned(
+              left: cx - 45,
+              top: y - 45,
+              child: _ActiveBtn(
+                modus: angezeigterModus,
+                anims: anims,
+                onTap: () => onStationTap(s),
+                sectionProgress: sectionProgress,
+              ),
             ),
-          ));
+          );
         } else if (istDone) {
-          overlays.add(Positioned(
-            left: cx - 41,
-            top: y - 41,
-            child: _DoneBtn(onTap: () => onStationTap(s)),
-          ));
+          overlays.add(
+            Positioned(
+              left: cx - 41,
+              top: y - 41,
+              child: _DoneBtn(onTap: () => onStationTap(s)),
+            ),
+          );
         } else if (details.istFreigeschaltet) {
-          overlays.add(Positioned(
-            left: cx - 41,
-            top: y - 41,
-            child: _FreiBtn(modus: angezeigterModus, onTap: () => onStationTap(s)),
-          ));
+          overlays.add(
+            Positioned(
+              left: cx - 41,
+              top: y - 41,
+              child: _FreiBtn(
+                modus: angezeigterModus,
+                onTap: () => onStationTap(s),
+              ),
+            ),
+          );
         } else {
-          overlays.add(Positioned(
-            left: cx - 41,
-            top: y - 41,
-            child: _LockedBtn(modus: s.modus),
-          ));
+          overlays.add(
+            Positioned(
+              left: cx - 41,
+              top: y - 41,
+              child: _LockedBtn(modus: s.modus),
+            ),
+          );
         }
 
         y += vGap;
@@ -765,11 +913,19 @@ class _Pfad extends StatelessWidget {
 
       // Checkpoint immer in der Mitte
       final mcx = 0.50 * w;
-      overlays.add(Positioned(
-        left: mcx - 41,
-        top: y - 41,
-        child: _MeilensteinBtn(abschnitt: a, istDone: aDone, istLetzter: ai == welt.abschnitte.length - 1),
-      ));
+      overlays.add(
+        Positioned(
+          left: mcx - 41,
+          top: y - 41,
+          child: _MeilensteinBtn(
+            abschnitt: a,
+            istDone: aDone,
+            istLetzter: ai == welt.abschnitte.length - 1,
+            wiederholungAktiv: wiederholungAktivProAbschnitt[a.id] ?? false,
+            onTap: () => onWiederholungTap(a),
+          ),
+        ),
+      );
       checkpointPunkte.add((pos: Offset(mcx, y), stufe: a.stufe));
       y += vGap;
     }
@@ -777,27 +933,38 @@ class _Pfad extends StatelessWidget {
     final s = stationenProAbschnitt;
     final all = alleStationPos;
 
-    overlays.insertAll(0, pfadDekoOverlays(
-      kontinentId: welt.id,
-      allePositionen: all,
-      stationenProAbschnitt: s,
-      screenWidth: w,
-    ));
+    overlays.insertAll(
+      0,
+      pfadDekoOverlays(
+        kontinentId: welt.id,
+        allePositionen: all,
+        stationenProAbschnitt: s,
+        screenWidth: w,
+      ),
+    );
 
     // Münzen: stufe 1 → Station 7, andere an spezifischen Positionen
     final muenzPunkte = checkpointPunkte.map((cp) {
       return switch (cp.stufe) {
-        1 => (pos: all.length >= 7  ? all[6]        : cp.pos, stufe: cp.stufe),
-        2 => (pos: s.length > 1 && s[1].length > 2  ? s[1][2]  : cp.pos, stufe: cp.stufe),
-        3 => (pos: s.length > 2 && s[2].length > 10 ? s[2][10] : cp.pos, stufe: cp.stufe),
-        4 => (pos: s.length > 3 && s[3].length > 22 ? s[3][22] : cp.pos, stufe: cp.stufe),
+        1 => (pos: all.length >= 7 ? all[6] : cp.pos, stufe: cp.stufe),
+        2 => (
+          pos: s.length > 1 && s[1].length > 2 ? s[1][2] : cp.pos,
+          stufe: cp.stufe,
+        ),
+        3 => (
+          pos: s.length > 2 && s[2].length > 10 ? s[2][10] : cp.pos,
+          stufe: cp.stufe,
+        ),
+        4 => (
+          pos: s.length > 3 && s[3].length > 22 ? s[3][22] : cp.pos,
+          stufe: cp.stufe,
+        ),
         _ => cp,
       };
     }).toList();
-    overlays.addAll(pfadMaskottchenOverlays(
-      abschnitte: muenzPunkte,
-      screenWidth: w,
-    ));
+    overlays.addAll(
+      pfadMaskottchenOverlays(abschnitte: muenzPunkte, screenWidth: w),
+    );
 
     // Globus: freie Positionen (kein Clash mit Coin/Deko). Nicht jede Welt
     // hat 4 Abschnitte (Südamerika/Ozeanien haben nur 3, siehe Teil 2 des
@@ -805,18 +972,35 @@ class _Pfad extends StatelessWidget {
     // existiert, sonst würde checkpointPunkte[3] einen RangeError werfen.
     final globusPunkte = [
       if (welt.id != 'suedamerika' && checkpointPunkte.isNotEmpty)
-        (pos: s.isNotEmpty && s[0].length > 10 ? s[0][10] : all.first, stufe: 1),
+        (
+          pos: s.isNotEmpty && s[0].length > 10 ? s[0][10] : all.first,
+          stufe: 1,
+        ),
       if (checkpointPunkte.length > 1)
-        (pos: s.length > 1 && s[1].length > 10 ? s[1][10] : checkpointPunkte[1].pos, stufe: 2),
+        (
+          pos: s.length > 1 && s[1].length > 10
+              ? s[1][10]
+              : checkpointPunkte[1].pos,
+          stufe: 2,
+        ),
       if (checkpointPunkte.length > 2)
-        (pos: s.length > 2 && s[2].length > 2  ? s[2][2]  : checkpointPunkte[2].pos, stufe: 3),
+        (
+          pos: s.length > 2 && s[2].length > 2
+              ? s[2][2]
+              : checkpointPunkte[2].pos,
+          stufe: 3,
+        ),
       if (checkpointPunkte.length > 3)
-        (pos: s.length > 3 && s[3].length > 14 ? s[3][14] : checkpointPunkte[3].pos, stufe: 4),
+        (
+          pos: s.length > 3 && s[3].length > 14
+              ? s[3][14]
+              : checkpointPunkte[3].pos,
+          stufe: 4,
+        ),
     ];
-    overlays.addAll(pfadGlobusOverlays(
-      abschnitte: globusPunkte,
-      screenWidth: w,
-    ));
+    overlays.addAll(
+      pfadGlobusOverlays(abschnitte: globusPunkte, screenWidth: w),
+    );
 
     final totalH = y + 80;
 
@@ -849,64 +1033,111 @@ class _MeilensteinBtn extends StatelessWidget {
   final LernAbschnitt abschnitt;
   final bool istDone;
   final bool istLetzter;
-  const _MeilensteinBtn({required this.abschnitt, required this.istDone, required this.istLetzter});
+  // Alle Stationen des Abschnitts fertig, Wiederholung aber noch nicht
+  // abgeschlossen -> Kachel ist antippbar und startet die Wiederholung
+  // (siehe _HomeScreenState._wiederholungTippen). Vorher (Stationen noch
+  // nicht fertig) oder danach (bereits abgeschlossen, istDone) bleibt sie
+  // inert wie zuvor.
+  final bool wiederholungAktiv;
+  final VoidCallback onTap;
+  const _MeilensteinBtn({
+    required this.abschnitt,
+    required this.istDone,
+    required this.istLetzter,
+    required this.wiederholungAktiv,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final hauptFarbe = istDone ? const Color(0xFFF9A825) : const Color(0xFFCECCCA);
-    final sockelFarbe = istDone ? const Color(0xFFC17F00) : const Color(0xFFADABA8);
+    // Drei Zustände statt nur zwei: nicht erreicht (grau, inert) — bereit
+    // zum Antippen (grün, wie der übrige "aktiv"-Farbcode im Lernpfad) —
+    // abgeschlossen (orange, inert, wie zuvor).
+    final hauptFarbe = istDone
+        ? const Color(0xFFF9A825)
+        : wiederholungAktiv
+        ? const Color(0xFF4A9E4A)
+        : const Color(0xFFCECCCA);
+    final sockelFarbe = istDone
+        ? const Color(0xFFC17F00)
+        : wiederholungAktiv
+        ? const Color(0xFF3D8B3D)
+        : const Color(0xFFADABA8);
     const radius = BorderRadius.all(Radius.circular(16));
 
     final String icon;
     final String label;
     if (istLetzter) {
       icon = istDone ? '🏆' : '⭐';
-      label = istDone ? t('Abschluss ✅') : t('Abschluss');
+      label = istDone
+          ? t('Abschluss ✅')
+          : wiederholungAktiv
+          ? t('Wiederholung starten')
+          : t('Abschluss');
     } else {
       icon = istDone ? '🎁' : '📖';
-      label = istDone ? t('Abschnitt ✅') : t('Checkpoint');
+      label = istDone
+          ? t('Abschnitt ✅')
+          : wiederholungAktiv
+          ? t('Wiederholung starten')
+          : t('Checkpoint');
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 82,
-          height: 87,
-          child: Stack(
-            children: [
-              // Sockel
-              Positioned(
-                top: 5, left: 0,
-                child: Container(
-                  width: 82, height: 82,
-                  decoration: BoxDecoration(color: sockelFarbe, borderRadius: radius),
-                ),
-              ),
-              // Haupt-Kachel
-              Positioned(
-                top: 0, left: 0,
-                child: Container(
-                  width: 82, height: 82,
-                  decoration: BoxDecoration(color: hauptFarbe, borderRadius: radius),
-                  child: Center(
-                    child: Text(icon, style: const TextStyle(fontSize: 34)),
+    return GestureDetector(
+      onTap: wiederholungAktiv ? onTap : null,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 82,
+            height: 87,
+            child: Stack(
+              children: [
+                // Sockel
+                Positioned(
+                  top: 5,
+                  left: 0,
+                  child: Container(
+                    width: 82,
+                    height: 82,
+                    decoration: BoxDecoration(
+                      color: sockelFarbe,
+                      borderRadius: radius,
+                    ),
                   ),
                 ),
-              ),
-            ],
+                // Haupt-Kachel
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  child: Container(
+                    width: 82,
+                    height: 82,
+                    decoration: BoxDecoration(
+                      color: hauptFarbe,
+                      borderRadius: radius,
+                    ),
+                    child: Center(
+                      child: Text(icon, style: const TextStyle(fontSize: 34)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: istDone ? const Color(0xFF4A9E4A) : const Color(0xFFAAAAAA),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: istDone || wiederholungAktiv
+                  ? const Color(0xFF4A9E4A)
+                  : const Color(0xFFAAAAAA),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -942,8 +1173,14 @@ class _StartSprechblase extends StatelessWidget {
             Transform.translate(
               offset: const Offset(0, _sockelH),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: const BoxDecoration(color: _sockel, borderRadius: _br),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                decoration: const BoxDecoration(
+                  color: _sockel,
+                  borderRadius: _br,
+                ),
                 child: Text(label, style: _style.copyWith(color: _sockel)),
               ),
             ),
@@ -977,7 +1214,9 @@ class _PfeilUntenMaler extends CustomPainter {
         ..lineTo(size.width, 0)
         ..lineTo(size.width / 2, size.height)
         ..close(),
-      Paint()..color = color..style = PaintingStyle.fill,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.fill,
     );
   }
 
@@ -1015,7 +1254,9 @@ class _Druckbar3DBtnState extends State<_Druckbar3DBtn> {
     final s = widget.sockelHoehe;
 
     return GestureDetector(
-      onTapDown: widget.onTap != null ? (_) => setState(() => _gedrueckt = true) : null,
+      onTapDown: widget.onTap != null
+          ? (_) => setState(() => _gedrueckt = true)
+          : null,
       onTapUp: widget.onTap != null
           ? (_) {
               setState(() => _gedrueckt = false);
@@ -1037,8 +1278,10 @@ class _Druckbar3DBtnState extends State<_Druckbar3DBtn> {
                 width: g,
                 height: g,
                 child: DecoratedBox(
-                  decoration:
-                      BoxDecoration(color: widget.sockelFarbe, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: widget.sockelFarbe,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
             ),
@@ -1109,7 +1352,9 @@ class _FreiBtn extends StatelessWidget {
           ),
           shape: BoxShape.circle,
         ),
-        child: Center(child: Icon(_modusIcon(modus), color: Colors.white, size: 32)),
+        child: Center(
+          child: Icon(_modusIcon(modus), color: Colors.white, size: 32),
+        ),
       ),
       onTap: onTap,
     );
@@ -1126,7 +1371,7 @@ class _PulsierRing3DPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2 + 3.0);
     final startR = size.width / 2 + 8.0; // 53px Startradius
-    final r = startR + animValue * 8.0;   // 51→59 (102px→118px diameter)
+    final r = startR + animValue * 8.0; // 51→59 (102px→118px diameter)
     final sw = (3.0 - animValue * 2.0).clamp(0.3, 3.0);
     final opacity = (1.0 - animValue * 0.9).clamp(0.0, 1.0);
 
@@ -1200,7 +1445,9 @@ class _ActiveBtn extends StatelessWidget {
                   ),
                   shape: BoxShape.circle,
                 ),
-                child: Center(child: Icon(_modusIcon(modus), color: Colors.white, size: 36)),
+                child: Center(
+                  child: Icon(_modusIcon(modus), color: Colors.white, size: 36),
+                ),
               ),
               onTap: onTap,
             ),
@@ -1229,7 +1476,11 @@ class _LockedBtn extends StatelessWidget {
           shape: BoxShape.circle,
         ),
         child: Center(
-          child: Icon(_modusIcon(modus), color: const Color(0xFF9E9C96), size: 28),
+          child: Icon(
+            _modusIcon(modus),
+            color: const Color(0xFF9E9C96),
+            size: 28,
+          ),
         ),
       ),
       onTap: null,
@@ -1243,8 +1494,11 @@ class _AbschnittTrenner extends StatelessWidget {
   final LernAbschnitt abschnitt;
   final bool istFrei;
   final bool istDone;
-  const _AbschnittTrenner(
-      {required this.abschnitt, required this.istFrei, required this.istDone});
+  const _AbschnittTrenner({
+    required this.abschnitt,
+    required this.istFrei,
+    required this.istDone,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1254,9 +1508,15 @@ class _AbschnittTrenner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFEAEAE5),
         borderRadius: BorderRadius.circular(16),
-        border: istDone ? Border.all(color: const Color(0xFF4A9E4A), width: 1.5) : null,
+        border: istDone
+            ? Border.all(color: const Color(0xFF4A9E4A), width: 1.5)
+            : null,
         boxShadow: const [
-          BoxShadow(color: Color(0x1F000000), offset: Offset(0, 3), blurRadius: 6),
+          BoxShadow(
+            color: Color(0x1F000000),
+            offset: Offset(0, 3),
+            blurRadius: 6,
+          ),
         ],
       ),
       child: Row(
@@ -1267,12 +1527,16 @@ class _AbschnittTrenner extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  t('Abschnitt {n} — {titel}',
-                      {'n': '${abschnitt.stufe}', 'titel': t(abschnitt.titel)}),
+                  t('Abschnitt {n} — {titel}', {
+                    'n': '${abschnitt.stufe}',
+                    'titel': t(abschnitt.titel),
+                  }),
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
-                    color: istFrei ? const Color(0xFF1a1a1a) : const Color(0xFF999999),
+                    color: istFrei
+                        ? const Color(0xFF1a1a1a)
+                        : const Color(0xFF999999),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -1280,7 +1544,9 @@ class _AbschnittTrenner extends StatelessWidget {
                   t(abschnitt.untertitel),
                   style: TextStyle(
                     fontSize: 11,
-                    color: istFrei ? const Color(0xFF666666) : const Color(0xFFBBBBBB),
+                    color: istFrei
+                        ? const Color(0xFF666666)
+                        : const Color(0xFFBBBBBB),
                   ),
                 ),
               ],
@@ -1290,7 +1556,11 @@ class _AbschnittTrenner extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Text(
-              istDone ? '✅' : istFrei ? '▼' : '🔒',
+              istDone
+                  ? '✅'
+                  : istFrei
+                  ? '▼'
+                  : '🔒',
               style: TextStyle(
                 fontSize: 16,
                 color: istFrei && !istDone ? const Color(0xFF4A9E4A) : null,
@@ -1312,11 +1582,12 @@ class _StationSheet extends StatelessWidget {
   final LernModus modus;
   final bool abgeschlossen;
   final VoidCallback onStart;
-  const _StationSheet(
-      {required this.station,
-      required this.modus,
-      required this.abgeschlossen,
-      required this.onStart});
+  const _StationSheet({
+    required this.station,
+    required this.modus,
+    required this.abgeschlossen,
+    required this.onStart,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1325,8 +1596,12 @@ class _StationSheet extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding:
-          EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.paddingOf(context).bottom + 20),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        16,
+        24,
+        MediaQuery.paddingOf(context).bottom + 20,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1334,19 +1609,27 @@ class _StationSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           const SizedBox(height: 22),
           Icon(_modusIcon(modus), size: 56, color: const Color(0xFF4A9E4A)),
           const SizedBox(height: 12),
           Text(
-              lernModusLabel(modus),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            lernModusLabel(modus),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 6),
-          Text(lernModusFragenLabel(station),
-              style: TextStyle(
-                  fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w600)),
+          Text(
+            lernModusFragenLabel(station),
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           if (abgeschlossen) ...[
             const SizedBox(height: 12),
             Container(
@@ -1355,11 +1638,14 @@ class _StationSheet extends StatelessWidget {
                 color: const Color(0xFF4A9E4A).withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(t('Bereits abgeschlossen ✅'),
-                  style: const TextStyle(
-                      color: Color(0xFF4A9E4A),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12)),
+              child: Text(
+                t('Bereits abgeschlossen ✅'),
+                style: const TextStyle(
+                  color: Color(0xFF4A9E4A),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ],
           const SizedBox(height: 28),
@@ -1372,12 +1658,18 @@ class _StationSheet extends StatelessWidget {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 elevation: 0,
               ),
-              child: Text(abgeschlossen ? t('Nochmal spielen') : t('START'),
-                  style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+              child: Text(
+                abgeschlossen ? t('Nochmal spielen') : t('START'),
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -1385,11 +1677,14 @@ class _StationSheet extends StatelessWidget {
             width: double.infinity,
             child: TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(t('Abbrechen'),
-                  style: const TextStyle(
-                      color: Color(0xFF888888),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15)),
+              child: Text(
+                t('Abbrechen'),
+                style: const TextStyle(
+                  color: Color(0xFF888888),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
             ),
           ),
         ],
@@ -1452,8 +1747,10 @@ class _ChallengePanelState extends State<_ChallengePanel> {
   Widget build(BuildContext context) {
     final doneCount = widget.done.length;
     final d = DailyChallenge.untilMidnight();
-    final countdown = t('Heute • Reset in {h}h {m}m',
-        {'h': '${d.inHours}', 'm': '${d.inMinutes % 60}'});
+    final countdown = t('Heute • Reset in {h}h {m}m', {
+      'h': '${d.inHours}',
+      'm': '${d.inMinutes % 60}',
+    });
 
     return Container(
       decoration: const BoxDecoration(
@@ -1536,8 +1833,11 @@ class _ChallengePanelState extends State<_ChallengePanel> {
                       color: const Color(0xFFEAEAE5),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(Icons.close_rounded,
-                        color: Color(0xFF888888), size: 18),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: Color(0xFF888888),
+                      size: 18,
+                    ),
                   ),
                 ),
               ],
@@ -1571,7 +1871,9 @@ class _ChallengePanelState extends State<_ChallengePanel> {
                           border: i < doneCount
                               ? null
                               : Border.all(
-                                  color: const Color(0xFFD0CEC8), width: 1.5),
+                                  color: const Color(0xFFD0CEC8),
+                                  width: 1.5,
+                                ),
                         ),
                       ),
                     ],
@@ -1735,8 +2037,10 @@ class _GrossKarteState extends State<_GrossKarte>
                         widget.asset,
                         fit: BoxFit.contain,
                         errorBuilder: (ctx, err, st) => Center(
-                          child: Text(widget.emoji,
-                              style: TextStyle(fontSize: 52.rsp(context))),
+                          child: Text(
+                            widget.emoji,
+                            style: TextStyle(fontSize: 52.rsp(context)),
+                          ),
                         ),
                       ),
                     ),
@@ -1778,9 +2082,14 @@ class _GrossKarteState extends State<_GrossKarte>
                   width: 22.rpx(context),
                   height: 22.rpx(context),
                   decoration: const BoxDecoration(
-                      color: Colors.white, shape: BoxShape.circle),
-                  child: Icon(Icons.check_rounded,
-                      color: const Color(0xFF4A9E4A), size: 16.rpx(context)),
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check_rounded,
+                    color: const Color(0xFF4A9E4A),
+                    size: 16.rpx(context),
+                  ),
                 ),
               ),
           ],
@@ -1814,8 +2123,10 @@ class _ChallengeBtnState extends State<_ChallengeBtn>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
-    _glowAnim = Tween<double>(begin: 0.0, end: 1.0)
-        .animate(CurvedAnimation(parent: _glowCtrl, curve: Curves.easeOut));
+    _glowAnim = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _glowCtrl, curve: Curves.easeOut));
     _syncAnim();
   }
 
@@ -1848,7 +2159,9 @@ class _ChallengeBtnState extends State<_ChallengeBtn>
     const outerBr = BorderRadius.all(Radius.circular(16));
     const innerBr = BorderRadius.all(Radius.circular(14));
     final allDone = widget.doneCount >= 4;
-    final badgeColor = allDone ? const Color(0xFF4A9E4A) : const Color(0xFFE53935);
+    final badgeColor = allDone
+        ? const Color(0xFF4A9E4A)
+        : const Color(0xFFE53935);
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -1881,14 +2194,16 @@ class _ChallengeBtnState extends State<_ChallengeBtn>
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18 + v * 4),
                         border: Border.all(
-                          color: const Color(0xFF4A9E4A)
-                              .withValues(alpha: (0.6 - v * 0.6).clamp(0, 1)),
+                          color: const Color(
+                            0xFF4A9E4A,
+                          ).withValues(alpha: (0.6 - v * 0.6).clamp(0, 1)),
                           width: (2.5 - v * 2.0).clamp(0.1, 2.5),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF4A9E4A)
-                                .withValues(alpha: (0.15 - v * 0.15).clamp(0, 0.15)),
+                            color: const Color(0xFF4A9E4A).withValues(
+                              alpha: (0.15 - v * 0.15).clamp(0, 0.15),
+                            ),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),
@@ -1903,29 +2218,29 @@ class _ChallengeBtnState extends State<_ChallengeBtn>
               top: 2,
               left: 0,
               child: Container(
-              width: outer,
-              height: outer,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFFFFFFFF), Color(0xFFE0DDD6)],
+                width: outer,
+                height: outer,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFFFFFF), Color(0xFFE0DDD6)],
+                  ),
+                  borderRadius: outerBr,
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      blurRadius: 6,
+                      offset: Offset(2, 5),
+                    ),
+                    BoxShadow(
+                      color: Color(0xCCFFFFFF),
+                      blurRadius: 3,
+                      offset: Offset(-1, -2),
+                    ),
+                  ],
                 ),
-                borderRadius: outerBr,
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x33000000),
-                    blurRadius: 6,
-                    offset: Offset(2, 5),
-                  ),
-                  BoxShadow(
-                    color: Color(0xCCFFFFFF),
-                    blurRadius: 3,
-                    offset: Offset(-1, -2),
-                  ),
-                ],
               ),
-            ),
             ),
             // Innerer Sockel (dunkelgrün, fix)
             Positioned(
@@ -1969,12 +2284,15 @@ class _ChallengeBtnState extends State<_ChallengeBtn>
                   children: [
                     Icon(Icons.bolt_rounded, color: Colors.white, size: 22),
                     SizedBox(height: 1),
-                    Text('Daily',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3)),
+                    Text(
+                      'Daily',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1995,9 +2313,10 @@ class _ChallengeBtnState extends State<_ChallengeBtn>
                   child: Text(
                     '${widget.doneCount}',
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800),
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
@@ -2015,8 +2334,11 @@ class _WeltUebersichtSheet extends StatefulWidget {
   final LernpfadSnapshot? snap;
   final LernWelt aktivWelt;
   final void Function(LernWelt) onWelt;
-  const _WeltUebersichtSheet(
-      {required this.snap, required this.aktivWelt, required this.onWelt});
+  const _WeltUebersichtSheet({
+    required this.snap,
+    required this.aktivWelt,
+    required this.onWelt,
+  });
 
   @override
   State<_WeltUebersichtSheet> createState() => _WeltUebersichtSheetState();
@@ -2033,14 +2355,19 @@ class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
   Widget build(BuildContext context) {
     final snap = widget.snap;
     return Container(
-      constraints:
-          BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
       decoration: const BoxDecoration(
         color: Color(0xFFF5F4F0),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding:
-          EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.paddingOf(context).bottom + 20),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        16,
+        20,
+        MediaQuery.paddingOf(context).bottom + 20,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2048,17 +2375,22 @@ class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           const SizedBox(height: 16),
-          Text(t('Alle Welten'),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(
+            t('Alle Welten'),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 16),
           Flexible(
             child: SingleChildScrollView(
               child: Column(
                 children: lernwelten.map((w) {
-                  final frei = snap?.istWeltFrei(w.id) ??
+                  final frei =
+                      snap?.istWeltFrei(w.id) ??
                       (w.reihenfolge == 1 ||
                           _zusaetzlichFreigeschaltet.contains(w.id));
                   final fortschritt = snap?.weltFortschritt(w.id) ?? 0.0;
@@ -2067,19 +2399,20 @@ class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
                     onTap: frei
                         ? () => widget.onWelt(w)
                         : () => showModalBottomSheet(
-                              context: context,
-                              backgroundColor: Colors.transparent,
-                              isScrollControlled: true,
-                              builder: (_) => _KontinentFreischaltenDialog(
-                                weltId: w.id,
-                                weltName: w.name,
-                                onFreigeschaltet: () {
-                                  setState(
-                                      () => _zusaetzlichFreigeschaltet.add(w.id));
-                                  widget.onWelt(w);
-                                },
-                              ),
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            isScrollControlled: true,
+                            builder: (_) => _KontinentFreischaltenDialog(
+                              weltId: w.id,
+                              weltName: w.name,
+                              onFreigeschaltet: () {
+                                setState(
+                                  () => _zusaetzlichFreigeschaltet.add(w.id),
+                                );
+                                widget.onWelt(w);
+                              },
                             ),
+                          ),
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(14),
@@ -2089,34 +2422,45 @@ class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
                             : Colors.white,
                         borderRadius: BorderRadius.circular(14),
                         border: istAktiv
-                            ? Border.all(color: const Color(0xFF4A9E4A), width: 2)
+                            ? Border.all(
+                                color: const Color(0xFF4A9E4A),
+                                width: 2,
+                              )
                             : null,
                       ),
                       child: Row(
                         children: [
-                          Text(w.emoji,
-                              style: TextStyle(
-                                  fontSize: 22,
-                                  color: frei ? null : const Color(0xFFCCCCCC))),
+                          Text(
+                            w.emoji,
+                            style: TextStyle(
+                              fontSize: 22,
+                              color: frei ? null : const Color(0xFFCCCCCC),
+                            ),
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(t(w.name),
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14,
-                                        color: frei
-                                            ? const Color(0xFF1a1a1a)
-                                            : const Color(0xFF999999))),
+                                Text(
+                                  t(w.name),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    color: frei
+                                        ? const Color(0xFF1a1a1a)
+                                        : const Color(0xFF999999),
+                                  ),
+                                ),
                                 if (frei) ...[
                                   const SizedBox(height: 4),
                                   LinearProgressIndicator(
                                     value: fortschritt,
                                     backgroundColor: const Color(0xFFD4D4CC),
-                                    valueColor: const AlwaysStoppedAnimation<Color>(
-                                        Color(0xFF4A9E4A)),
+                                    valueColor:
+                                        const AlwaysStoppedAnimation<Color>(
+                                          Color(0xFF4A9E4A),
+                                        ),
                                     minHeight: 4,
                                     borderRadius: BorderRadius.circular(2),
                                   ),
@@ -2128,11 +2472,12 @@ class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
                           Text(
                             frei ? '${(fortschritt * 100).round()}%' : '🔒',
                             style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: frei
-                                    ? const Color(0xFF4A9E4A)
-                                    : const Color(0xFFBBBBBB)),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: frei
+                                  ? const Color(0xFF4A9E4A)
+                                  : const Color(0xFFBBBBBB),
+                            ),
                           ),
                         ],
                       ),
@@ -2196,18 +2541,24 @@ class _KontinentFreischaltenDialogState
       return;
     }
 
-    final neuerStand =
-        await FortschrittService.kontinentWerbungErhoehen(widget.weltId);
+    final neuerStand = await FortschrittService.kontinentWerbungErhoehen(
+      widget.weltId,
+    );
     if (!mounted) return;
 
     if (neuerStand >= FortschrittService.kontinentWerbungenNoetig) {
       Navigator.pop(context);
       widget.onFreigeschaltet();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            t('🎉 {welt} ist jetzt freigeschaltet!', {'welt': t(widget.weltName)})),
-        backgroundColor: const Color(0xFF4A9E4A),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t('🎉 {welt} ist jetzt freigeschaltet!', {
+              'welt': t(widget.weltName),
+            }),
+          ),
+          backgroundColor: const Color(0xFF4A9E4A),
+        ),
+      );
       return;
     }
 
@@ -2222,7 +2573,11 @@ class _KontinentFreischaltenDialogState
     final noetig = FortschrittService.kontinentWerbungenNoetig;
     return Container(
       padding: EdgeInsets.fromLTRB(
-          24, 24, 24, MediaQuery.paddingOf(context).bottom + 24),
+        24,
+        24,
+        24,
+        MediaQuery.paddingOf(context).bottom + 24,
+      ),
       decoration: const BoxDecoration(
         color: Color(0xFFF5F4F0),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -2237,16 +2592,22 @@ class _KontinentFreischaltenDialogState
               height: 4,
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                  color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
-          Text(t('Diesen Kontinent freischalten'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(
+            t('Diesen Kontinent freischalten'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 8),
           Text(
-            t('Schau dir {n} kurze Werbungen an, um {welt} freizuschalten',
-                {'n': '$noetig', 'welt': t(widget.weltName)}),
+            t('Schau dir {n} kurze Werbungen an, um {welt} freizuschalten', {
+              'n': '$noetig',
+              'welt': t(widget.weltName),
+            }),
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
           ),
@@ -2261,14 +2622,19 @@ class _KontinentFreischaltenDialogState
                 height: 14,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: gesehen ? const Color(0xFF4A9E4A) : const Color(0xFFD4D4CC),
+                  color: gesehen
+                      ? const Color(0xFF4A9E4A)
+                      : const Color(0xFFD4D4CC),
                 ),
               );
             }),
           ),
           const SizedBox(height: 6),
           Text(
-            t('{n} von {gesamt} angesehen', {'n': '$_angesehen', 'gesamt': '$noetig'}),
+            t('{n} von {gesamt} angesehen', {
+              'n': '$_angesehen',
+              'gesamt': '$noetig',
+            }),
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
           ),
@@ -2287,7 +2653,9 @@ class _KontinentFreischaltenDialogState
               backgroundColor: const Color(0xFF4A9E4A),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
               elevation: 0,
             ),
             child: _ladeAd
@@ -2295,10 +2663,17 @@ class _KontinentFreischaltenDialogState
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2),
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
                   )
-                : Text(t('Werbung ansehen'),
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                : Text(
+                    t('Werbung ansehen'),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
           ),
         ],
       ),

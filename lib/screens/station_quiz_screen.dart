@@ -708,32 +708,17 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       return;
     }
 
-    // Wiederholungsrunde starten
+    // Wiederholung nötig: KEIN automatischer Start mehr — der Abschnitt
+    // bleibt bewusst unabgeschlossen (wiederholungAbschliessen() wird erst
+    // beim tatsächlichen Abschluss der Wiederholungsrunde aufgerufen, siehe
+    // oben istWiederholungsrunde-Zweig). Der Spieler startet die
+    // Wiederholung stattdessen bewusst über die Geschenk-Kachel im
+    // Lernpfad (siehe home_screen.dart _MeilensteinBtn /
+    // _HomeScreenState._wiederholungTippen). Einfach normal zum Lernpfad
+    // zurückkehren, wie nach jeder anderen Station auch.
     // ignore: avoid_print
-    print('[StationFertig] Wiederholungsrunde wird jetzt AUTOMATISCH gestartet (Bug 4)');
-    final falscheJson =
-        await FortschrittService.sammelFalscheFragenFuerAbschnitt(abschnittId);
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(t('🔄 Weiter zur Wiederholungsrunde!')),
-      backgroundColor: const Color(0xFFD98C30),
-      duration: const Duration(milliseconds: 1500),
-    ));
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
-
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StationQuizScreen.wiederholung(
-          wiederholungsAbschnittId: abschnittId,
-          wiederholungsFragenJson: falscheJson,
-        ),
-      ),
-    );
-    // ignore: avoid_print
-    print('[StationFertig] Navigator.push zur Wiederholungsrunde zurückgekehrt, mounted=$mounted');
+    print('[StationFertig] Wiederholung nötig für $abschnittId — kehre normal zum Lernpfad '
+        'zurück, Start jetzt über die Geschenk-Kachel statt automatisch');
     if (mounted) Navigator.pop(context);
   }
 

@@ -14,6 +14,7 @@ const Map<String, String> uebersetzungenLernpfad = {
   'Abschluss': 'Finale',
   'Abschnitt ✅': 'Section ✅',
   'Checkpoint': 'Checkpoint',
+  'Wiederholung starten': 'Start review',
 
   'Bereits abgeschlossen ✅': 'Already completed ✅',
   'Nochmal spielen': 'Play again',

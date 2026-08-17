@@ -25,6 +25,7 @@ import 'uebersetzungen_portfolio.dart';
 import 'uebersetzungen_portfolio_aufloesung.dart';
 import 'uebersetzungen_portfolio_investieren.dart';
 import 'uebersetzungen_portfoliobeispiel.dart';
+import 'portfolio_news_en.dart';
 import 'uebersetzungen_profil.dart';
 import 'uebersetzungen_ranking.dart';
 import 'uebersetzungen_rangliste.dart';
@@ -84,6 +85,7 @@ final Map<String, String> uebersetzungen = {
   ...uebersetzungenOutlineQuiz,
   ...uebersetzungenPortfolioInvestieren,
   ...uebersetzungenPortfolioBeispiel,
+  ...portfolioNewsEn,
   ...uebersetzungenProfil,
   ...laenderFaktenEn,
   ...laenderGebaeudeEn,

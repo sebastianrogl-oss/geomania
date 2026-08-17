@@ -243,11 +243,11 @@ class _PortfolioMarktbriefingScreenState
       children: [
         _buildNewsKopfzeile(n),
         const SizedBox(height: 8),
-        Text(n.titel,
+        Text(t(n.titel),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900,
                 color: Color(0xFF1A1A1A))),
         const SizedBox(height: 4),
-        Text(n.klartext,
+        Text(t(n.klartext),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -298,7 +298,7 @@ class _PortfolioMarktbriefingScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(n.titel,
+                  Text(t(n.titel),
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
                           color: Color(0xFF1A1A1A))),
                   const SizedBox(height: 2),
@@ -311,7 +311,7 @@ class _PortfolioMarktbriefingScreenState
           ],
         ),
         const SizedBox(height: 8),
-        Text(n.klartext,
+        Text(t(n.klartext),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13, color: Color(0xFF888888))),

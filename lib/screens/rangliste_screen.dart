@@ -131,7 +131,11 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
         : '${_angezeigterTag.day}. $monat';
   }
 
-  bool get _istGeld => _challenge == _Challenge.portfolio;
+  // Tages-Portfolio sortiert/zeigt jetzt primär die PROZENTUALE Rendite
+  // (siehe _istPortfolioHeute), nur das Gesamt-Ranking (All-Time-Kapital)
+  // zeigt weiterhin den absoluten Dollar-Betrag prominent.
+  bool get _istGeld =>
+      _challenge == _Challenge.portfolio && _portfolioSubTab == 1;
 
   bool get _istPortfolioHeute =>
       _challenge == _Challenge.portfolio && _portfolioSubTab == 0;
@@ -515,18 +519,21 @@ class _RangZeile extends StatelessWidget {
                 istGeld
                     ? fmtKapital(eintrag.wert.toDouble(),
                         mitVorzeichen: mitVorzeichen)
-                    : '${eintrag.wert}',
+                    : mitVorzeichen
+                        ? fmtProzent(eintrag.wert.toDouble())
+                        : '${eintrag.wert}',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF1A1A1A),
                 ),
               ),
-              // Prozent zusätzlich zum Dollar-Betrag — macht Ergebnisse mit
-              // unterschiedlichem Kapitalstand untereinander vergleichbar.
-              if (mitVorzeichen && eintrag.renditeProzent != null)
+              // Dollar-Betrag zusätzlich zur (sortierrelevanten) Prozentzahl —
+              // rein informativ, macht Ergebnisse mit unterschiedlichem
+              // Kapitalstand für den Spieler nachvollziehbar.
+              if (mitVorzeichen && eintrag.zusatzWert != null)
                 Text(
-                  fmtProzent(eintrag.renditeProzent!),
+                  '(${fmtKapital(eintrag.zusatzWert!.toDouble(), mitVorzeichen: true)})',
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,

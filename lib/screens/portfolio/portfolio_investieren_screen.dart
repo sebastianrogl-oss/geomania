@@ -307,10 +307,13 @@ class _PortfolioInvestierenScreenState
 
     if (AuthService.uid != null) {
       await RanglisteService.portfolioKapitalSpeichern(neuerStatus.kapital);
+      // Tages-Rangliste sortiert nach PROZENTUALER Rendite (fair unabhängig
+      // vom Startkapital) — der absolute Dollar-Betrag wird nur informativ
+      // als zusatzWert mitgespeichert, siehe RanglisteErgebnisKarte-Anzeige.
       await RanglisteService.ergebnisSpeichernMitBereinigung(
         challengeId: 'portfolio',
-        wert: gewinnHeuteAbsolut.round(),
-        renditeProzent: tagesRenditeProzent,
+        wert: tagesRenditeProzent,
+        zusatzWert: gewinnHeuteAbsolut.round(),
       );
     }
 

@@ -115,6 +115,10 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
   @override
   Widget build(BuildContext context) {
     final positiv = ergebnis.depotRenditeGesamt >= 0;
+    final gewinnAbsolut = ergebnis.neuesKapital - ergebnis.altesKapital;
+    final tagesRenditeProzent = ergebnis.altesKapital > 0
+        ? gewinnAbsolut / ergebnis.altesKapital * 100
+        : 0.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F0E8),
@@ -131,19 +135,29 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                   const SizedBox(height: 16),
                   RanglisteErgebnisKarte(
                     challengeId: 'portfolio',
-                    eigenerWert:
-                        (ergebnis.neuesKapital - ergebnis.altesKapital).round(),
-                    punkteLabel: t('Tagesgewinn'),
+                    // Sortier-/Vergleichswert der Tages-Rangliste ist die
+                    // PROZENTUALE Rendite, nicht der absolute Dollar-Betrag —
+                    // fair unabhängig vom eigenen Startkapital.
+                    eigenerWert: tagesRenditeProzent,
+                    punkteLabel: t('Tagesrendite'),
                     farbe: const Color(0xFF4A90D9),
-                    formatWert: (w) => fmtKapital(w.toDouble()),
-                    punkteAnzeige: Text(
-                      fmtKapital(
-                          (ergebnis.neuesKapital - ergebnis.altesKapital),
-                          mitVorzeichen: true),
-                      style: const TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1A1A1A)),
+                    formatWert: (w) => fmtProzent(w.toDouble()),
+                    punkteAnzeige: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          fmtProzent(tagesRenditeProzent),
+                          style: const TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF1A1A1A)),
+                        ),
+                        Text(
+                          '(${fmtKapital(gewinnAbsolut, mitVorzeichen: true)})',
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF888888)),
+                        ),
+                      ],
                     ),
                   ),
                 ],

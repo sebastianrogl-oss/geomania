@@ -50,7 +50,7 @@ class RanglisteService {
   static Future<void> ergebnisSpeichern({
     required String challengeId,
     required num wert,
-    double? renditeProzent,
+    num? zusatzWert,
   }) async {
     final uid = AuthService.uid;
     final name = AuthService.anzeigename;
@@ -70,7 +70,7 @@ class RanglisteService {
           'uid': uid,
           'anzeigename': name ?? 'Spieler',
           'punkte': wert,
-          if (renditeProzent != null) 'renditeProzent': renditeProzent,
+          if (zusatzWert != null) 'zusatzWert': zusatzWert,
           'profilbild': await ProfilbildService.getProfilbild(),
           'topAbzeichen': await _topAbzeichen(),
           'erstelltAm': FieldValue.serverTimestamp(),
@@ -94,12 +94,12 @@ class RanglisteService {
   static Future<void> ergebnisSpeichernMitBereinigung({
     required String challengeId,
     required num wert,
-    double? renditeProzent,
+    num? zusatzWert,
   }) async {
     await ergebnisSpeichern(
       challengeId: challengeId,
       wert: wert,
-      renditeProzent: renditeProzent,
+      zusatzWert: zusatzWert,
     );
 
     final vorFuenfzehnTagen = DateTime.now().subtract(const Duration(days: 15));
@@ -146,7 +146,7 @@ class RanglisteService {
         // dem QueryDocumentSnapshot selbst zugreifen: Firestore wirft bei
         // Snapshot[] einen StateError für fehlende Felder, eine Map gibt bei
         // einem fehlenden Key dagegen einfach null zurück — wichtig, da
-        // ältere Einträge (vor Einführung von 'profilbild'/'renditeProzent')
+        // ältere Einträge (vor Einführung von 'profilbild'/'zusatzWert')
         // diese Felder noch nicht haben.
         final d = e.value.data();
         return RanglistenEintrag(
@@ -157,7 +157,7 @@ class RanglisteService {
           istIch: d['uid'] == AuthService.uid,
           topAbzeichen: d['topAbzeichen'] as String?,
           profilbildPfad: d['profilbild'] as String?,
-          renditeProzent: (d['renditeProzent'] as num?)?.toDouble(),
+          zusatzWert: d['zusatzWert'] as num?,
         );
       }).toList();
     } catch (e) {
@@ -320,7 +320,7 @@ class RanglistenEintrag {
   final bool istIch;
   final String? topAbzeichen;
   final String? profilbildPfad;
-  final double? renditeProzent;
+  final num? zusatzWert;
   RanglistenEintrag({
     required this.rang,
     required this.uid,
@@ -329,6 +329,6 @@ class RanglistenEintrag {
     required this.istIch,
     this.topAbzeichen,
     this.profilbildPfad,
-    this.renditeProzent,
+    this.zusatzWert,
   });
 }

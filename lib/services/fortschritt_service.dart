@@ -230,6 +230,42 @@ class FortschrittService {
     await prefs.remove('$_sAktive$stationId');
   }
 
+  // ── Level-Skip (Rewarded Ad) ───────────────────────────────────────────────
+
+  /// Markiert [stationId] als übersprungen: zählt für die Freischaltung der
+  /// NÄCHSTEN Station als abgeschlossen (istStationFreigeschaltet prüft nur
+  /// das _sDone-Flag der vorherigen Station), bringt aber bewusst KEINE
+  /// richtig/falsch-Punkte (kein Beitrag zu gesamtRichtig) und KEINEN Eintrag
+  /// in den Wiederholungsrunden-Pool (kein falscheFragenJson) — einfachste
+  /// Lösung im bestehenden Speichermodell, das "abgeschlossen" nicht separat
+  /// von "bestanden" unterscheidet.
+  static Future<void> stationUebersprungen(String stationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('$_sDone$stationId', true);
+    await prefs.remove('$_sGestartet$stationId');
+    await prefs.remove('$_sIdx$stationId');
+    await prefs.remove('$_sAktive$stationId');
+    await prefs.setString('$_sGespielt$stationId', DateTime.now().toIso8601String());
+  }
+
+  /// Übersprungene Station + (falls es die letzte Station des Abschnitts
+  /// war) dieselbe Abschnitts-Abschluss-Prüfung wie nach einer regulär
+  /// beendeten letzten Station — Wiederholungsrunde wird nur ausgelöst, wenn
+  /// ANDERE (nicht übersprungene) Stationen im Abschnitt falsche Fragen
+  /// hinterlassen haben.
+  static Future<void> stationUeberspringenUndAbschnittPruefen(
+      String stationId) async {
+    await stationUebersprungen(stationId);
+    if (!istLetzteStationImAbschnitt(stationId)) return;
+    final kontext = stationKontext(stationId);
+    if (kontext == null) return;
+    final abschnittId = kontext.$2.id;
+    final wdhNoetig = await wiederholungNoetig(abschnittId);
+    if (!wdhNoetig) {
+      await wiederholungAbschliessen(abschnittId);
+    }
+  }
+
   // ── Abschnitts-Wiederholung ────────────────────────────────────────────────
 
   /// Gibt true zurück wenn [stationId] die letzte Station im Abschnitt ist.

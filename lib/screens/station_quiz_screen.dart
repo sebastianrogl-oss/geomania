@@ -19,6 +19,7 @@ import '../services/skala_service.dart';
 import '../services/station_session_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/flaggen_widget.dart';
+import '../widgets/level_skip_button.dart';
 
 // ── Geo-Cache (einmal laden, überall nutzen) ──────────────────────────────────
 
@@ -277,8 +278,8 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   bool _feedbackRichtig = false;
   String? _gewahlteAntwort;
 
-  // Skip-Button (Rewarded Ad)
-  bool _skipLoading = false;
+  // Level-Skip-Button (Rewarded Ad, sitzt in der AppBar)
+  bool _levelSkipLoading = false;
 
   // Timer — Dauer hängt vom Modus der jeweils aktuellen Frage ab (siehe
   // timerSekundenFuerModus), nicht mehr fix 15s. _timerGesamt == 0 bedeutet
@@ -605,18 +606,23 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   bool _hatEigenenWeiterButton(LernModus m) =>
       m == LernModus.sortierSpiel || m == LernModus.preisSchaetzen;
 
-  // ── Skip-Button (Rewarded Ad) ─────────────────────────────────────────────
+  // ── Level-Skip (Rewarded Ad) — überspringt die GANZE Station ──────────────
   //
-  // Überspringt die aktuelle Frage NACH einer erfolgreich angesehenen
-  // Rewarded Ad — zählt bewusst weder als richtig noch als falsch (siehe
-  // StationSession.frageUeberspringen), im Unterschied zu _weiterTippen()
-  // oben, das immer eine Wertung einträgt.
-  Future<void> _skipFrage() async {
-    if (_session == null || _skipLoading) return;
-    setState(() => _skipLoading = true);
+  // Sitzt in der AppBar (siehe build()), nicht mehr unten bei den
+  // Antwortmöglichkeiten — das war der alte, pro-Frage-Skip. Nach
+  // erfolgreich angesehener Rewarded Ad gilt die komplette Station als
+  // übersprungen: kein Punktgewinn, kein Eintrag in die Wiederholungsrunde,
+  // aber die nächste Station wird freigeschaltet (siehe
+  // FortschrittService.stationUeberspringenUndAbschnittPruefen). In der
+  // Wiederholungsrunde gibt es keine "nächste Station" — dort schließt
+  // Skip stattdessen direkt den Abschnitt ab, genau wie ein regulär
+  // beendeter Durchlauf ohne verbleibende falsche Fragen.
+  Future<void> _levelSkippen() async {
+    if (_session == null || _levelSkipLoading) return;
+    setState(() => _levelSkipLoading = true);
     final belohnt = await AdService.zeigeRewardedAd(onBelohnt: () {});
     if (!mounted) return;
-    setState(() => _skipLoading = false);
+    setState(() => _levelSkipLoading = false);
     if (!belohnt) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(t(
@@ -626,8 +632,15 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       return;
     }
     _stopCountdown();
-    _session!.frageUeberspringen();
-    _vorruecken();
+    if (widget.istWiederholungsrunde) {
+      await FortschrittService.wiederholungAbschliessen(
+          widget.wiederholungsAbschnittId!);
+    } else {
+      await FortschrittService.stationUeberspringenUndAbschnittPruefen(
+          widget.station!.id);
+    }
+    if (!mounted) return;
+    Navigator.pop(context);
   }
 
   // ── Vorrücken / Station fertig ─────────────────────────────────────────────
@@ -787,7 +800,17 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: Text(titel,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: LevelSkipButton(
+                  loading: _levelSkipLoading, onTap: _levelSkippen),
+            ),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(6),
           child: LinearProgressIndicator(
@@ -831,18 +854,11 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
                     },
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Column(
-                    children: [
-                      if (_showFeedback && !_hatEigenenWeiterButton(frage.modus)) ...[
-                        _WeiterButton(onTap: _weiterTippen),
-                        const SizedBox(height: 10),
-                      ],
-                      _SkipButton(loading: _skipLoading, onTap: _skipFrage),
-                    ],
+                if (_showFeedback && !_hatEigenenWeiterButton(frage.modus))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: _WeiterButton(onTap: _weiterTippen),
                   ),
-                ),
               ],
             ),
     );
@@ -1165,47 +1181,6 @@ class _WeiterButton extends StatelessWidget {
 // Bewusst dezenter als der Weiter-Button (grau statt grün, kein 3D-Schatten,
 // kleiner) und IMMER sichtbar — auch bevor überhaupt geantwortet wurde —
 // damit der Spieler jede Frage abbrechen kann, die ihm nicht gefällt.
-class _SkipButton extends StatelessWidget {
-  final bool loading;
-  final VoidCallback onTap;
-  const _SkipButton({required this.loading, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: loading ? null : onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEAEAE5),
-          borderRadius: BorderRadius.circular(50),
-          border: Border.all(color: const Color(0xFFB0AEA8), width: 1.5),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (loading)
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Color(0xFF888888)),
-              )
-            else
-              const Icon(Icons.skip_next, size: 16, color: Color(0xFF888888)),
-            const SizedBox(width: 6),
-            Text(t('Überspringen'),
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF888888))),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── Flaggen Bild → Land wählen ─────────────────────────────────────────────────
 
 class _FlagBildUI extends StatelessWidget {

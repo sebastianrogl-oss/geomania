@@ -11,6 +11,7 @@ import '../services/profilbild_service.dart';
 import '../services/station_session_service.dart';
 import '../utils/responsive.dart';
 import '../widgets/kontinent_hintergrund.dart';
+import '../widgets/level_skip_button.dart';
 import '../widgets/pfad_deko_layer.dart';
 import '../widgets/pfad_maskottchen.dart';
 import 'challenge_start_screen.dart';
@@ -413,6 +414,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           );
           _load();
         },
+        onSkipped: _load,
       ),
     );
   }
@@ -1583,19 +1585,53 @@ class _AbschnittTrenner extends StatelessWidget {
 
 // ── Station Sheet ─────────────────────────────────────────────────────────────
 
-class _StationSheet extends StatelessWidget {
+class _StationSheet extends StatefulWidget {
   final LernStation station;
   // Tatsächlich zu spielender Modus (nach Pensionierungs-Substitution) —
   // NICHT einfach station.modus, siehe _stationTippen().
   final LernModus modus;
   final bool abgeschlossen;
   final VoidCallback onStart;
+  final VoidCallback onSkipped;
   const _StationSheet({
     required this.station,
     required this.modus,
     required this.abgeschlossen,
     required this.onStart,
+    required this.onSkipped,
   });
+
+  @override
+  State<_StationSheet> createState() => _StationSheetState();
+}
+
+class _StationSheetState extends State<_StationSheet> {
+  bool _skipLoading = false;
+
+  // Identische Logik zum Level-Skip in station_quiz_screen.dart
+  // (_StationQuizScreenState._levelSkippen) — hier zusätzlich VOR dem
+  // eigentlichen Start der Station aufrufbar, damit der Spieler ein Level
+  // überspringen kann, ohne es erst öffnen zu müssen.
+  Future<void> _skipLevel() async {
+    if (_skipLoading) return;
+    setState(() => _skipLoading = true);
+    final belohnt = await AdService.zeigeRewardedAd(onBelohnt: () {});
+    if (!mounted) return;
+    setState(() => _skipLoading = false);
+    if (!belohnt) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+            'Werbung aktuell nicht verfügbar, versuch es später erneut')),
+        backgroundColor: const Color(0xFF888888),
+      ));
+      return;
+    }
+    await FortschrittService.stationUeberspringenUndAbschnittPruefen(
+        widget.station.id);
+    if (!mounted) return;
+    Navigator.pop(context);
+    widget.onSkipped();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1610,7 +1646,18 @@ class _StationSheet extends StatelessWidget {
         24,
         MediaQuery.paddingOf(context).bottom + 20,
       ),
-      child: Column(
+      child: Stack(
+        children: [
+          Positioned(
+            top: 0,
+            right: 0,
+            child: LevelSkipButton(
+              loading: _skipLoading,
+              onTap: _skipLevel,
+              color: const Color(0xFF888888),
+            ),
+          ),
+          Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
@@ -1622,23 +1669,23 @@ class _StationSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 22),
-          Icon(_modusIcon(modus), size: 56, color: const Color(0xFF4A9E4A)),
+          Icon(_modusIcon(widget.modus), size: 56, color: const Color(0xFF4A9E4A)),
           const SizedBox(height: 12),
           Text(
-            lernModusLabel(modus),
+            lernModusLabel(widget.modus),
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 6),
           Text(
-            lernModusFragenLabel(station),
+            lernModusFragenLabel(widget.station),
             style: TextStyle(
               fontSize: 13,
               color: Colors.grey[600],
               fontWeight: FontWeight.w600,
             ),
           ),
-          if (abgeschlossen) ...[
+          if (widget.abgeschlossen) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -1660,7 +1707,7 @@ class _StationSheet extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: onStart,
+              onPressed: widget.onStart,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4A9E4A),
                 foregroundColor: Colors.white,
@@ -1671,7 +1718,7 @@ class _StationSheet extends StatelessWidget {
                 elevation: 0,
               ),
               child: Text(
-                abgeschlossen ? t('Nochmal spielen') : t('START'),
+                widget.abgeschlossen ? t('Nochmal spielen') : t('START'),
                 style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
@@ -1694,6 +1741,8 @@ class _StationSheet extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+            ],
           ),
         ],
       ),

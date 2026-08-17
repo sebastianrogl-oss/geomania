@@ -43,6 +43,7 @@ import 'uebersetzungen_widgets.dart';
 import 'uebersetzungen_wirtschaftssektoren.dart';
 import 'wirtschaftssektoren_en.dart';
 import 'wirtschaftssektoren_frage_en.dart';
+import 'wirtschaftssektoren_daten_en.dart';
 
 // Zentrale Übersetzungstabelle (Deutsch -> Englisch). Statt eines
 // offiziellen ARB-/gen-l10n-Setups (zu viel Umbau-Overhead für eine bereits
@@ -96,6 +97,9 @@ final Map<String, String> uebersetzungen = {
   ...schaetzenFaktenEn,
   ...wirtschaftssektorenFrageEn,
   ...wirtschaftssektorenEn,
+  ...exportgueterEn,
+  ...sektorBeschreibungenEn,
+  ...sektorFunFactsEn,
   ...uebersetzungenWirtschaftssektoren,
   ...spielkategorienEn,
 };

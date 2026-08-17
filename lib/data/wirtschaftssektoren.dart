@@ -119,7 +119,7 @@ const List<SektorData> wirtschaftssektoren = [
     countryName: 'Finnland', flagEmoji: '🇫🇮', mainSector: 'Technologie',
     topExports: ['Elektronik', 'Maschinen', 'Holz'],
     sectorDescription: 'Finnland ist Heimat von Nokia (einstmals weltweit größter Handyhersteller) und einer der führenden Gaming-Nationen (Angry Birds, Clash of Clans).',
-    funFact: 'Finland hat die höchste Dichte an Ingenieuren pro Einwohner in Europa.',
+    funFact: 'Finnland hat die höchste Dichte an Ingenieuren pro Einwohner in Europa.',
   ),
   SektorData(
     countryName: 'Schweden', flagEmoji: '🇸🇪', mainSector: 'Technologie',
@@ -207,12 +207,12 @@ const List<SektorData> wirtschaftssektoren = [
     countryName: 'Äthiopien', flagEmoji: '🇪🇹', mainSector: 'Landwirtschaft',
     topExports: ['Kaffee', 'Schnittblumen', 'Sesam'],
     sectorDescription: 'Äthiopien ist die Heimat des Kaffees – der Name „Kaffee" leitet sich von der Provinz Kaffa ab.',
-    funFact: 'Äthiopien ist der weltweit größte Kaffeeexporteur Afrikas und globaler Top-5-Produzent.',
+    funFact: 'Äthiopien ist Afrikas größter Kaffeeexporteur und globaler Top-5-Produzent.',
   ),
   SektorData(
     countryName: 'Kenia', flagEmoji: '🇰🇪', mainSector: 'Landwirtschaft',
     topExports: ['Tee', 'Kaffee', 'Schnittblumen'],
-    sectorDescription: 'Kenia ist der weltgrößte Exporteur von Schnittblumen – der meiste Rosen aus europäischen Blumenläden kommt aus dem Rift Valley.',
+    sectorDescription: 'Kenia ist der weltgrößte Exporteur von Schnittblumen – die meisten Rosen aus europäischen Blumenläden kommen aus dem Rift Valley.',
     funFact: 'Kenias Tee wird in London versteigert und gilt als einer der besten der Welt.',
   ),
   SektorData(
@@ -257,7 +257,7 @@ const List<SektorData> wirtschaftssektoren = [
     countryName: 'Spanien', flagEmoji: '🇪🇸', mainSector: 'Tourismus',
     topExports: ['Tourismus', 'Fahrzeuge', 'Maschinen'],
     sectorDescription: 'Spanien ist das zweitmeistbesuchte Land Europas. Tourismus macht ca. 12 % des BIP aus.',
-    funFact: 'Spanien hat die zweitgrößten Anzahl an UNESCO-Welterbestätten in Europa.',
+    funFact: 'Spanien hat die zweitgrößte Anzahl an UNESCO-Welterbestätten in Europa.',
   ),
   SektorData(
     countryName: 'Italien', flagEmoji: '🇮🇹', mainSector: 'Tourismus',
@@ -348,7 +348,7 @@ const List<SektorData> wirtschaftssektoren = [
   SektorData(
     countryName: 'Sambia', flagEmoji: '🇿🇲', mainSector: 'Bergbau & Rohstoffe',
     topExports: ['Kupfer', 'Kobalt', 'Gold'],
-    sectorDescription: 'Der sogenannte „Kupfergürtel" erstreckt sich über Nordzambia und ist einer der reichsten Kupferabbaugebiete weltweit.',
+    sectorDescription: 'Der sogenannte „Kupfergürtel" erstreckt sich über Nordsambia und ist einer der reichsten Kupferabbaugebiete weltweit.',
     funFact: '',
   ),
   SektorData(

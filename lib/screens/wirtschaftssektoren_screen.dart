@@ -447,7 +447,7 @@ class _WirtschaftssektorenScreenState
                           children: [
                             const Text('💡 ', style: TextStyle(fontSize: 14)),
                             Expanded(
-                              child: Text(correct.funFact,
+                              child: Text(t(correct.funFact),
                                   style: const TextStyle(
                                       color: Color(0xFF2E7D32),
                                       fontSize: 12,
@@ -680,7 +680,7 @@ class _LearnCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
             ),
             padding: const EdgeInsets.all(16),
-            child: Text(data.sectorDescription,
+            child: Text(t(data.sectorDescription),
                 style: const TextStyle(
                     color: Color(0xFF1A1A1A),
                     fontSize: 14,
@@ -716,7 +716,7 @@ class _LearnCard extends StatelessWidget {
                       color: const Color(0xFFF5F5F0),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(e,
+                    child: Text(t(e),
                         style: const TextStyle(
                             color: Color(0xFF1A1A1A),
                             fontSize: 13,
@@ -743,7 +743,7 @@ class _LearnCard extends StatelessWidget {
                   const Text('💡', style: TextStyle(fontSize: 18)),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(data.funFact,
+                    child: Text(t(data.funFact),
                         style: const TextStyle(
                             color: Color(0xFF5D4037),
                             fontSize: 13,

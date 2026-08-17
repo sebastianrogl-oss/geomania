@@ -507,45 +507,46 @@ class _RangZeile extends StatelessWidget {
               ),
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                istGeld
-                    ? fmtKapital(
-                        // Die Tages-Portfolio-Rangliste sortiert nach
-                        // eintrag.wert (jetzt Prozent-Rendite), zeigt aber
-                        // unverändert den Dollar-Betrag prominent an — dafür
-                        // wird bei sortiertem Prozent-Wert auf den separat
-                        // gespeicherten Dollar-Betrag (zusatzWert)
-                        // zurückgegriffen. Alltime (kein zusatzWert) zeigt
-                        // weiterhin direkt eintrag.wert (Kapital).
-                        (mitVorzeichen ? eintrag.zusatzWert : null)
-                                ?.toDouble() ??
-                            eintrag.wert.toDouble(),
-                        mitVorzeichen: mitVorzeichen)
-                    : '${eintrag.wert}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A1A1A),
-                ),
-              ),
-              // Prozent zusätzlich zum Dollar-Betrag — macht Ergebnisse mit
-              // unterschiedlichem Kapitalstand untereinander vergleichbar.
-              // eintrag.wert IST bereits die Prozentzahl (Sortier-Wert).
-              if (mitVorzeichen && eintrag.zusatzWert != null)
+          if (mitVorzeichen && eintrag.zusatzWert != null)
+            // Tägliche Portfolio-Rangliste: sortiert nach eintrag.wert
+            // (Prozent-Rendite) — die Prozentzahl ist daher prominent,
+            // der Dollar-Betrag (zusatzWert) nur informativ darunter.
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Text(
                   fmtProzent(eintrag.wert.toDouble()),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: eintrag.wert >= 0
+                        ? const Color(0xFF4A9E4A)
+                        : const Color(0xFFE53935),
+                  ),
+                ),
+                Text(
+                  fmtKapital(eintrag.zusatzWert!.toDouble(),
+                      mitVorzeichen: true),
                   style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
                     color: Color(0xFF888888),
                   ),
                 ),
-            ],
-          ),
+              ],
+            )
+          else
+            Text(
+              istGeld
+                  ? fmtKapital(eintrag.wert.toDouble(),
+                      mitVorzeichen: mitVorzeichen)
+                  : '${eintrag.wert}',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
         ],
       ),
     );

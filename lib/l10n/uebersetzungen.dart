@@ -15,6 +15,7 @@ import 'uebersetzungen_quiz.dart';
 import 'laender_fakten_en.dart';
 import 'laender_gebaeude_en.dart';
 import 'laender_grenzketten_en.dart';
+import 'schaetzen_fakten_en.dart';
 import 'uebersetzungen_lernpfad.dart';
 import 'uebersetzungen_lernwelten.dart';
 import 'uebersetzungen_mapquiz.dart';
@@ -35,6 +36,7 @@ import 'uebersetzungen_settings.dart';
 import 'uebersetzungen_stationquiz.dart';
 import 'uebersetzungen_tagesspiele.dart';
 import 'uebersetzungen_waehrungen.dart';
+import 'waehrungen_namen_en.dart';
 import 'uebersetzungen_widgets.dart';
 import 'uebersetzungen_wirtschaftssektoren.dart';
 import 'wirtschaftssektoren_en.dart';
@@ -67,6 +69,8 @@ final Map<String, String> uebersetzungen = {
   ...uebersetzungenStationQuiz,
   ...uebersetzungenTagesspiele,
   ...uebersetzungenWaehrungen,
+  ...waehrungsNamenEn,
+  ...waehrungsFunFactsEn,
   ...uebersetzungenHigherLower,
   ...uebersetzungenWidgets,
   ...uebersetzungenRanking,
@@ -84,6 +88,7 @@ final Map<String, String> uebersetzungen = {
   ...laenderFaktenEn,
   ...laenderGebaeudeEn,
   ...laenderGrenzkettenEn,
+  ...schaetzenFaktenEn,
   ...wirtschaftssektorenFrageEn,
   ...wirtschaftssektorenEn,
   ...uebersetzungenWirtschaftssektoren,

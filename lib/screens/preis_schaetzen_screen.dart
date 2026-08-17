@@ -389,6 +389,38 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     return '${v.round()} $einheit';
   }
 
+  // Geldbeträge in Milliarden USD — Deutsch bleibt "X Mrd. USD", Englisch
+  // wird als "$X billion" ausgeschrieben (Dollarzeichen vorangestellt statt
+  // nachgestelltem "USD", wie in natürlichem Englisch üblich).
+  String _fmtGeldMrd(double milliardenWert) {
+    final zahl = _fmtGerundetOderZweiDezimal(milliardenWert, '').trim();
+    return LocaleService.istEnglisch ? '\$$zahl billion' : '$zahl Mrd. USD';
+  }
+
+  // Englisches Ordinal-Suffix (1st, 2nd, 3rd, 4th, 11th, 21st, ...) — die
+  // 11./12./13. sind Sonderfälle (immer "th"), sonst entscheidet die letzte
+  // Ziffer.
+  String _ordinalSuffixEn(int n) {
+    if (n % 100 >= 11 && n % 100 <= 13) return 'th';
+    switch (n % 10) {
+      case 1:
+        return 'st';
+      case 2:
+        return 'nd';
+      case 3:
+        return 'rd';
+      default:
+        return 'th';
+    }
+  }
+
+  // Lokalisierte Ordnungszahl für Ranglisten-Platzierungen in Fließtext
+  // ("5.-größte" / "5th largest").
+  String _rangOrdinal(int rank) {
+    if (LocaleService.istEnglisch) return '$rank${_ordinalSuffixEn(rank)}';
+    return '$rank.';
+  }
+
   String _fakt(_Frage q, double realVal) {
     final pool = countryRankings
         .where((c) => (q.kat.getValue(c) ?? -1) > 0)
@@ -400,89 +432,125 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
       });
     final rank = pool.indexWhere((c) => c.iso2 == q.land.iso2) + 1;
     final name = q.land.name;
+    final rankStr = '$rank';
     switch (q.kat.id) {
       case 'gdpPerCapita':
         return rank <= 3
-            ? '$name gehört zu den reichsten Ländern der Welt (Platz $rank).'
-            : '$name liegt auf Platz $rank beim BIP pro Kopf.';
+            ? t('{name} gehört zu den reichsten Ländern der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr})
+            : t('{name} liegt auf Platz {rank} beim BIP pro Kopf.',
+                {'name': name, 'rank': rankStr});
       case 'population':
         return rank == 1
-            ? '$name ist das bevölkerungsreichste Land der Welt.'
-            : '$name ist das $rank.-bevölkerungsreichste Land der Welt.';
+            ? t('{name} ist das bevölkerungsreichste Land der Welt.', {'name': name})
+            : t('{name} ist das {rankOrd}-bevölkerungsreichste Land der Welt.',
+                {'name': name, 'rankOrd': _rangOrdinal(rank)});
       case 'area':
         return rank == 1
-            ? '$name ist das größte Land der Welt nach Fläche.'
-            : '$name ist das $rank.-größte Land der Welt.';
+            ? t('{name} ist das größte Land der Welt nach Fläche.', {'name': name})
+            : t('{name} ist das {rankOrd}-größte Land der Welt.',
+                {'name': name, 'rankOrd': _rangOrdinal(rank)});
       case 'lifeExpectancy':
         return rank <= 5
-            ? 'Die Lebenserwartung in $name gehört zu den höchsten weltweit.'
-            : 'In $name leben die Menschen im Schnitt ${realVal.toStringAsFixed(1)} Jahre.';
+            ? t('Die Lebenserwartung in {name} gehört zu den höchsten weltweit.',
+                {'name': name})
+            : t('In {name} leben die Menschen im Schnitt {val} Jahre.',
+                {'name': name, 'val': realVal.toStringAsFixed(1)});
       case 'minimumWage':
         return rank <= 3
-            ? '$name hat einen der höchsten Mindestlöhne der Welt (Platz $rank).'
-            : 'In $name liegt der Mindestlohn bei ${realVal.round()} USD im Monat (Platz $rank).';
+            ? t('{name} hat einen der höchsten Mindestlöhne der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr})
+            : t('In {name} liegt der Mindestlohn bei {val} USD im Monat (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
       case 'coastline':
         return rank == 1
-            ? '$name hat die längste Küstenlinie der Welt.'
-            : '$name hat eine Küstenlinie von ${realVal.round()} km (Platz $rank).';
+            ? t('{name} hat die längste Küstenlinie der Welt.', {'name': name})
+            : t('{name} hat eine Küstenlinie von {val} km (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
       case 'gdpTotal':
         return rank <= 3
-            ? '$name gehört zu den größten Volkswirtschaften der Welt (Platz $rank).'
-            : '$name erwirtschaftet ein BIP von ${_fmtGerundetOderZweiDezimal(realVal / 1e9, 'Mrd. USD')} (Platz $rank).';
+            ? t('{name} gehört zu den größten Volkswirtschaften der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr})
+            : t('{name} erwirtschaftet ein BIP von {val} (Platz {rank}).',
+                {'name': name, 'val': _fmtGeldMrd(realVal / 1e9), 'rank': rankStr});
       case 'internet':
         return rank <= 5
-            ? '$name gehört zu den schnellsten Ländern beim Internet (Platz $rank).'
-            : '$name hat eine Download-Geschwindigkeit von ${realVal.round()} Mbps (Platz $rank).';
+            ? t('{name} gehört zu den schnellsten Ländern beim Internet (Platz {rank}).',
+                {'name': name, 'rank': rankStr})
+            : t('{name} hat eine Download-Geschwindigkeit von {val} Mbps (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
       case 'corruption':
         return rank <= 5
-            ? '$name ist eines der am wenigsten korrupten Länder weltweit (Platz $rank).'
-            : '$name erreicht ${realVal.round()} von 100 Punkten im Korruptionsindex (Platz $rank).';
+            ? t('{name} ist eines der am wenigsten korrupten Länder weltweit (Platz {rank}).',
+                {'name': name, 'rank': rankStr})
+            : t('{name} erreicht {val} von 100 Punkten im Korruptionsindex (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
       case 'press_freedom':
         return rank <= 5
-            ? '$name gehört zu den pressefreiesten Ländern der Welt (Platz $rank).'
-            : '$name erreicht ${realVal.round()} von 100 Punkten beim Pressefreiheitsindex (Platz $rank).';
+            ? t('{name} gehört zu den pressefreiesten Ländern der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr})
+            : t('{name} erreicht {val} von 100 Punkten beim Pressefreiheitsindex (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
       case 'happiness':
         return rank == 1
-            ? '$name ist das glücklichste Land der Welt.'
-            : '$name liegt auf Platz $rank im World Happiness Report (Score: ${realVal.toStringAsFixed(2)}).';
+            ? t('{name} ist das glücklichste Land der Welt.', {'name': name})
+            : t('{name} liegt auf Platz {rank} im World Happiness Report (Score: {val}).',
+                {'name': name, 'rank': rankStr, 'val': realVal.toStringAsFixed(2)});
       case 'tourism':
         return rank <= 3
-            ? '$name gehört zu den top Reisezielen weltweit (Platz $rank nach Einnahmen).'
-            : '$name erwirtschaftet ${_fmtGerundetOderZweiDezimal(realVal, 'Mrd. USD')} durch Tourismus (Platz $rank).';
+            ? t('{name} gehört zu den top Reisezielen weltweit (Platz {rank} nach Einnahmen).',
+                {'name': name, 'rank': rankStr})
+            : t('{name} erwirtschaftet {val} durch Tourismus (Platz {rank}).',
+                {'name': name, 'val': _fmtGeldMrd(realVal), 'rank': rankStr});
       case 'military':
         return rank == 1
-            ? '$name hat das größte Militärbudget der Welt.'
-            : '$name gibt ${_fmtGerundetOderZweiDezimal(realVal, 'Mrd. USD')} für das Militär aus (Platz $rank).';
+            ? t('{name} hat das größte Militärbudget der Welt.', {'name': name})
+            : t('{name} gibt {val} für das Militär aus (Platz {rank}).',
+                {'name': name, 'val': _fmtGeldMrd(realVal), 'rank': rankStr});
       case 'birth_rate':
         return rank == 1
-            ? '$name hat die höchste Geburtenrate weltweit.'
-            : 'In $name kommen im Schnitt ${realVal.toStringAsFixed(1)} Kinder pro Frau zur Welt (Platz $rank).';
+            ? t('{name} hat die höchste Geburtenrate weltweit.', {'name': name})
+            : t('In {name} kommen im Schnitt {val} Kinder pro Frau zur Welt (Platz {rank}).',
+                {'name': name, 'val': realVal.toStringAsFixed(1), 'rank': rankStr});
       case 'forest':
         return rank <= 5
-            ? '$name gehört zu den waldreichsten Ländern der Welt (Platz $rank).'
-            : '${_fmtGerundetOderZweiDezimal(realVal, '%')} der Fläche von $name sind von Wald bedeckt (Platz $rank).';
+            ? t('{name} gehört zu den waldreichsten Ländern der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr})
+            : t('{val} der Fläche von {name} sind von Wald bedeckt (Platz {rank}).', {
+                'val': _fmtGerundetOderZweiDezimal(realVal, '%'),
+                'name': name,
+                'rank': rankStr,
+              });
       case 'alcohol':
         return rank <= 3
-            ? '$name gehört zu den Ländern mit dem höchsten Alkoholkonsum der Welt (Platz $rank).'
-            : 'In $name werden im Schnitt ${realVal.toStringAsFixed(1)} Liter Alkohol pro Kopf getrunken (Platz $rank).';
+            ? t('{name} gehört zu den Ländern mit dem höchsten Alkoholkonsum der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr})
+            : t('In {name} werden im Schnitt {val} Liter Alkohol pro Kopf getrunken (Platz {rank}).',
+                {'name': name, 'val': realVal.toStringAsFixed(1), 'rank': rankStr});
       case 'olympics':
         return rank == 1
-            ? '$name hat die meisten Olympia-Medaillen aller Zeiten.'
-            : '$name hat ${realVal.round()} olympische Medaillen gewonnen (Platz $rank).';
+            ? t('{name} hat die meisten Olympia-Medaillen aller Zeiten.', {'name': name})
+            : t('{name} hat {val} olympische Medaillen gewonnen (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
       case 'highest_point':
         return rank == 1
-            ? '$name hat den höchsten Punkt der Welt.'
-            : 'Der höchste Punkt in $name liegt auf ${realVal.round()} m (Platz $rank).';
+            ? t('{name} hat den höchsten Punkt der Welt.', {'name': name})
+            : t('Der höchste Punkt in {name} liegt auf {val} m (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
       case 'inflation':
         return rank == 1
-            ? '$name hat die höchste Inflationsrate der Welt.'
-            : 'Die Inflationsrate in $name liegt bei ${realVal.toStringAsFixed(1)} % (Platz $rank).';
+            ? t('{name} hat die höchste Inflationsrate der Welt.', {'name': name})
+            : t('Die Inflationsrate in {name} liegt bei {val} % (Platz {rank}).',
+                {'name': name, 'val': realVal.toStringAsFixed(1), 'rank': rankStr});
       case 'debt':
         return rank == 1
-            ? '$name hat die höchsten Staatsschulden relativ zur Wirtschaftsleistung.'
-            : 'Die Staatsschulden in $name liegen bei ${realVal.round()} % des BIP (Platz $rank).';
+            ? t('{name} hat die höchsten Staatsschulden relativ zur Wirtschaftsleistung.',
+                {'name': name})
+            : t('Die Staatsschulden in {name} liegen bei {val} % des BIP (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
       default:
-        return '$name liegt auf Platz $rank bei ${q.kat.label}.';
+        return t('{name} liegt auf Platz {rank} bei {kat}.',
+            {'name': name, 'rank': rankStr, 'kat': q.kat.label});
     }
   }
 

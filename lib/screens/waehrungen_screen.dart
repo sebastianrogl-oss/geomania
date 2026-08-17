@@ -299,7 +299,7 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
                     children: [
                       const Text('💡 ', style: TextStyle(fontSize: 14)),
                       Expanded(
-                        child: Text(correct.funFact,
+                        child: Text(t(correct.funFact),
                             style: const TextStyle(
                                 color: Color(0xFF2E7D32),
                                 fontSize: 12,
@@ -343,7 +343,7 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text(opt,
+                          child: Text(t(opt),
                               style: TextStyle(
                                   color: textColor,
                                   fontSize: 15,

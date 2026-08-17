@@ -517,12 +517,10 @@ class _RangZeile extends StatelessWidget {
               children: [
                 Text(
                   fmtProzent(eintrag.wert.toDouble()),
-                  style: TextStyle(
-                    fontSize: 18,
+                  style: const TextStyle(
+                    fontSize: 14,
                     fontWeight: FontWeight.w900,
-                    color: eintrag.wert >= 0
-                        ? const Color(0xFF4A9E4A)
-                        : const Color(0xFFE53935),
+                    color: Color(0xFF1A1A1A),
                   ),
                 ),
                 Text(

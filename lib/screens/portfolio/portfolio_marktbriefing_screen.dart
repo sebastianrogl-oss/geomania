@@ -196,7 +196,7 @@ class _PortfolioMarktbriefingScreenState
             Flexible(
               child: Text(
                 t('Tagessektor: {s} (+{n}%)', {
-                  's': sektor.name,
+                  's': t(sektor.name),
                   'n': trend.staerke.toStringAsFixed(1),
                 }),
                 maxLines: 1,
@@ -393,7 +393,7 @@ class _PortfolioMarktbriefingScreenState
       t('{status}: {emoji} {sektor}', {
         'status': positiv ? t('Profitiert') : t('Betroffen'),
         'emoji': sektor.emoji,
-        'sektor': sektor.name,
+        'sektor': t(sektor.name),
       }),
       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
           color: impactFarbe),
@@ -458,7 +458,7 @@ class _PortfolioMarktbriefingScreenState
                 children: [
                   Text(sektor.emoji, style: const TextStyle(fontSize: 12)),
                   const SizedBox(width: 4),
-                  Text(sektor.name,
+                  Text(t(sektor.name),
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                           color: farbe)),
                 ],

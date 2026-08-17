@@ -774,7 +774,7 @@ class _PortfolioInvestierenScreenState
           Text(sektor.emoji, style: TextStyle(fontSize: (gross ? 11 : 9).rsp(context))),
           SizedBox(width: (gross ? 3 : 2).rpx(context)),
           Expanded(
-            child: Text(sektor.name,
+            child: Text(t(sektor.name),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: (gross ? 11 : 7.5).rsp(context),

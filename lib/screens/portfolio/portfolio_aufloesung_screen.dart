@@ -197,7 +197,7 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                       _buildBonusZeile(
                           t('Sektor-Kombi-Bonus ({s})', {
                             's': kombo.sektorKombo!
-                                .map((s) => portfolioSektoren.firstWhere((p) => p.id == s).name)
+                                .map((s) => t(portfolioSektoren.firstWhere((p) => p.id == s).name))
                                 .join("+")
                           }),
                           kombo.sektorKomboBonus!),

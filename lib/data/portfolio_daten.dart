@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart' show Color, HSLColor;
+import '../l10n/uebersetzungen.dart';
 import 'country_rankings.dart';
 
 String landName(String iso) =>
@@ -143,12 +144,12 @@ String kontinentName(String iso) => kontinentNameFuerId(landKontinent[iso]);
 /// aus MarktNews.allianzKontinente) statt eines Länder-ISO-Codes.
 String kontinentNameFuerId(String? kontinentId) {
   switch (kontinentId) {
-    case 'europa':   return 'Europa';
-    case 'asien':    return 'Asien';
-    case 'amerika':  return 'Amerika';
-    case 'afrika':   return 'Afrika';
-    case 'ozeanien': return 'Ozeanien';
-    default:         return 'Andere';
+    case 'europa':   return t('Europa');
+    case 'asien':    return t('Asien');
+    case 'amerika':  return t('Amerika');
+    case 'afrika':   return t('Afrika');
+    case 'ozeanien': return t('Ozeanien');
+    default:         return t('Andere');
   }
 }
 

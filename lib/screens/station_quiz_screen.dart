@@ -276,7 +276,9 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   bool _showFeedback = false;
   bool _feedbackRichtig = false;
   String? _gewahlteAntwort;
-  Timer? _feedbackTimer;
+
+  // Skip-Button (Rewarded Ad)
+  bool _skipLoading = false;
 
   // Timer — Dauer hängt vom Modus der jeweils aktuellen Frage ab (siehe
   // timerSekundenFuerModus), nicht mehr fix 15s. _timerGesamt == 0 bedeutet
@@ -308,7 +310,6 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   @override
   void dispose() {
-    _feedbackTimer?.cancel();
     _countdownTimer?.cancel();
     _textCtrl.dispose();
     super.dispose();
@@ -460,6 +461,9 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     });
   }
 
+  // Zeigt nur noch das Feedback an — der Übergang zur nächsten Frage
+  // erfolgt nicht mehr automatisch, sondern erst wenn der Spieler den
+  // Weiter-Button antippt (siehe _weiterTippen).
   void _timerAbgelaufen() {
     if (_showFeedback || _session == null) return;
     _vibriereAntwort(false);
@@ -467,11 +471,6 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       _showFeedback = true;
       _feedbackRichtig = false;
       _gewahlteAntwort = null;
-    });
-    _feedbackTimer = Timer(const Duration(milliseconds: 1200), () {
-      if (!mounted) return;
-      _session!.timerAbgelaufen();
-      _vorruecken();
     });
   }
 
@@ -489,20 +488,10 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       _showFeedback = true;
       _feedbackRichtig = richtig;
     });
-    // Grenzketten-Rätsel zeigt zusätzlich die Route + Erklärung an -> mehr
-    // Lesezeit als die kurze Standard-Rückmeldung der übrigen MC-Modi.
-    final dauer = frage.modus == LernModus.grenzkettenRaetsel
-        ? const Duration(milliseconds: 2600)
-        : const Duration(milliseconds: 1200);
-    _feedbackTimer = Timer(dauer, () {
-      if (!mounted) return;
-      if (richtig) {
-        _session!.richtigeAntwortVerarbeiten();
-      } else {
-        _session!.falscheAntwortVerarbeiten();
-      }
-      _vorruecken();
-    });
+    // Kein Auto-Übergang mehr: der Spieler bestätigt manuell mit "Weiter"
+    // (siehe _weiterTippen), auch bei Grenzketten-Rätsel mit zusätzlicher
+    // Route+Erklärung — dort gibt es jetzt beliebig viel Lesezeit statt
+    // einer festen 2600ms-Verzögerung.
   }
 
   bool _eingabeIstRichtig(String eingabe, String richtigeAntwort, String iso2) {
@@ -527,17 +516,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       _feedbackRichtig = richtig;
       _gewahlteAntwort = text;
     });
-    _feedbackTimer = Timer(const Duration(milliseconds: 1800), () {
-      if (!mounted) return;
-      if (richtig) {
-        _session!.richtigeAntwortVerarbeiten();
-      } else {
-        _session!.falscheAntwortVerarbeiten();
-      }
-      _textCtrl.clear();
-      setState(() => _eingabeBestaetigt = false);
-      _vorruecken();
-    });
+    // Kein Auto-Übergang mehr: Weiter-Button in _EingabeUI/_weiterTippen.
   }
 
   void _sortierPruefen() {
@@ -594,6 +573,60 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       _session!.falscheAntwortVerarbeiten();
     }
     setState(() => _preisBestaetigt = false);
+    _vorruecken();
+  }
+
+  // ── Weiter-Button (MC-/Umriss-/Grenzketten-/Eingabe-Modi) ────────────────────
+  //
+  // Sortierspiel und Preisschätzen haben ihre eigenen Weiter-Handler
+  // (_sortierWeiter, _preisWeiter) mit modusspezifischer Nachbearbeitung —
+  // diese Methode deckt alle übrigen Modi ab, die einfach nur richtig/falsch
+  // werten und weiterrücken (inkl. abgelaufenem Timer, siehe
+  // _timerAbgelaufen, wo genau wie bei einer falschen Antwort verfahren
+  // wird).
+  void _weiterTippen() {
+    if (_session == null) return;
+    if (_feedbackRichtig) {
+      _session!.richtigeAntwortVerarbeiten();
+    } else {
+      _session!.falscheAntwortVerarbeiten();
+    }
+    if (_eingabeBestaetigt) {
+      _textCtrl.clear();
+      setState(() => _eingabeBestaetigt = false);
+    }
+    _vorruecken();
+  }
+
+  /// true für Modi, die ihren eigenen Weiter-Button mitbringen (Ergebnis-
+  /// Ansicht mit zusätzlichen Werten/Erklärung) — der globale Weiter-Button
+  /// unten im build() wird für diese Modi unterdrückt, damit er nicht doppelt
+  /// erscheint.
+  bool _hatEigenenWeiterButton(LernModus m) =>
+      m == LernModus.sortierSpiel || m == LernModus.preisSchaetzen;
+
+  // ── Skip-Button (Rewarded Ad) ─────────────────────────────────────────────
+  //
+  // Überspringt die aktuelle Frage NACH einer erfolgreich angesehenen
+  // Rewarded Ad — zählt bewusst weder als richtig noch als falsch (siehe
+  // StationSession.frageUeberspringen), im Unterschied zu _weiterTippen()
+  // oben, das immer eine Wertung einträgt.
+  Future<void> _skipFrage() async {
+    if (_session == null || _skipLoading) return;
+    setState(() => _skipLoading = true);
+    final belohnt = await AdService.zeigeRewardedAd(onBelohnt: () {});
+    if (!mounted) return;
+    setState(() => _skipLoading = false);
+    if (!belohnt) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+            'Werbung aktuell nicht verfügbar, versuch es später erneut')),
+        backgroundColor: const Color(0xFF888888),
+      ));
+      return;
+    }
+    _stopCountdown();
+    _session!.frageUeberspringen();
     _vorruecken();
   }
 
@@ -796,6 +829,18 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
                         ),
                       );
                     },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    children: [
+                      if (_showFeedback && !_hatEigenenWeiterButton(frage.modus)) ...[
+                        _WeiterButton(onTap: _weiterTippen),
+                        const SizedBox(height: 10),
+                      ],
+                      _SkipButton(loading: _skipLoading, onTap: _skipFrage),
+                    ],
                   ),
                 ),
               ],
@@ -1074,6 +1119,87 @@ class _AntwortButton extends StatelessWidget {
               color: textColor,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Weiter-Button ──────────────────────────────────────────────────────────────
+//
+// Exakt im Stil von ChallengeFertigButton (Tages-Challenges, siehe
+// widgets/challenge_fertig_button.dart) — 1:1 dieselben Werte für Farbe,
+// Radius, Border, Schatten-Offset und Schriftgröße übernommen, damit beide
+// Weiter-artigen Buttons der App identisch aussehen.
+class _WeiterButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _WeiterButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF4A9E4A),
+          borderRadius: BorderRadius.circular(50),
+          border: Border.all(color: const Color(0xFF1A1A1A), width: 2.5),
+          boxShadow: const [
+            BoxShadow(
+                color: Color(0xFF1A1A1A), offset: Offset(0, 4), blurRadius: 0),
+          ],
+        ),
+        child: Text(t('Weiter'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+      ),
+    );
+  }
+}
+
+// ── Skip-Button (Frage überspringen, nur nach Rewarded Ad) ─────────────────────
+//
+// Bewusst dezenter als der Weiter-Button (grau statt grün, kein 3D-Schatten,
+// kleiner) und IMMER sichtbar — auch bevor überhaupt geantwortet wurde —
+// damit der Spieler jede Frage abbrechen kann, die ihm nicht gefällt.
+class _SkipButton extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onTap;
+  const _SkipButton({required this.loading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: loading ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAEAE5),
+          borderRadius: BorderRadius.circular(50),
+          border: Border.all(color: const Color(0xFFB0AEA8), width: 1.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (loading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Color(0xFF888888)),
+              )
+            else
+              const Icon(Icons.skip_next, size: 16, color: Color(0xFF888888)),
+            const SizedBox(width: 6),
+            Text(t('Überspringen'),
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF888888))),
+          ],
         ),
       ),
     );
@@ -1775,21 +1901,7 @@ class _ErgebnisAnsicht extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: onWeiter,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A9E4A),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(t('Weiter'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          ),
-        ),
+        _WeiterButton(onTap: onWeiter),
       ],
     );
   }
@@ -2050,21 +2162,7 @@ class _PreisUI extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: onWeiter,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A9E4A),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(t('Weiter'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          ),
-        ),
+        _WeiterButton(onTap: onWeiter),
       ],
     );
   }

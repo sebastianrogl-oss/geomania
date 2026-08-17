@@ -135,6 +135,13 @@ class StationSession {
   /// TIMER abgelaufen → wie falsche Antwort.
   void timerAbgelaufen() => falscheAntwortVerarbeiten();
 
+  /// SKIP (nach Rewarded Ad): Frage einfach überspringen — zählt WEDER als
+  /// richtig NOCH als falsch (keine Punktzahl-/Wiederholungsrunden-
+  /// Auswirkung), im Gegensatz zu falscheAntwortVerarbeiten() oben.
+  void frageUeberspringen() {
+    aktuellerIndex++;
+  }
+
   /// JSON der falschen Fragen (für Abschnitts-Wiederholung).
   String falscheFragenAlsJson() =>
       jsonEncode(falscheFragen.map((f) => f.toJson()).toList());

@@ -135,29 +135,24 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                   const SizedBox(height: 16),
                   RanglisteErgebnisKarte(
                     challengeId: 'portfolio',
-                    // Sortier-/Vergleichswert der Tages-Rangliste ist die
-                    // PROZENTUALE Rendite, nicht der absolute Dollar-Betrag —
-                    // fair unabhängig vom eigenen Startkapital.
+                    // eigenerWert bestimmt NUR die Position auf der
+                    // Verteilungskurve/den Vergleich mit den Top-100-Werten
+                    // (RanglisteErgebnisKarte) — die sind jetzt nach
+                    // Prozent-Rendite sortiert/gespeichert, daher muss hier
+                    // ebenfalls Prozent übergeben werden, auch wenn die
+                    // Anzeige unverändert den Dollar-Betrag zeigt.
                     eigenerWert: tagesRenditeProzent,
-                    punkteLabel: t('Tagesrendite'),
+                    punkteLabel: t('Tagesgewinn'),
                     farbe: const Color(0xFF4A90D9),
+                    // Achsen-Beschriftung der Kurve muss zum jetzt
+                    // prozentualen eigenerWert/Top-100-Vergleich passen.
                     formatWert: (w) => fmtProzent(w.toDouble()),
-                    punkteAnzeige: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          fmtProzent(tagesRenditeProzent),
-                          style: const TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF1A1A1A)),
-                        ),
-                        Text(
-                          '(${fmtKapital(gewinnAbsolut, mitVorzeichen: true)})',
-                          style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF888888)),
-                        ),
-                      ],
+                    punkteAnzeige: Text(
+                      fmtKapital(gewinnAbsolut, mitVorzeichen: true),
+                      style: const TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1A1A1A)),
                     ),
                   ),
                 ],

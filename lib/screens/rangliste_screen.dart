@@ -131,11 +131,7 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
         : '${_angezeigterTag.day}. $monat';
   }
 
-  // Tages-Portfolio sortiert/zeigt jetzt primär die PROZENTUALE Rendite
-  // (siehe _istPortfolioHeute), nur das Gesamt-Ranking (All-Time-Kapital)
-  // zeigt weiterhin den absoluten Dollar-Betrag prominent.
-  bool get _istGeld =>
-      _challenge == _Challenge.portfolio && _portfolioSubTab == 1;
+  bool get _istGeld => _challenge == _Challenge.portfolio;
 
   bool get _istPortfolioHeute =>
       _challenge == _Challenge.portfolio && _portfolioSubTab == 0;
@@ -517,23 +513,31 @@ class _RangZeile extends StatelessWidget {
             children: [
               Text(
                 istGeld
-                    ? fmtKapital(eintrag.wert.toDouble(),
+                    ? fmtKapital(
+                        // Die Tages-Portfolio-Rangliste sortiert nach
+                        // eintrag.wert (jetzt Prozent-Rendite), zeigt aber
+                        // unverändert den Dollar-Betrag prominent an — dafür
+                        // wird bei sortiertem Prozent-Wert auf den separat
+                        // gespeicherten Dollar-Betrag (zusatzWert)
+                        // zurückgegriffen. Alltime (kein zusatzWert) zeigt
+                        // weiterhin direkt eintrag.wert (Kapital).
+                        (mitVorzeichen ? eintrag.zusatzWert : null)
+                                ?.toDouble() ??
+                            eintrag.wert.toDouble(),
                         mitVorzeichen: mitVorzeichen)
-                    : mitVorzeichen
-                        ? fmtProzent(eintrag.wert.toDouble())
-                        : '${eintrag.wert}',
+                    : '${eintrag.wert}',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF1A1A1A),
                 ),
               ),
-              // Dollar-Betrag zusätzlich zur (sortierrelevanten) Prozentzahl —
-              // rein informativ, macht Ergebnisse mit unterschiedlichem
-              // Kapitalstand für den Spieler nachvollziehbar.
+              // Prozent zusätzlich zum Dollar-Betrag — macht Ergebnisse mit
+              // unterschiedlichem Kapitalstand untereinander vergleichbar.
+              // eintrag.wert IST bereits die Prozentzahl (Sortier-Wert).
               if (mitVorzeichen && eintrag.zusatzWert != null)
                 Text(
-                  '(${fmtKapital(eintrag.zusatzWert!.toDouble(), mitVorzeichen: true)})',
+                  fmtProzent(eintrag.wert.toDouble()),
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,

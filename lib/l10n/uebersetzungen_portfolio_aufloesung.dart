@@ -2,6 +2,7 @@
 // (gemeinsam genutzte Länder-Aufschlüsselungskarte).
 const Map<String, String> uebersetzungenPortfolioAufloesung = {
   'Neuer Rang erreicht!': 'New rank reached!',
+  'Tagesgewinn': "Today's gain",
   'Kontinents-Synergie': 'Continent synergy',
   'Allianz-Bonus ({k})': 'Alliance bonus ({k})',
   'Sektor-Kombi-Bonus ({s})': 'Sector combo bonus ({s})',

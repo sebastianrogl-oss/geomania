@@ -64,8 +64,20 @@ class RanglisteService {
 
     try {
       final snap = await ref.get();
-      final alt = snap.exists ? (snap.data()?['punkte'] as num? ?? 0) : null;
-      if (alt == null || wert > alt) {
+      final altData = snap.data();
+      final alt = snap.exists ? (altData?['punkte'] as num? ?? 0) : null;
+      // Migrations-Fall: ein bereits gespeichertes Dokument, das VOR der
+      // Umstellung von 'punkte' auf die Prozent-Rendite (Portfolio) erstellt
+      // wurde, hat keinen 'zusatzWert' und trägt noch den alten, viel
+      // größeren Dollar-Betrag als 'punkte'. Ein 'wert > alt'-Vergleich
+      // (Prozent gegen Dollar) würde dann NIE zutreffen, sodass die
+      // Rangliste dauerhaft auf dem alten, falsch skalierten Wert hängen
+      // bliebe. Erkennbar daran, dass der neue Aufruf einen zusatzWert
+      // mitliefert, das gespeicherte Dokument aber keinen hat — dann einmalig
+      // unabhängig vom Wertevergleich überschreiben.
+      final legacyOhneZusatzWert =
+          snap.exists && zusatzWert != null && altData?['zusatzWert'] == null;
+      if (alt == null || wert > alt || legacyOhneZusatzWert) {
         await ref.set({
           'uid': uid,
           'anzeigename': name ?? 'Spieler',

@@ -7,8 +7,8 @@ import '../l10n/uebersetzungen.dart';
 /// in home_screen.dart, grau auf weißem Grund, [color] entsprechend gesetzt).
 /// Bewusst schlicht als Text+Icon ohne Container/Rahmen/Hintergrund, damit er
 /// sich dezent einfügt statt als eigenständiger Button abzustechen. Das
-/// Icon signalisiert eine Werbung (statt eines Skip-Symbols), da das
-/// Überspringen an das Ansehen einer Rewarded Ad gekoppelt ist.
+/// Filmklappen-Icon signalisiert eine Werbung (statt eines Skip-Symbols), da
+/// das Überspringen an das Ansehen einer Rewarded Ad gekoppelt ist.
 class LevelSkipButton extends StatelessWidget {
   final bool loading;
   final VoidCallback onTap;
@@ -34,7 +34,7 @@ class LevelSkipButton extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2, color: color),
             )
           else
-            Icon(Icons.ondemand_video, size: 16, color: color),
+            Icon(Icons.movie_creation_outlined, size: 16, color: color),
           const SizedBox(width: 6),
           Text(t('Level überspringen'),
               style: TextStyle(

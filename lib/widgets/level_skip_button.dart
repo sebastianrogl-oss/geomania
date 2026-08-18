@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../l10n/uebersetzungen.dart';
+import 'filmklappe_icon.dart';
 
 /// Überspringt eine GANZE Lernpfad-Station gegen eine Rewarded Ad — verwendet
 /// an zwei Stellen: rechts in der Quiz-AppBar (station_quiz_screen.dart, weiß
@@ -7,7 +8,7 @@ import '../l10n/uebersetzungen.dart';
 /// in home_screen.dart, grau auf weißem Grund, [color] entsprechend gesetzt).
 /// Bewusst schlicht als Text+Icon ohne Container/Rahmen/Hintergrund, damit er
 /// sich dezent einfügt statt als eigenständiger Button abzustechen. Das
-/// Filmklappen-Icon signalisiert eine Werbung (statt eines Skip-Symbols), da
+/// FilmklappeIcon signalisiert eine Werbung (statt eines Skip-Symbols), da
 /// das Überspringen an das Ansehen einer Rewarded Ad gekoppelt ist.
 class LevelSkipButton extends StatelessWidget {
   final bool loading;
@@ -34,9 +35,12 @@ class LevelSkipButton extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2, color: color),
             )
           else
-            Icon(Icons.movie_creation_outlined, size: 16, color: color),
+            FilmklappeIcon(size: 16, color: color),
           const SizedBox(width: 6),
-          Text(t('Level überspringen'),
+          // "Skip Level" ist ein fester Begriff und steht bewusst in BEIDEN
+          // Sprachen gleich — der deutsche Eintrag in der Übersetzungs-Map
+          // lautet deshalb ebenfalls "Skip Level".
+          Text(t('Skip Level'),
               style: TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w600, color: color)),
         ],

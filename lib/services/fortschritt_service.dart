@@ -478,7 +478,13 @@ class FortschrittService {
 
   // ── Streak ─────────────────────────────────────────────────────────────────
 
-  static Future<void> streakAktualisieren() async {
+  /// Aktualisiert den Tages-Streak und gibt `(vorher, nachher)` zurück.
+  ///
+  /// Die beiden Werte braucht die Streak-Feier in station_quiz_screen.dart:
+  /// sie zeigt den Wechsel von der alten auf die neue Zahl und darf nur
+  /// erscheinen, wenn der Streak sich tatsächlich erhöht hat — an einem Tag,
+  /// an dem schon gespielt wurde, sind beide Werte gleich.
+  static Future<(int, int)> streakAktualisieren() async {
     final prefs = await SharedPreferences.getInstance();
     final letzteStr = prefs.getString(_kLetzteAkt);
     final heute = DateTime.now();
@@ -503,7 +509,7 @@ class FortschrittService {
       if (diff == 0) {
         // ignore: avoid_print
         print('[LP-Streak] diff==0 (schon heute aktualisiert) -> keine Änderung');
-        return;
+        return (alterStreak, alterStreak);
       }
       streak = diff == 1 ? streak + 1 : 1;
     } else {
@@ -517,6 +523,35 @@ class FortschrittService {
     // ignore: avoid_print
     print('[LP-Streak] NACH Update: gespeicherter Streak=$streak, '
         'gespeicherte letzteAktivitaet=${heute.toIso8601String()}');
+    return (alterStreak, streak);
+  }
+
+  // ── DEBUG-Hilfen für den Streak (nur vom Debug-Bereich der Einstellungen
+  // aufgerufen, siehe settings_screen.dart) ─────────────────────────────────
+
+  /// Datiert die letzte Aktivität auf GESTERN zurück.
+  ///
+  /// Damit läuft der anschließende, ganz normale streakAktualisieren()-Aufruf
+  /// in seinen "genau ein Tag später"-Zweig und erhöht den Streak um 1 — ohne
+  /// dass es dafür eine eigene Debug-Variante der Streak-Logik bräuchte. Der
+  /// Debug-Button verschiebt also nur die Uhr, den Rest macht der echte Code.
+  static Future<void> debugLetzteAktivitaetAufGestern() async {
+    final prefs = await SharedPreferences.getInstance();
+    final gestern = DateTime.now().subtract(const Duration(days: 1));
+    await prefs.setString(_kLetzteAkt, gestern.toIso8601String());
+    // ignore: avoid_print
+    print('[LP-Streak/DEBUG] letzteAktivitaet auf gestern gesetzt: '
+        '${gestern.toIso8601String()}');
+  }
+
+  /// Setzt Streak und letzte Aktivität zurück, damit der Neustart-Fall
+  /// (0 → 1) erneut getestet werden kann.
+  static Future<void> debugStreakZuruecksetzen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kStreak, 0);
+    await prefs.remove(_kLetzteAkt);
+    // ignore: avoid_print
+    print('[LP-Streak/DEBUG] Streak auf 0 zurückgesetzt');
   }
 
   // ── Abzeichen ─────────────────────────────────────────────────────────────

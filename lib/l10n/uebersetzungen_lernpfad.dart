@@ -10,6 +10,10 @@ const Map<String, String> uebersetzungenLernpfad = {
   'Welten': 'Worlds',
   'Alle Welten': 'All worlds',
 
+  // Streak-Feier (widgets/streak_feier_overlay.dart) und Abzeichen-Popup
+  // (widgets/abzeichen_popup.dart) — bewusst derselbe Text in beiden.
+  'Tippen für weiter': 'Tap to continue',
+
   'Abschluss ✅': 'Finale ✅',
   'Abschluss': 'Finale',
   'Abschnitt ✅': 'Section ✅',

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../data/abzeichen_data.dart';
 import '../data/countries.dart';
 import '../data/lernpfad_data.dart';
 import '../services/ad_service.dart';
@@ -10,6 +11,8 @@ import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/locale_service.dart';
 import '../l10n/uebersetzungen.dart';
+import '../widgets/abzeichen_popup.dart';
+import '../widgets/streak_feier_overlay.dart';
 import 'station_quiz_screen.dart';
 
 const _bg = Color(0xFFF5F4F0);
@@ -301,6 +304,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  // ── DEBUG: Streak-Feier simulieren (nur kDebugMode) ───────────────────────
+  //
+  // Erhöht den ECHTEN Streak um 1 und löst dabei die Feier aus, damit sie sich
+  // testen lässt, ohne auf echte Kalendertage zu warten.
+  //
+  // Der Trick steckt allein im Zurückdatieren: streakAktualisieren() erhöht
+  // den Streak nur, wenn die letzte Aktivität einen Tag zurückliegt. Der
+  // Debug-Button setzt deshalb nur diesen Zeitstempel auf gestern und ruft
+  // danach streakErhoehenUndFeiern() auf — also exakt dieselbe Funktion, die
+  // auch nach einem echten Level-Abschluss läuft (siehe
+  // station_quiz_screen.dart `_stationFertig`). Es gibt keine parallele
+  // Animations- oder Streak-Logik für den Testfall.
+  //
+  // Dadurch: 1. Antippen 0 -> 1 (Fall A, grau -> rot), danach jeweils +1
+  // (Fall B, roter Pop-Impuls).
+  Future<void> _streakSimulieren() async {
+    await FortschrittService.debugLetzteAktivitaetAufGestern();
+    if (!mounted) return;
+    final (alt, neu) = await streakErhoehenUndFeiern(context);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('🐞 Streak $alt → $neu '
+          '(${neu == 1 ? 'Fall A: grau → rot' : 'Fall B: Pop-Impuls'})'),
+    ));
+  }
+
+  Future<void> _streakZuruecksetzen() async {
+    await FortschrittService.debugStreakZuruecksetzen();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🐞 Streak auf 0 zurückgesetzt — '
+          'nächste Simulation zeigt wieder Fall A'),
+    ));
+  }
+
+  // ── DEBUG: Abzeichen-Freischaltung simulieren (nur kDebugMode) ────────────
+  //
+  // Zeigt die Freischalt-Animation mit Beispiel-Abzeichen aus der echten
+  // Abzeichen-Liste. Aufgerufen wird ausschließlich AbzeichenPopup.zeigen() —
+  // exakt dieselbe Methode, die auch der Spielbetrieb nutzt (siehe
+  // station_quiz_screen.dart `_stationFertig` nach
+  // AbzeichenService.pruefeNachLernpfadFortschritt). Es gibt keine separate
+  // Test-Variante der Animation.
+  //
+  // [anzahl] > 1 nutzt die Warteschlangen-Logik von zeigen() (ein Overlay
+  // nach dem anderen) und lässt damit auch den "1 / 3"-Zähler testen.
+  //
+  // Der Debug-Weg unterscheidet sich vom echten nur darin, WELCHE Abzeichen
+  // übergeben werden — im Spielbetrieb die tatsächlich neu erreichten, hier
+  // die ersten [anzahl] der Liste. Nichts wird dabei freigeschaltet oder
+  // gespeichert.
+  Future<void> _abzeichenSimulieren(int anzahl) async {
+    final beispiele = alleAbzeichen.take(anzahl).toList();
+    await AbzeichenPopup.zeigen(context, beispiele);
+  }
+
   // ── DEBUG: Testmodus (nur kDebugMode, nie im Release-Build) ────────────────
   //
   // Erlaubt Entwicklern, eine EXAKTE Land+Modus-Kombination direkt zu öffnen
@@ -409,6 +468,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('Testmodus: bestimmtes Land/Modus öffnen'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: _testmodusOeffnen,
+                ),
+                _Zeile(
+                  icon: Icons.local_fire_department_rounded,
+                  title: t('Streak simulieren (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _streakSimulieren,
+                ),
+                _Zeile(
+                  icon: Icons.restart_alt_rounded,
+                  title: t('Streak zurücksetzen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _streakZuruecksetzen,
+                ),
+                _Zeile(
+                  icon: Icons.workspace_premium_rounded,
+                  title: t('Abzeichen-Freischaltung simulieren (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: () => _abzeichenSimulieren(1),
+                ),
+                _Zeile(
+                  icon: Icons.filter_3_rounded,
+                  title: t('3 Abzeichen gleichzeitig simulieren (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: () => _abzeichenSimulieren(3),
                 ),
               ]),
               const SizedBox(height: 24),

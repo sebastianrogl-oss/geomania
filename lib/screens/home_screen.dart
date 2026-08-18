@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../data/lernpfad_data.dart';
 import '../l10n/uebersetzungen.dart';
@@ -586,7 +587,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
 // ── Grüner Header ─────────────────────────────────────────────────────────────
 
-class _GreenHeader extends StatelessWidget {
+class _GreenHeader extends StatefulWidget {
   final String weltEmoji;
   final int streak;
   final int punkte;
@@ -599,6 +600,51 @@ class _GreenHeader extends StatelessWidget {
     required this.profilbild,
     this.onProfilTap,
   });
+
+  @override
+  State<_GreenHeader> createState() => _GreenHeaderState();
+}
+
+// Der ⭐-Zähler zeigt die insgesamt verdienten Sterne (gesamtRichtig). Kommt
+// der Spieler von einem abgeschlossenen Quiz zurück, zählt er die dort neu
+// verdienten Sterne hoch — also vom vorherigen Stand zum neuen, NICHT von 0.
+// (Ein IntTween mit begin: 0 zählte bei jeder Wertänderung den kompletten
+// Gesamtstand neu durch, was den eigentlichen Zugewinn unkenntlich machte.)
+//
+// Das frühere Pulsieren der Icons ist bewusst entfallen: 🔥 (Tages-Streak)
+// bekommt beim Steigen jetzt einen eigenen Vollbild-Moment
+// (widgets/streak_feier_overlay.dart), und für ⭐ genügt das Hochzählen.
+class _GreenHeaderState extends State<_GreenHeader> {
+  // Ausgangswert des laufenden Hochzählens. Wird in didUpdateWidget auf den
+  // ALTEN Punktestand gesetzt, damit der TweenAnimationBuilder genau die
+  // Differenz durchläuft.
+  late int _punkteVon;
+
+  // Der Header wird einmal mit dem 0-Platzhalter gebaut, bevor der Snapshot
+  // geladen ist (siehe build(): `snap?.gesamtRichtig ?? 0`). Dieser Sprung
+  // 0 -> Gesamtstand ist kein Zugewinn und darf nicht hochgezählt werden.
+  bool _erstStandGesetzt = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _punkteVon = widget.punkte;
+    // Steht beim Aufbau schon ein Wert, ist das bereits der geladene Stand.
+    _erstStandGesetzt = widget.punkte > 0;
+  }
+
+  @override
+  void didUpdateWidget(covariant _GreenHeader old) {
+    super.didUpdateWidget(old);
+    if (widget.punkte != old.punkte) {
+      if (kDebugMode) {
+        debugPrint('[Header] Sterne ${old.punkte} -> ${widget.punkte}'
+            '${_erstStandGesetzt ? '' : ' (Erstbefüllung, ohne Animation)'}');
+      }
+      _punkteVon = _erstStandGesetzt ? old.punkte : widget.punkte;
+      _erstStandGesetzt = true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -617,12 +663,12 @@ class _GreenHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Text(weltEmoji, style: const TextStyle(fontSize: 22)),
+          Text(widget.weltEmoji, style: const TextStyle(fontSize: 22)),
           const SizedBox(width: 16),
           const Text('🔥', style: TextStyle(fontSize: 18)),
           const SizedBox(width: 4),
           Text(
-            '$streak',
+            '${widget.streak}',
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
@@ -632,17 +678,24 @@ class _GreenHeader extends StatelessWidget {
           const SizedBox(width: 16),
           const Text('⭐', style: TextStyle(fontSize: 18)),
           const SizedBox(width: 4),
-          Text(
-            '$punkte',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
+          // Zählt die im letzten Quiz verdienten Sterne hoch (vom alten auf
+          // den neuen Gesamtstand, siehe _punkteVon).
+          TweenAnimationBuilder<int>(
+            tween: IntTween(begin: _punkteVon, end: widget.punkte),
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeOut,
+            builder: (context, wert, child) => Text(
+              '$wert',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
             ),
           ),
           const Spacer(),
           GestureDetector(
-            onTap: onProfilTap,
+            onTap: widget.onProfilTap,
             child: Container(
               width: 38,
               height: 38,
@@ -651,17 +704,19 @@ class _GreenHeader extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: ClipOval(
-                child: ProfilbildService.istWeitformat(profilbild)
+                child: ProfilbildService.istWeitformat(widget.profilbild)
                     // Siehe profil_screen.dart: BoxFit.cover schnitt bei
                     // "winken" die Hand ab, contain+Skalierung zeigt sie
                     // vollständig.
                     ? Transform.scale(
                         scale: 1.25,
-                        child: Image.asset(profilbild, fit: BoxFit.contain),
+                        child:
+                            Image.asset(widget.profilbild, fit: BoxFit.contain),
                       )
                     : Padding(
                         padding: const EdgeInsets.all(4),
-                        child: Image.asset(profilbild, fit: BoxFit.contain),
+                        child: Image.asset(widget.profilbild,
+                            fit: BoxFit.contain),
                       ),
               ),
             ),

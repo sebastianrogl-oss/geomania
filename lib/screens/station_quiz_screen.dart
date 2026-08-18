@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:vibration/vibration.dart';
@@ -20,6 +21,7 @@ import '../services/station_session_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/flaggen_widget.dart';
 import '../widgets/level_skip_button.dart';
+import '../widgets/streak_feier_overlay.dart';
 
 // ── Geo-Cache (einmal laden, überall nutzen) ──────────────────────────────────
 
@@ -673,9 +675,18 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // den "letzte Aktivität"-Zeitstempel, den streakAktualisieren() für die
     // Tagesdifferenz-Berechnung braucht — danach aufgerufen würde die
     // Streak nie erhöht werden (Differenz wäre immer 0).
-    await FortschrittService.streakAktualisieren();
+    // Streak erhöhen und ggf. feiern — bewusst hier: direkt nach dem
+    // Streak-Update und VOR Abzeichen-Popup, Interstitial und Navigation
+    // zurück zum Lernpfad, damit der Moment nicht mit anderen Overlays
+    // kollidiert. Blockiert, bis der Nutzer die Feier weggetippt hat.
+    //
+    // Derselbe Aufruf steckt hinter dem Debug-Button in den Einstellungen
+    // (siehe streakErhoehenUndFeiern) — es gibt nur diesen einen Pfad.
+    final (alterStreak, neuerStreak) = await streakErhoehenUndFeiern(context);
     // ignore: avoid_print
-    print('[StationFertig] streakAktualisieren() fertig');
+    print('[StationFertig] streakErhoehenUndFeiern() fertig: '
+        '$alterStreak -> $neuerStreak');
+    if (!mounted) return;
 
     if (widget.istWiederholungsrunde) {
       // ignore: avoid_print
@@ -813,12 +824,21 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(6),
-          child: LinearProgressIndicator(
-            value: session.fortschritt,
-            minHeight: 6,
-            backgroundColor: const Color(0xFF2A4A3A),
-            valueColor:
-                const AlwaysStoppedAnimation<Color>(Color(0xFF4A9E4A)),
+          // Animiert den Balken flüssig zum neuen Fortschritt statt beim
+          // Weiterrücken ruckartig zu springen — TweenAnimationBuilder
+          // interpoliert automatisch vom zuletzt angezeigten Wert zum neuen
+          // `end`, ein manuelles Mitführen des alten Werts ist nicht nötig.
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: session.fortschritt),
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutCubic,
+            builder: (context, wert, child) => LinearProgressIndicator(
+              value: wert,
+              minHeight: 6,
+              backgroundColor: const Color(0xFF2A4A3A),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Color(0xFF4A9E4A)),
+            ),
           ),
         ),
       ),
@@ -854,10 +874,27 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
                     },
                   ),
                 ),
-                if (_showFeedback && !_hatEigenenWeiterButton(frage.modus))
+                // Der Weiter-Button ist IMMER im Baum und wird nur ein-/
+                // ausgeblendet — vorher wurde er erst bei _showFeedback
+                // eingefügt, wodurch die Column beim Antworten plötzlich ein
+                // Kind mehr bekam und Frage+Antworten darüber nach oben
+                // sprangen. Da der Button dauerhaft mitlayoutet wird, ist sein
+                // Platz von Anfang an reserviert; bewusst KEINE hartkodierte
+                // SizedBox-Höhe, denn die tatsächliche Höhe hängt vom
+                // Text-Scale des Geräts ab und würde sonst überlaufen.
+                // IgnorePointer verhindert, dass der unsichtbare Button
+                // antippbar ist.
+                if (!_hatEigenenWeiterButton(frage.modus))
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: _WeiterButton(onTap: _weiterTippen),
+                    child: AnimatedOpacity(
+                      opacity: _showFeedback ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: IgnorePointer(
+                        ignoring: !_showFeedback,
+                        child: _WeiterButton(onTap: _weiterTippen),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -1054,22 +1091,6 @@ Country? _countryByIso2(String iso2) {
   );
 }
 
-Color _optionFarbe(String option, String richtige, String? gewaehlt,
-    bool showFeedback, bool feedbackRichtig) {
-  if (!showFeedback) return const Color(0xFFEAEAE5);
-  if (option == richtige) return const Color(0xFF4A9E4A);
-  if (option == gewaehlt && !feedbackRichtig) return const Color(0xFFD94040);
-  return const Color(0xFFEAEAE5);
-}
-
-Color _textFarbe(String option, String richtige, String? gewaehlt,
-    bool showFeedback, bool feedbackRichtig) {
-  if (!showFeedback) return const Color(0xFF1a1a1a);
-  if (option == richtige) return Colors.white;
-  if (option == gewaehlt && !feedbackRichtig) return Colors.white;
-  return const Color(0xFF888888);
-}
-
 // ── Gemeinsame Widgets ─────────────────────────────────────────────────────────
 
 class _LandHeader extends StatelessWidget {
@@ -1098,41 +1119,211 @@ class _LandHeader extends StatelessWidget {
   }
 }
 
-class _AntwortButton extends StatelessWidget {
+// Dauer des Wackelns bei falscher Antwort. Vorher 150ms — das war der Grund,
+// warum auf dem Gerät praktisch nichts zu sehen war: bei 60fps sind 150ms nur
+// 9 Frames, und da die Amplitude zusätzlich mit exp(-5t) abklang, war schon
+// ab Frame 3 alles vorbei (siehe wackelOffset). Übrig blieb ein Ausschlag von
+// ~3px über 2 Frames — technisch lief die Animation, sichtbar war sie nicht.
+const kWackelDauer = Duration(milliseconds: 400);
+
+// Gedämpftes Wackeln für eine falsch angetippte Antwort — 3 Ausschläge über
+// die volle Animationsdauer, Amplitude klingt exponentiell ab. [t] läuft von
+// 0.0 bis 1.0.
+//
+// Amplitude (6→11px) und Dämpfung (exp(-5t)→exp(-2.5t)) wurden zusammen mit
+// kWackelDauer angehoben, damit die Bewegung tatsächlich wahrnehmbar ist: mit
+// diesen Werten liegt der erste Ausschlag bei ~9px und auch der dritte noch
+// bei ~4px, statt wie zuvor nach zwei Frames unter die Sichtbarkeitsschwelle
+// zu fallen. Der abschließende Wert bei t=1.0 bleibt praktisch 0, der Button
+// kehrt also exakt an seine Position zurück.
+double wackelOffset(double t) {
+  final gedaempft = exp(-t * 2.5);
+  return sin(t * pi * 6) * 11 * gedaempft;
+}
+
+// Leichtgewichtige Wiederverwendung des Wackel-Effekts (siehe wackelOffset)
+// für die Bild-Kachel-Modi (Flaggen/Umriss Multiple), die ihre eigene
+// Border-basierte Farbgebung behalten (Bild-Kacheln können nicht wie
+// Text-Buttons flächig grün/rot eingefärbt werden) — nur das Wackeln bei
+// falscher Wahl wird hier übernommen, kein Häkchen/Farbverlauf.
+class _WackelTile extends StatefulWidget {
+  final bool falschGewaehlt;
+  final Widget child;
+  const _WackelTile({required this.falschGewaehlt, required this.child});
+
+  @override
+  State<_WackelTile> createState() => _WackelTileState();
+}
+
+class _WackelTileState extends State<_WackelTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _wackelCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _wackelCtrl = AnimationController(vsync: this, duration: kWackelDauer);
+  }
+
+  @override
+  void didUpdateWidget(covariant _WackelTile old) {
+    super.didUpdateWidget(old);
+    if (!old.falschGewaehlt && widget.falschGewaehlt) {
+      if (kDebugMode) debugPrint('[Wackel/Kachel] Start — forward(from: 0)');
+      _wackelCtrl.forward(from: 0);
+    } else if (!widget.falschGewaehlt && old.falschGewaehlt) {
+      _wackelCtrl.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _wackelCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _wackelCtrl,
+      builder: (context, child) {
+        final dx =
+            widget.falschGewaehlt ? wackelOffset(_wackelCtrl.value) : 0.0;
+        return Transform.translate(offset: Offset(dx, 0), child: child);
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class _AntwortButton extends StatefulWidget {
   final String text;
-  final Color bgColor;
-  final Color textColor;
+  final Widget? leading;
+  final bool showFeedback;
+  final bool istRichtig;
+  final bool istGewaehlt;
+  final bool feedbackRichtig;
   final VoidCallback? onTap;
 
   const _AntwortButton({
     required this.text,
-    required this.bgColor,
-    required this.textColor,
+    this.leading,
+    required this.showFeedback,
+    required this.istRichtig,
+    required this.istGewaehlt,
+    required this.feedbackRichtig,
     this.onTap,
   });
 
   @override
+  State<_AntwortButton> createState() => _AntwortButtonState();
+}
+
+class _AntwortButtonState extends State<_AntwortButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _wackelCtrl;
+
+  bool get _istFalschGewaehlt =>
+      widget.showFeedback && widget.istGewaehlt && !widget.feedbackRichtig;
+
+  @override
+  void initState() {
+    super.initState();
+    _wackelCtrl = AnimationController(vsync: this, duration: kWackelDauer);
+  }
+
+  bool _warFalschGewaehlt(_AntwortButton w) =>
+      w.showFeedback && w.istGewaehlt && !w.feedbackRichtig;
+
+  @override
+  void didUpdateWidget(covariant _AntwortButton old) {
+    super.didUpdateWidget(old);
+    // Wackeln nur EINMAL auslösen: exakt beim Übergang zu "dieser Button
+    // wurde falsch gewählt" — nicht bei jedem Rebuild (verhindert
+    // Doppel-Animation bei schnellem Durchklicken).
+    //
+    // Der Übergang wird über den vorherigen Wert von _istFalschGewaehlt
+    // selbst geprüft, nicht mehr über old.showFeedback: Letzteres traf nur zu,
+    // wenn showFeedback im SELBEN Rebuild von false auf true kippte, und ging
+    // damit leer aus, sobald der Screen zwischendurch noch einmal baute (z.B.
+    // durch den Countdown-Tick) oder das Feedback bereits stand, als die Wahl
+    // gesetzt wurde.
+    if (!_warFalschGewaehlt(old) && _istFalschGewaehlt) {
+      if (kDebugMode) {
+        debugPrint('[Wackel/Button] Start "${widget.text}" — forward(from: 0)');
+      }
+      _wackelCtrl.forward(from: 0);
+    } else if (!widget.showFeedback && old.showFeedback) {
+      _wackelCtrl.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _wackelCtrl.dispose();
+    super.dispose();
+  }
+
+  Color get _bgColor {
+    if (!widget.showFeedback) return const Color(0xFFEAEAE5);
+    if (widget.istRichtig) return const Color(0xFF4A9E4A);
+    if (_istFalschGewaehlt) return const Color(0xFFE53935);
+    return const Color(0xFFEAEAE5);
+  }
+
+  Color get _textColor {
+    if (!widget.showFeedback) return const Color(0xFF1a1a1a);
+    if (widget.istRichtig) return Colors.white;
+    if (_istFalschGewaehlt) return Colors.white;
+    return const Color(0xFF888888);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Die richtige Antwort blendet sanft grün ein (300ms, kein Wackeln) —
+    // der falsch gewählte Button reagiert schneller (150ms) UND wackelt.
+    final faerbDauer = widget.istRichtig && !widget.istGewaehlt
+        ? const Duration(milliseconds: 300)
+        : const Duration(milliseconds: 150);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: textColor,
+        child: AnimatedBuilder(
+          animation: _wackelCtrl,
+          builder: (context, child) {
+            final dx =
+                _istFalschGewaehlt ? wackelOffset(_wackelCtrl.value) : 0.0;
+            return Transform.translate(offset: Offset(dx, 0), child: child);
+          },
+          child: AnimatedContainer(
+            duration: faerbDauer,
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: _bgColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (widget.leading != null) ...[
+                  widget.leading!,
+                  const SizedBox(width: 10),
+                ],
+                Flexible(
+                  child: Text(
+                    widget.text,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: _textColor,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1218,10 +1409,10 @@ class _FlagBildUI extends StatelessWidget {
         const SizedBox(height: 28),
         ...frage.antwortOptionen.map((opt) => _AntwortButton(
               text: opt,
-              bgColor: _optionFarbe(opt, frage.richtigeAntwort, gewaehlt,
-                  showFeedback, feedbackRichtig),
-              textColor: _textFarbe(opt, frage.richtigeAntwort, gewaehlt,
-                  showFeedback, feedbackRichtig),
+              showFeedback: showFeedback,
+              istRichtig: opt == frage.richtigeAntwort,
+              istGewaehlt: opt == gewaehlt,
+              feedbackRichtig: feedbackRichtig,
               onTap: showFeedback ? null : () => onAntwort(opt),
             )),
       ],
@@ -1297,37 +1488,15 @@ class _GrenzkettenUI extends StatelessWidget {
         const SizedBox(height: 20),
         ...frage.antwortOptionen.map((iso2) {
           final land = _countryByIso2(iso2);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: InkWell(
-              onTap: showFeedback ? null : () => onAntwort(iso2),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: _optionFarbe(iso2, frage.richtigeAntwort, gewaehlt,
-                      showFeedback, feedbackRichtig),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FlaggenWidget(countryCode: iso2, width: 32, height: 21, borderRadius: 4),
-                    const SizedBox(width: 10),
-                    Text(
-                      land?.name ?? iso2,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: _textFarbe(iso2, frage.richtigeAntwort, gewaehlt,
-                            showFeedback, feedbackRichtig),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          return _AntwortButton(
+            text: land?.name ?? iso2,
+            leading: FlaggenWidget(
+                countryCode: iso2, width: 32, height: 21, borderRadius: 4),
+            showFeedback: showFeedback,
+            istRichtig: iso2 == frage.richtigeAntwort,
+            istGewaehlt: iso2 == gewaehlt,
+            feedbackRichtig: feedbackRichtig,
+            onTap: showFeedback ? null : () => onAntwort(iso2),
           );
         }),
         if (showFeedback) ...[
@@ -1449,32 +1618,36 @@ class _FlagMultipleUI extends StatelessWidget {
                 border = const Color(0xFFD94040);
               }
             }
-            return GestureDetector(
-              onTap: showFeedback ? null : () => onAntwort(iso2),
-              child: LayoutBuilder(
-                builder: (ctx, constraints) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: border,
-                      width: border == Colors.transparent ? 0 : 3,
+            return _WackelTile(
+              falschGewaehlt:
+                  showFeedback && iso2 == gewaehlt && !feedbackRichtig,
+              child: GestureDetector(
+                onTap: showFeedback ? null : () => onAntwort(iso2),
+                child: LayoutBuilder(
+                  builder: (ctx, constraints) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: border,
+                        width: border == Colors.transparent ? 0 : 3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(20),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        )
+                      ],
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(20),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      )
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: FlaggenWidget(
-                      countryCode: iso2,
-                      width: constraints.maxWidth,
-                      height: constraints.maxHeight,
-                      borderRadius: 0,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: FlaggenWidget(
+                        countryCode: iso2,
+                        width: constraints.maxWidth,
+                        height: constraints.maxHeight,
+                        borderRadius: 0,
+                      ),
                     ),
                   ),
                 ),
@@ -1528,10 +1701,10 @@ class _GenericMCUI extends StatelessWidget {
         const SizedBox(height: 24),
         ...frage.antwortOptionen.map((opt) => _AntwortButton(
               text: _labelFor(opt),
-              bgColor: _optionFarbe(opt, frage.richtigeAntwort, gewaehlt,
-                  showFeedback, feedbackRichtig),
-              textColor: _textFarbe(opt, frage.richtigeAntwort, gewaehlt,
-                  showFeedback, feedbackRichtig),
+              showFeedback: showFeedback,
+              istRichtig: opt == frage.richtigeAntwort,
+              istGewaehlt: opt == gewaehlt,
+              feedbackRichtig: feedbackRichtig,
               onTap: showFeedback ? null : () => onAntwort(opt),
             )),
       ],
@@ -2202,10 +2375,10 @@ class _UmrissBildUI extends StatelessWidget {
         const SizedBox(height: 20),
         ...frage.antwortOptionen.map((opt) => _AntwortButton(
               text: opt,
-              bgColor: _optionFarbe(opt, frage.richtigeAntwort, gewaehlt,
-                  showFeedback, feedbackRichtig),
-              textColor: _textFarbe(opt, frage.richtigeAntwort, gewaehlt,
-                  showFeedback, feedbackRichtig),
+              showFeedback: showFeedback,
+              istRichtig: opt == frage.richtigeAntwort,
+              istGewaehlt: opt == gewaehlt,
+              feedbackRichtig: feedbackRichtig,
               onTap: showFeedback ? null : () => onAntwort(opt),
             )),
       ],
@@ -2271,32 +2444,36 @@ class _UmrissMultipleUI extends StatelessWidget {
             final silColor = (showFeedback && iso2 == gewaehlt && !feedbackRichtig)
                 ? const Color(0xFFD94040)
                 : const Color(0xFF2E7D32);
-            return GestureDetector(
-              onTap: showFeedback ? null : () => onAntwort(iso2),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: borderColor, width: borderWidth),
-                ),
-                child: !geoLoaded
-                    ? const Center(
-                        child: SizedBox(
-                          width: 20, height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Color(0xFF2E7D32)),
+            return _WackelTile(
+              falschGewaehlt:
+                  showFeedback && iso2 == gewaehlt && !feedbackRichtig,
+              child: GestureDetector(
+                onTap: showFeedback ? null : () => onAntwort(iso2),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: borderColor, width: borderWidth),
+                  ),
+                  child: !geoLoaded
+                      ? const Center(
+                          child: SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Color(0xFF2E7D32)),
+                          ),
+                        )
+                      : rings.isEmpty
+                          ? const Center(
+                              child: Text('🗺️', style: TextStyle(fontSize: 32)),
+                            )
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CustomPaint(
+                              painter: _UmrissPainter(rings: rings, color: silColor)),
                         ),
-                      )
-                    : rings.isEmpty
-                        ? const Center(
-                            child: Text('🗺️', style: TextStyle(fontSize: 32)),
-                          )
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: CustomPaint(
-                            painter: _UmrissPainter(rings: rings, color: silColor)),
-                      ),
+                ),
               ),
             );
           }).toList(),

@@ -424,7 +424,8 @@
       "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb kill-server; Start-Sleep -Seconds 2; & $adb start-server; Start-Sleep -Seconds 3; & $adb devices -l)",
       "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb devices; & $adb shell pidof com.northlight.geomania)",
       "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb devices)",
-      "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb devices; $p = & $adb shell pidof com.northlight.geomania; if \\($p\\) { \"App laeuft, PID $p\" } else { \"App laeuft NICHT\" })"
+      "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb devices; $p = & $adb shell pidof com.northlight.geomania; if \\($p\\) { \"App laeuft, PID $p\" } else { \"App laeuft NICHT\" })",
+      "Bash(sort -t' ' -k2 -n)"
     ]
   }
 }

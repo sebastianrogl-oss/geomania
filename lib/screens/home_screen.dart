@@ -15,6 +15,7 @@ import '../widgets/kontinent_hintergrund.dart';
 import '../widgets/level_skip_button.dart';
 import '../widgets/pfad_deko_layer.dart';
 import '../widgets/pfad_maskottchen.dart';
+import '../widgets/streak_flamme.dart';
 import 'challenge_start_screen.dart';
 import 'higher_lower_screen.dart';
 import 'portfolio/portfolio_ergebnis_ansicht_screen.dart';
@@ -666,7 +667,23 @@ class _GreenHeaderState extends State<_GreenHeader> {
         children: [
           Text(widget.weltEmoji, style: const TextStyle(fontSize: 22)),
           const SizedBox(width: 16),
-          const Text('🔥', style: TextStyle(fontSize: 18)),
+          // Deutlich größer als das frühere Emoji (18): die Flamme trägt die
+          // Streak-Anzeige optisch. Die Kopfzeile ist 56px hoch, 45px passen
+          // dort hinein, und die Row zentriert ihre Kinder vertikal — der
+          // Zahlentext daneben bleibt dadurch auf Höhe.
+          //
+          // Der Versatz korrigiert die optische Lage: Transform.translate
+          // wirkt rein visuell, der Platzbedarf in der Row bleibt unverändert
+          // und der Zahlentext daneben rutscht dadurch nicht mit.
+          Transform.translate(
+            offset: const Offset(5, -5),
+            // Die Zahl steht hier daneben statt in der Flamme, deshalb muss
+            // der erloschene Zustand ausdrücklich mitgegeben werden.
+            child: StreakFlamme(
+              groesse: 45,
+              erloschen: widget.streak == 0,
+            ),
+          ),
           const SizedBox(width: 4),
           Text(
             '${widget.streak}',

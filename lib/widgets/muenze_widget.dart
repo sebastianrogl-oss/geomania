@@ -2,6 +2,91 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/abzeichen_data.dart';
 
+/// Dunkles Braun der Münz-Outline — Farbe für alles, was IN der Münze steht.
+const kMuenzInhaltFarbe = Color(0xFF4E342E);
+
+/// Die Münze ohne festgelegten Inhalt.
+///
+/// Herausgelöst aus [MuenzenWidget], damit andere Stellen (Profil-Kachel mit
+/// Abzeichen-Anzahl) exakt dieselbe Münze mit eigenem Inhalt zeigen können —
+/// eine Quelle für die Optik statt zweier, die auseinanderlaufen.
+class MuenzGrundlage extends StatelessWidget {
+  final double groesse;
+  final Widget inhalt;
+
+  const MuenzGrundlage({
+    super.key,
+    required this.groesse,
+    required this.inhalt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: groesse,
+      height: groesse,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Echtes Maskottchen-Körper-Bild als Münz-Grundlage. Das Bild ist
+          // Weitformat (1380x752, Kreis füllt nur einen mittleren Streifen
+          // der Breite) -> ClipOval + BoxFit.cover statt contain, sonst
+          // erscheint der Kreis winzig mit riesigem transparentem Rand
+          // (dasselbe Muster wie ProfilbildService.istWeitformat).
+          ClipOval(
+            child: Image.asset(
+              'assets/icons/deko/Körper.png',
+              width: groesse,
+              height: groesse,
+              fit: BoxFit.cover,
+              errorBuilder: (c, e, s) => _fallbackGradientMuenze(groesse),
+            ),
+          ),
+          inhalt,
+        ],
+      ),
+    );
+  }
+
+  /// Absicherung falls das Körper.png-Bild nicht lädt — die vorherige,
+  /// rein aus BoxDecoration gebaute Münze (Sockel + Gold-Gradient) als
+  /// Fallback, kein leerer Kreis/Crash.
+  Widget _fallbackGradientMuenze(double groesse) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Positioned(
+          top: groesse * 0.04,
+          child: Container(
+            width: groesse * 0.96,
+            height: groesse * 0.96,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFC17F00),
+              border: Border.all(
+                  color: kMuenzInhaltFarbe, width: groesse * 0.027),
+            ),
+          ),
+        ),
+        Container(
+          width: groesse * 0.96,
+          height: groesse * 0.96,
+          margin: EdgeInsets.only(bottom: groesse * 0.04),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const RadialGradient(
+              center: Alignment(-0.3, -0.3),
+              colors: [Color(0xFFFFD54F), Color(0xFFF9A825)],
+            ),
+            border:
+                Border.all(color: kMuenzInhaltFarbe, width: groesse * 0.027),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Einziges, gemeinsam genutztes Münz-Widget für Münzalbum UND Freischalt-
 /// Popup — garantiert identisches Aussehen an beiden Stellen. Dicke,
 /// 3D-wirkende Münze im Stil der coin_*.png-Maskottchen-Varianten
@@ -27,69 +112,13 @@ class MuenzenWidget extends StatelessWidget {
       );
     }
 
-    return SizedBox(
-      width: groesse,
-      height: groesse,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Echtes Maskottchen-Körper-Bild als Münz-Grundlage. Das Bild ist
-          // Weitformat (1380x752, Kreis füllt nur einen mittleren Streifen
-          // der Breite) -> ClipOval + BoxFit.cover statt contain, sonst
-          // erscheint der Kreis winzig mit riesigem transparentem Rand
-          // (dasselbe Muster wie ProfilbildService.istWeitformat).
-          ClipOval(
-            child: Image.asset(
-              'assets/icons/deko/Körper.png',
-              width: groesse,
-              height: groesse,
-              fit: BoxFit.cover,
-              errorBuilder: (c, e, s) => _fallbackGradientMuenze(groesse),
-            ),
-          ),
-          Icon(
-            iconFuerAbzeichen(abzeichen.id),
-            size: groesse * 0.38,
-            color: const Color(0xFF4E342E),
-          ),
-        ],
+    return MuenzGrundlage(
+      groesse: groesse,
+      inhalt: Icon(
+        iconFuerAbzeichen(abzeichen.id),
+        size: groesse * 0.38,
+        color: kMuenzInhaltFarbe,
       ),
-    );
-  }
-
-  /// Absicherung falls das Körper.png-Bild nicht lädt — die vorherige,
-  /// rein aus BoxDecoration gebaute Münze (Sockel + Gold-Gradient) als
-  /// Fallback, kein leerer Kreis/Crash.
-  Widget _fallbackGradientMuenze(double groesse) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Positioned(
-          top: groesse * 0.04,
-          child: Container(
-            width: groesse * 0.96,
-            height: groesse * 0.96,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFC17F00),
-              border: Border.all(color: const Color(0xFF4E342E), width: groesse * 0.027),
-            ),
-          ),
-        ),
-        Container(
-          width: groesse * 0.96,
-          height: groesse * 0.96,
-          margin: EdgeInsets.only(bottom: groesse * 0.04),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const RadialGradient(
-              center: Alignment(-0.3, -0.3),
-              colors: [Color(0xFFFFD54F), Color(0xFFF9A825)],
-            ),
-            border: Border.all(color: const Color(0xFF4E342E), width: groesse * 0.027),
-          ),
-        ),
-      ],
     );
   }
 }

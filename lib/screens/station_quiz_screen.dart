@@ -20,6 +20,7 @@ import '../services/skala_service.dart';
 import '../services/station_session_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/flaggen_widget.dart';
+import '../widgets/halbzeit_inhalt.dart';
 import '../widgets/level_skip_button.dart';
 import '../widgets/streak_feier_overlay.dart';
 import '../theme/app_theme.dart';
@@ -275,6 +276,16 @@ class StationQuizScreen extends StatefulWidget {
 class _StationQuizScreenState extends State<StationQuizScreen> {
   StationSession? _session;
   bool _loading = true;
+  // Der Halbzeit-Moment erscheint höchstens einmal pro Station.
+  bool _halbzeitGezeigt = false;
+  // Solange gesetzt, zeigt der Inhaltsbereich den Halbzeit-Moment statt einer
+  // Frage; der Completer hält _vorruecken so lange an.
+  bool _zeigeHalbzeit = false;
+  bool _halbzeitButtonSichtbar = false;
+  Completer<void>? _halbzeitFertig;
+  // Key des gerade angezeigten Inhalts — unterscheidet im Wisch-Übergang das
+  // eingehende vom abgehenden Kind (siehe _inhaltMitWisch).
+  Key? _aktuellerInhaltKey;
 
   // Feedback-State
   bool _showFeedback = false;
@@ -648,7 +659,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   // ── Vorrücken / Station fertig ─────────────────────────────────────────────
 
-  void _vorruecken() {
+  Future<void> _vorruecken() async {
     if (!mounted) return;
     if (_session!.istFertig) {
       _stationFertig();
@@ -658,9 +669,59 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         _gewahlteAntwort = null;
       });
       _session!.speichernFortschritt();
+      // Halbzeit-Moment VOR dem Neustart des Countdowns: der Timer wurde beim
+      // Antworten gestoppt und läuft erst nach dem Wegtippen wieder an,
+      // niemand verliert also Zeit durch das Overlay.
+      await _halbzeitPruefen();
+      if (!mounted) return;
       if (_session!.hatTimer) _startCountdown();
       _initFrageState(_session!.aktuelleFrage);
     }
+  }
+
+  /// Zeigt nach der halben Fragenzahl einmalig den Motivations-Moment.
+  ///
+  /// Kein eigener Screen und kein Overlay: nur der Inhaltsbereich wird
+  /// getauscht, AppBar samt Fortschrittsbalken und Skip-Button sowie der
+  /// Weiter-Button bleiben stehen. Der Completer hält den Ablauf an, bis der
+  /// Spieler "Weiter" tippt — von außen verhält sich die Methode damit wie
+  /// ein blockierender Dialog.
+  ///
+  /// Nicht in Wiederholungsrunden: dort ist die Fragenzahl variabel (nur die
+  /// zuvor falsch beantworteten Fragen), eine "Halbzeit" wäre dort ohne
+  /// Aussage. Tages-Challenges laufen über eigene Screens und erreichen
+  /// diesen Code ohnehin nie.
+  Future<void> _halbzeitPruefen() async {
+    if (_halbzeitGezeigt || widget.istWiederholungsrunde) return;
+    final session = _session!;
+    final gesamt = session.aktiveFragen.length;
+    // Bei sehr kurzen Stationen ergibt ein Halbzeit-Moment keinen Sinn.
+    if (gesamt < 4) return;
+    if (session.aktuellerIndex != gesamt ~/ 2) return;
+
+    _halbzeitGezeigt = true;
+    _halbzeitFertig = Completer<void>();
+    setState(() {
+      _zeigeHalbzeit = true;
+      _halbzeitButtonSichtbar = false;
+    });
+    // Der Weiter-Button erscheint erst, wenn Bild und Spruch stehen.
+    Future.delayed(const Duration(milliseconds: kHalbzeitButtonAb), () {
+      if (mounted && _zeigeHalbzeit) {
+        setState(() => _halbzeitButtonSichtbar = true);
+      }
+    });
+    await _halbzeitFertig!.future;
+  }
+
+  void _halbzeitWeiter() {
+    if (!_zeigeHalbzeit) return;
+    setState(() {
+      _zeigeHalbzeit = false;
+      _halbzeitButtonSichtbar = false;
+    });
+    _halbzeitFertig?.complete();
+    _halbzeitFertig = null;
   }
 
   Future<void> _stationFertig() async {
@@ -868,7 +929,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
                               // Inhalt wird stattdessen normal gescrollt,
                               // keine Zentrierung erzwungen, kein Overflow
                               children: [
-                                _frageWidget(frage),
+                                _inhaltMitWisch(session, frage),
                               ],
                             ),
                           ),
@@ -887,20 +948,101 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
                 // Text-Scale des Geräts ab und würde sonst überlaufen.
                 // IgnorePointer verhindert, dass der unsichtbare Button
                 // antippbar ist.
-                if (!_hatEigenenWeiterButton(frage.modus))
+                // Im Halbzeit-Moment gehört der Button diesem Moment (und
+                // erscheint zeitversetzt), sonst dem Feedback zur Frage. In
+                // beiden Fällen dieselbe Position und dasselbe Widget — für
+                // den Spieler bleibt der Button einfach stehen.
+                if (_zeigeHalbzeit || !_hatEigenenWeiterButton(frage.modus))
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: AnimatedOpacity(
-                      opacity: _showFeedback ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: IgnorePointer(
-                        ignoring: !_showFeedback,
-                        child: _WeiterButton(onTap: _weiterTippen),
-                      ),
-                    ),
+                    child: Builder(builder: (context) {
+                      final sichtbar = _zeigeHalbzeit
+                          ? _halbzeitButtonSichtbar
+                          : _showFeedback;
+                      return AnimatedOpacity(
+                        opacity: sichtbar ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: IgnorePointer(
+                          ignoring: !sichtbar,
+                          child: _WeiterButton(
+                            onTap: _zeigeHalbzeit
+                                ? _halbzeitWeiter
+                                : _weiterTippen,
+                          ),
+                        ),
+                      );
+                    }),
                   ),
               ],
             ),
+    );
+  }
+
+  /// Inhaltsbereich mit horizontalem Wisch-Übergang.
+  ///
+  /// Zentral hier statt in jedem Modus einzeln: alle Modi laufen durch
+  /// _frageWidget und bekommen den Übergang dadurch automatisch. Auch der
+  /// Halbzeit-Moment ist eingeschlossen, damit sich der Wechsel dorthin und
+  /// zurück genauso anfühlt wie zwischen zwei Fragen.
+  ///
+  /// Der Key ist entscheidend: nur wenn er sich ändert, erkennt der
+  /// AnimatedSwitcher überhaupt einen Wechsel. Er enthält deshalb den
+  /// Fragen-Index UND den Halbzeit-Zustand.
+  Widget _inhaltMitWisch(StationSession session, Frage? frage) {
+    final Widget inhalt;
+    final Key key;
+    if (_zeigeHalbzeit) {
+      // Derselbe Key-Raum wie die Fragen, nur mit einem Zusatz: dadurch ist
+      // es für den AnimatedSwitcher technisch ein ganz normaler Wechsel und
+      // wischt zwangsläufig in dieselbe Richtung — vorheriger Inhalt nach
+      // links raus, neuer von rechts herein, auch beim Verlassen.
+      key = ValueKey('frage_${session.aktuellerIndex}_halbzeit');
+      inhalt = HalbzeitInhalt(
+        richtigBisher: session.richtigeAntworten,
+        beantwortet: session.aktuellerIndex,
+      );
+    } else {
+      key = ValueKey('frage_${session.aktuellerIndex}');
+      inhalt = _frageWidget(frage!);
+    }
+    _aktuellerInhaltKey = key;
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 350),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        // Der Switcher fährt die Animation für das ALTE Kind RÜCKWÄRTS. Mit
+        // nur einer Richtung würde die alte Frage deshalb dorthin
+        // zurückgleiten, wo die neue herkommt (beide rechts) — es sähe aus,
+        // als würde zurückgeblättert.
+        //
+        // Deshalb bekommt jedes Kind seine eigene Richtung: das eingehende
+        // startet rechts und läuft zur Mitte, das abgehende läuft von der
+        // Mitte nach links. Erkennbar am Key — nur das aktuelle Kind trägt
+        // _aktuellerInhaltKey.
+        final istEingehend = child.key == _aktuellerInhaltKey;
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: istEingehend ? const Offset(1.0, 0.0) : const Offset(-1.0, 0.0),
+            end: Offset.zero,
+          ).animate(animation),
+          child: FadeTransition(opacity: animation, child: child),
+        );
+      },
+      layoutBuilder: (currentChild, previousChildren) {
+        // Standard-Layout stapelt zentriert; die abgehende Frage darf dabei
+        // die Größe des Bereichs nicht mehr bestimmen, sonst springt die
+        // Höhe bei unterschiedlich hohen Modi.
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            ...previousChildren,
+            ?currentChild,
+          ],
+        );
+      },
+      child: KeyedSubtree(key: key, child: inhalt),
     );
   }
 

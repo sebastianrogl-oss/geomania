@@ -22,6 +22,7 @@ import 'portfolio_screen.dart';
 import 'preis_schaetzen_screen.dart';
 import 'ranking_game_screen.dart';
 import 'station_quiz_screen.dart';
+import '../theme/app_theme.dart';
 
 IconData _modusIcon(LernModus m) => switch (m) {
   LernModus.flaggenQuizBild => Icons.flag_rounded,
@@ -1866,7 +1867,7 @@ class _ChallengePanelState extends State<_ChallengePanel> {
 
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFFF5F4F0),
+        color: kHintergrund,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
@@ -2465,7 +2466,7 @@ class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
         maxHeight: MediaQuery.of(context).size.height * 0.75,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFFF5F4F0),
+        color: kHintergrund,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
@@ -2678,7 +2679,7 @@ class _KontinentFreischaltenDialogState
         MediaQuery.paddingOf(context).bottom + 24,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFFF5F4F0),
+        color: kHintergrund,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(

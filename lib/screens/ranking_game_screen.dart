@@ -17,6 +17,7 @@ import '../widgets/rangliste_ergebnis_karte.dart';
 import '../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../widgets/rekord_badge.dart';
 import '../widgets/spiel_erklaerung.dart';
+import '../theme/app_theme.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -533,7 +534,7 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0E8),
+      backgroundColor: kHintergrund,
       body: switch (_status) {
         _Status.laden => const Center(
             child: CircularProgressIndicator(color: Color(0xFF4A9E4A))),

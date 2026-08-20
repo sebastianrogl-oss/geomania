@@ -4,6 +4,7 @@ import '../data/countries.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/locale_service.dart';
 import '../services/stats_service.dart';
+import '../theme/app_theme.dart';
 
 class GdpQuizScreen extends StatefulWidget {
   final int questionCount;
@@ -101,9 +102,9 @@ class _GdpQuizScreenState extends State<GdpQuizScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F0),
+      backgroundColor: kHintergrund,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F5F0),
+        backgroundColor: kHintergrund,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),

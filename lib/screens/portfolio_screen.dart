@@ -12,6 +12,7 @@ import '../utils/portfolio_format.dart';
 import 'portfolio/portfolio_investieren_screen.dart';
 import 'portfolio/portfolio_marktbriefing_screen.dart';
 import 'portfolio_beispiel_screen.dart';
+import '../theme/app_theme.dart';
 
 const _kPortfolioId = 'portfolio';
 
@@ -116,7 +117,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
   Widget build(BuildContext context) {
     final status = _status;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0E8),
+      backgroundColor: kHintergrund,
       body: status == null
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFF4A9E4A)))

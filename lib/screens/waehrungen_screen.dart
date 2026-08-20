@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/currencies.dart';
 import '../l10n/uebersetzungen.dart';
+import '../theme/app_theme.dart';
 
 // ── Phase ─────────────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F0),
+      backgroundColor: kHintergrund,
       body: switch (_phase) {
         _Phase.difficulty => _buildDifficulty(),
         _Phase.quiz       => _buildQuiz(),
@@ -196,9 +197,9 @@ class _WaehrungenScreenState extends State<WaehrungenScreen> {
     final hasFact = correct.funFact.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F0),
+      backgroundColor: kHintergrund,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F5F0),
+        backgroundColor: kHintergrund,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),

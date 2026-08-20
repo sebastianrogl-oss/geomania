@@ -4,6 +4,7 @@ import '../../services/challenge_ergebnis_service.dart';
 import '../../services/portfolio_engine.dart';
 import '../../services/portfolio_service.dart';
 import 'portfolio_aufloesung_screen.dart';
+import '../../theme/app_theme.dart';
 
 /// Lädt das heute bereits erzielte Portfolio-Ergebnis aus der lokalen
 /// Speicherung und zeigt es über die bestehende PortfolioAufloesungScreen
@@ -109,7 +110,7 @@ class _PortfolioErgebnisAnsichtScreenState
     final status = _status;
     if (ergebnis == null || status == null) {
       return const Scaffold(
-        backgroundColor: Color(0xFFF5F0E8),
+        backgroundColor: kHintergrund,
         body: Center(
             child: CircularProgressIndicator(color: Color(0xFF4A9E4A))),
       );

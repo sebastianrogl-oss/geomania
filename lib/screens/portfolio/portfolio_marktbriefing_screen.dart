@@ -9,6 +9,7 @@ import '../../utils/portfolio_format.dart';
 import '../../widgets/portfolio_flagge.dart';
 import '../../widgets/spiel_erklaerung.dart';
 import 'portfolio_investieren_screen.dart';
+import '../../theme/app_theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WELTPORTFOLIO — Screen 1: Marktbriefing (Phase 4)
@@ -59,7 +60,7 @@ class _PortfolioMarktbriefingScreenState
     return PopScope(
       canPop: false,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F0E8),
+        backgroundColor: kHintergrund,
         body: SafeArea(
           child: Column(
             children: [

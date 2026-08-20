@@ -22,6 +22,7 @@ import '../widgets/abzeichen_popup.dart';
 import '../widgets/flaggen_widget.dart';
 import '../widgets/level_skip_button.dart';
 import '../widgets/streak_feier_overlay.dart';
+import '../theme/app_theme.dart';
 
 // ── Geo-Cache (einmal laden, überall nutzen) ──────────────────────────────────
 
@@ -805,7 +806,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         : lernModusLabel(frage?.modus ?? widget.station!.modus);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F0),
+      backgroundColor: kHintergrund,
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B3A2D),
         foregroundColor: Colors.white,

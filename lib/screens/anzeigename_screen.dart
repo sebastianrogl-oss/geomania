@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/auth_service.dart';
 import '../widgets/maskottchen_animation.dart';
+import '../theme/app_theme.dart';
 
 class AnzeigenameScreen extends StatefulWidget {
   final VoidCallback onFertig;
@@ -50,7 +51,7 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0E8),
+      backgroundColor: kHintergrund,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {

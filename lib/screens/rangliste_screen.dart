@@ -4,6 +4,7 @@ import '../services/locale_service.dart';
 import '../services/profilbild_service.dart';
 import '../services/rangliste_service.dart';
 import '../utils/portfolio_format.dart';
+import '../theme/app_theme.dart';
 
 const _kMonatsnamenDe = [
   'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
@@ -144,7 +145,7 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF5F0E8),
+      color: kHintergrund,
       child: SafeArea(
         child: Column(
           children: [

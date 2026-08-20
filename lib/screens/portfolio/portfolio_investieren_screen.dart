@@ -18,6 +18,7 @@ import '../../widgets/abzeichen_popup.dart';
 import '../../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../../widgets/portfolio_flagge.dart';
 import 'portfolio_aufloesung_screen.dart';
+import '../../theme/app_theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WELTPORTFOLIO — Screen 2: Investieren (Karten-Deck + Gewichtung) (Phase 5)
@@ -355,7 +356,7 @@ class _PortfolioInvestierenScreenState
     return PopScope(
       canPop: _rundeAbgeschlossen,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F0E8),
+        backgroundColor: kHintergrund,
         body: SafeArea(
           child: Column(
             children: [
@@ -840,7 +841,7 @@ class _PortfolioInvestierenScreenState
       key: _slotKeys[index],
       height: iso != null ? null : 96,
       decoration: BoxDecoration(
-        color: iso != null ? Colors.transparent : const Color(0xFFF5F0E8),
+        color: iso != null ? Colors.transparent : kHintergrund,
         borderRadius: BorderRadius.circular(14),
       ),
       child: iso == null

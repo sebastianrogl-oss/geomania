@@ -19,6 +19,7 @@ import '../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../widgets/rangliste_ergebnis_karte.dart';
 import '../widgets/rekord_badge.dart';
 import '../widgets/spiel_erklaerung.dart';
+import '../theme/app_theme.dart';
 
 // ── Runden-Historie (für die Game-Over-Liste) ──────────────────────────────
 
@@ -421,7 +422,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F0),
+      backgroundColor: kHintergrund,
       body: SafeArea(
         child: !_bereit
             ? const Center(child: CircularProgressIndicator())
@@ -441,7 +442,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
         ? (_lastCorrect == true
               ? const Color(0xFFE8F5E9)
               : const Color(0xFFFFEBEE))
-        : const Color(0xFFF5F5F0);
+        : kHintergrund;
 
     return Column(
       children: [
@@ -562,7 +563,7 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
                       country: _leftCountry,
                       value: leftVal,
                       label: _category.label,
-                      bgColor: const Color(0xFFF5F5F0),
+                      bgColor: kHintergrund,
                     ),
                   ),
                 ),
@@ -1001,7 +1002,7 @@ class _HiddenPanel extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        color: const Color(0xFFF5F5F0),
+        color: kHintergrund,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class KontinentHintergrund extends StatefulWidget {
   final String kontinentId;
@@ -91,21 +92,21 @@ class _KontinentHintergrundState
   List<Color> _getGradient(String id) {
     switch (id) {
       case 'europa':
-        return [const Color(0xFFF0F4FF), const Color(0xFFF5F4F0)];
+        return [const Color(0xFFF0F4FF), kHintergrund];
       case 'suedamerika':
-        return [const Color(0xFFF0FFF4), const Color(0xFFF5F4F0)];
+        return [const Color(0xFFF0FFF4), kHintergrund];
       case 'nordamerika':
-        return [const Color(0xFFFFF8F0), const Color(0xFFF5F4F0)];
+        return [const Color(0xFFFFF8F0), kHintergrund];
       case 'afrika':
-        return [const Color(0xFFFFF9F0), const Color(0xFFF5F4F0)];
+        return [const Color(0xFFFFF9F0), kHintergrund];
       case 'asien':
-        return [const Color(0xFFF0F0FF), const Color(0xFFF5F4F0)];
+        return [const Color(0xFFF0F0FF), kHintergrund];
       case 'ozeanien':
-        return [const Color(0xFFF0FFFE), const Color(0xFFF5F4F0)];
+        return [const Color(0xFFF0FFFE), kHintergrund];
       case 'welt':
-        return [const Color(0xFFF0F2FF), const Color(0xFFF5F4F0)];
+        return [const Color(0xFFF0F2FF), kHintergrund];
       default:
-        return [const Color(0xFFF5F4F0), const Color(0xFFF5F4F0)];
+        return [kHintergrund, kHintergrund];
     }
   }
 }

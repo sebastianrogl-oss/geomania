@@ -15,6 +15,7 @@ import '../utils/portfolio_format.dart';
 import '../widgets/muenzalbum_seite.dart';
 import '../widgets/station_emoji.dart';
 import 'settings_screen.dart';
+import '../theme/app_theme.dart';
 
 const _challengeIds = ['preis', 'higher_lower', 'ranking_game', 'portfolio'];
 
@@ -573,7 +574,7 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
       height: screenH * 0.75,
       clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(
-        color: Color(0xFFF5F5F0),
+        color: kHintergrund,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -814,7 +815,7 @@ class _ProfilbildFreischaltenDialogState
       padding: EdgeInsets.fromLTRB(
           24, 24, 24, MediaQuery.paddingOf(context).bottom + 24),
       decoration: const BoxDecoration(
-        color: Color(0xFFF5F4F0),
+        color: kHintergrund,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(

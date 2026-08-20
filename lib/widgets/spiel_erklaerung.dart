@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Wiederverwendbarer "?"-Hilfe-Button + Erklärungs-Sheet für die 4 Tages-
@@ -57,7 +58,7 @@ void zeigeSpielErklaerung(
       expand: false,
       builder: (ctx, scrollController) => Container(
         decoration: const BoxDecoration(
-          color: Color(0xFFF5F4F0),
+          color: kHintergrund,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(

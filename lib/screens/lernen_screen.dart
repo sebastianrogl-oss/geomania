@@ -11,6 +11,7 @@ import 'waehrungen_screen.dart';
 import 'wirtschaftssektoren_screen.dart';
 import 'sortier_spiel_screen.dart';
 import 'category_match_screen.dart';
+import '../theme/app_theme.dart';
 
 // ── Quiz-Settings ─────────────────────────────────────────────────────────────
 
@@ -590,7 +591,7 @@ class _ContinentPicker extends StatelessWidget {
         maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFFF5F5F0),
+        color: kHintergrund,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
@@ -750,7 +751,7 @@ class _CountPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFFF5F5F0),
+        color: kHintergrund,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),

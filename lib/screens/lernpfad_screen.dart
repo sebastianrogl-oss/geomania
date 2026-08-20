@@ -11,6 +11,7 @@ import '../services/fortschritt_service.dart';
 import '../widgets/kontinent_hintergrund.dart';
 import '../widgets/station_emoji.dart';
 import 'station_quiz_screen.dart';
+import '../theme/app_theme.dart';
 
 class LernpfadScreen extends StatefulWidget {
   const LernpfadScreen({super.key});
@@ -52,7 +53,7 @@ class _LernpfadScreenState extends State<LernpfadScreen> {
   Widget build(BuildContext context) {
     final snap = _snap;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F4F0),
+      backgroundColor: kHintergrund,
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B3A2D),
         foregroundColor: Colors.white,

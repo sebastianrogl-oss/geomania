@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/country_rankings.dart';
 import '../l10n/uebersetzungen.dart';
+import '../theme/app_theme.dart';
 
 enum _Phase { placing, result }
 
@@ -138,7 +139,7 @@ class _CategoryMatchScreenState extends State<CategoryMatchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F0),
+      backgroundColor: kHintergrund,
       body: SafeArea(
         child: _phase == _Phase.placing ? _buildPlacing() : _buildResult(),
       ),

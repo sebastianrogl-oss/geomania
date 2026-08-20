@@ -1,8 +1,25 @@
 import 'package:flutter/material.dart';
 
+/// Der Hintergrundton der gesamten App — die einzige Stelle, an der er steht.
+///
+/// Vorher lag er dreifach vor: 0xFFF5F4F0 (Theme, Home, Lernpfad, Profil,
+/// Einstellungen), 0xFFF5F5F0 (Quiz-Screens und Spiele) und 0xFFF5F0E8
+/// (Portfolio, Rangliste). Die drei sahen fast gleich aus, ließen sich aber
+/// nur einzeln ändern. Neue Hintergründe bitte über diese Konstante setzen,
+/// nicht erneut hartcodieren.
+///
+/// Nicht zu verwechseln mit [AppTheme.card] (0xFFEAEAE5) — dem bewusst etwas
+/// dunkleren Ton für Karten und Kacheln, der sich davon abheben soll.
+///
+/// Der Wert ist aus den Ergebnis-Videos gemessen, nicht geschätzt: rgb(244,
+/// 245, 238) an den vier Eckpunkten des ersten Frames, übereinstimmend in allen
+/// acht Dateien. Dadurch geht der Videorand ohne sichtbare Kante in den Screen
+/// über. Wird der Videohintergrund je geändert, muss dieser Wert mitwandern.
+const kHintergrund = Color(0xFFF4F5EE);
+
 class AppTheme {
   // ── Palette ────────────────────────────────────────────────────────────────
-  static const Color bg          = Color(0xFFF5F4F0);
+  static const Color bg          = kHintergrund;
   static const Color card        = Color(0xFFEAEAE5);
   static const Color accentGreen = Color(0xFF4A9E4A);
   static const Color gold        = Color(0xFFF9A825);

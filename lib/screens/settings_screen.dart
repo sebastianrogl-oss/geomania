@@ -14,8 +14,9 @@ import '../l10n/uebersetzungen.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/streak_feier_overlay.dart';
 import 'station_quiz_screen.dart';
+import '../theme/app_theme.dart';
 
-const _bg = Color(0xFFF5F4F0);
+const _bg = kHintergrund;
 const _textDark = Color(0xFF1A1A1A);
 const _textMid = Color(0xFF888888);
 const _accent = Color(0xFF4A9E4A);

@@ -5,6 +5,7 @@ import '../services/portfolio_engine.dart';
 import '../utils/portfolio_format.dart';
 import '../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../widgets/portfolio_land_karte.dart';
+import '../theme/app_theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WELTPORTFOLIO — Onboarding-Beispiel ("So funktioniert's")
@@ -65,7 +66,7 @@ class PortfolioBeispielScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0E8),
+      backgroundColor: kHintergrund,
       appBar: AppBar(
         backgroundColor: const Color(0xFF4A9E4A),
         elevation: 0,
@@ -359,7 +360,7 @@ class PortfolioBeispielScreen extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFFF5F0E8),
+              color: kHintergrund,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(t('Kontinents-Bonus: keiner (verschiedene Kontinente)'),

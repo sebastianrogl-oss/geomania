@@ -18,6 +18,7 @@ import '../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../widgets/rangliste_ergebnis_karte.dart';
 import '../widgets/rekord_badge.dart';
 import '../widgets/spiel_erklaerung.dart';
+import '../theme/app_theme.dart';
 
 // ── Question ──────────────────────────────────────────────────────────────────
 //
@@ -557,9 +558,9 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F0),
+      backgroundColor: kHintergrund,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F5F0),
+        backgroundColor: kHintergrund,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
@@ -914,7 +915,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                                color: const Color(0xFFF5F5F0),
+                                color: kHintergrund,
                                 borderRadius: BorderRadius.circular(10)),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,

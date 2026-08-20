@@ -8,6 +8,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../data/countries.dart';
 import '../l10n/uebersetzungen.dart';
+import '../theme/app_theme.dart';
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
 const _cOcean = Color(0xFF8EC8DC);
@@ -603,7 +604,7 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
     return Scaffold(
       backgroundColor: _cOcean,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F5F0),
+        backgroundColor: kHintergrund,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
@@ -728,7 +729,7 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
   Widget _buildHeader() {
     final country = _questions[_current];
     return Container(
-      color: const Color(0xFFF5F5F0),
+      color: kHintergrund,
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       child: Column(children: [
         _totalQ <= 25
@@ -784,7 +785,7 @@ class _MapQuizScreenState extends State<MapQuizScreen> {
   Widget _buildWrongHint() {
     final country = _questions[_current];
     return Container(
-      color: const Color(0xFFF5F5F0),
+      color: kHintergrund,
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
       child: Row(children: [
         const Text('❌', style: TextStyle(fontSize: 20)),

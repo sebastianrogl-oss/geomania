@@ -10,6 +10,7 @@ import '../../widgets/challenge_ergebnis_header.dart';
 import '../../widgets/challenge_fertig_button.dart';
 import '../../widgets/portfolio_land_karte.dart';
 import '../../widgets/rangliste_ergebnis_karte.dart';
+import '../../theme/app_theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // WELTPORTFOLIO — Screen 3: Auflösung (Phase 6/7)
@@ -121,7 +122,7 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
         : 0.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0E8),
+      backgroundColor: kHintergrund,
       body: SafeArea(
         child: Column(
           children: [

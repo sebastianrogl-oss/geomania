@@ -8,6 +8,7 @@ import 'ranking_quiz_screen.dart';
 import 'currency_quiz_screen.dart';
 import 'economic_blocks_screen.dart';
 import 'finance_connections_screen.dart';
+import '../theme/app_theme.dart';
 
 class FinanceHubScreen extends StatelessWidget {
   const FinanceHubScreen({super.key});
@@ -19,9 +20,9 @@ class FinanceHubScreen extends StatelessWidget {
     final puzzle = connectionsPuzzles[puzzleIdx];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F0),
+      backgroundColor: kHintergrund,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F5F0),
+        backgroundColor: kHintergrund,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),

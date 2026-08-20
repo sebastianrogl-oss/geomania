@@ -7,7 +7,6 @@ import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
 import '../services/auth_service.dart';
 import '../services/challenge_rekord_service.dart';
-import '../services/daily_challenge.dart';
 import '../services/fortschritt_service.dart';
 import '../services/portfolio_service.dart';
 import '../services/portfolio_spielstil_service.dart';
@@ -15,7 +14,9 @@ import '../services/profilbild_service.dart';
 import '../services/rangliste_service.dart';
 import '../utils/portfolio_format.dart';
 import '../widgets/muenzalbum_seite.dart';
+import '../widgets/muenze_widget.dart';
 import '../widgets/station_emoji.dart';
+import '../widgets/streak_flamme.dart';
 import 'settings_screen.dart';
 import '../theme/app_theme.dart';
 
@@ -72,7 +73,6 @@ class ProfilScreen extends StatefulWidget {
 }
 
 class _ProfilScreenState extends State<ProfilScreen> {
-  Set<String> _done = {};
   Map<String, Set<String>> _spieltage = {};
   Map<String, int> _challengeStreaks = {};
   Map<String, int> _challengeAnzahlGespielt = {};
@@ -91,7 +91,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
   }
 
   Future<void> _load() async {
-    final done = await DailyChallenge.completedToday();
     final spieltage = <String, Set<String>>{
       for (final id in _challengeIds)
         id: await ChallengeRekordService.getSpieltage(id),
@@ -117,7 +116,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
     final profilbild = await ProfilbildService.getProfilbild();
     if (mounted) {
       setState(() {
-        _done = done;
         _spieltage = spieltage;
         _challengeStreaks = streaks;
         _challengeAnzahlGespielt = anzahlGespielt;
@@ -134,9 +132,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
 
   int get _streak => _lpSnap?.streak ?? 0;
   int get _totalSeen => _lpSnap?.abgeschlosseneStationenAnzahl ?? 0;
-  // Reale, aktuell verfügbare Kennzahl: heute abgeschlossene Challenges
-  // (0-4) — dieselbe Datenquelle wie die HEUTE-Häkchen unten.
-  int get _totalChallenges => _done.length;
+  // Die erste Statistik-Kachel zeigt seit dem Umbau den Lernpfad-Streak. Die
+  // frühere Zahl der heute abgeschlossenen Challenges (aus
+  // DailyChallenge.completedToday) wird dadurch nirgends mehr angezeigt und
+  // ist samt ihrem Ladevorgang entfallen.
   double _kategorieFortschritt(Set<LernModus> modi) =>
       _lpSnap?.modiFortschritt(modi) ?? 0.0;
 
@@ -281,43 +280,50 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           color: Color(0xFF4A9E4A),
                           fontSize: 12,
                           fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('🔥',
-                          style: TextStyle(fontSize: 14)),
-                      const SizedBox(width: 4),
-                      Text(t('Lernpfad-Streak: {n} Tage', {'n': '$_streak'}),
-                          style: const TextStyle(
-                              color: Color(0xFFF9A825),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700)),
-                    ],
-                  ),
+                  // Die Streak-Zeile stand früher hier; sie ist in die
+                  // Statistik-Kachel unten gewandert.
                 ],
               ),
             ),
             const SizedBox(height: 24),
 
             // ── Statistiken ──────────────────────────────────────────────────
-            Row(
+            // Gibt allen drei Kacheln die Höhe der höchsten — die
+            // Streak-Kachel ist durch die große Flamme höher als die anderen.
+            //
+            // Bewusst IntrinsicHeight statt CrossAxisAlignment.stretch: die
+            // Row steht in einer scrollbaren Spalte und hat dort keine
+            // begrenzte Höhe, stretch würde deshalb mit h=Infinity abstürzen.
+            IntrinsicHeight(
+              child: Row(
               children: [
+                // Zeigt den Lernpfad-Streak mit animierter Flamme statt der
+                // heute gespielten Challenges; die Zeile oben im Profil ist
+                // dafür entfallen. Die Zahl steht in der Flamme selbst.
                 _StatCard(
-                    value: '$_totalChallenges',
-                    label: t('Challenges'),
-                    valueColor: const Color(0xFF4A9E4A)),
+                    element:
+                        StreakFlamme(
+                            groesse: _kFlammeGroesse,
+                            zahl: _streak,
+                            zahlGroesse: _kZahlGroesse),
+                    label: t('Streak')),
                 const SizedBox(width: 8),
                 _StatCard(
-                    value: '$_totalSeen',
-                    label: t('Stationen'),
-                    valueColor: const Color(0xFF1A1A1A)),
+                    element: _StationsButton(zahl: _totalSeen),
+                    label: t('Stationen')),
                 const SizedBox(width: 8),
                 _StatCard(
-                    value: '${_freigeschalteteAbzeichen.length}',
-                    label: t('Abzeichen'),
-                    valueColor: const Color(0xFFF9A825)),
+                    element: MuenzGrundlage(
+                      groesse: _kMuenzGroesse,
+                      inhalt: _RundZahl(
+                        zahl: _freigeschalteteAbzeichen.length,
+                        farbe: kMuenzInhaltFarbe,
+                        durchmesser: _kMuenzGroesse,
+                      ),
+                    ),
+                    label: t('Abzeichen')),
               ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -1114,13 +1120,46 @@ class _ProfilbildFreischaltenDialogState
 
 // ── Stat-Card ─────────────────────────────────────────────────────────────────
 
+// ── Statistik-Kacheln ────────────────────────────────────────────────────────
+//
+// Alle drei Kacheln tragen ihre Zahl in einem eigenen visuellen Element:
+// Streak in der Flamme, Stationen im grünen Lernpfad-Button, Abzeichen in
+// der Münze. Die Konstanten hier gelten für alle drei gemeinsam, damit sie
+// nicht auseinanderlaufen können.
+
+/// Größe der Streak-Flamme.
+const _kFlammeGroesse = 181.0;
+
+/// Höhe des Elementbereichs. Entspricht der Flamme, dem höchsten der drei —
+/// Button und Münze werden darin zentriert. Dadurch stehen die drei
+/// Beschriftungen darunter zwangsläufig auf einer Linie.
+const _kElementHoehe = _kFlammeGroesse;
+
+/// Abstand zwischen Element und Beschriftung, für alle drei identisch.
+const _kAbstandElementLabel = 3.0;
+
+/// Durchmesser des Stationsbuttons — entspricht dem Lernpfad-Button.
+const _kButtonGroesse = 82.0;
+
+/// Durchmesser der Münze.
+const _kMuenzGroesse = 107.0;
+
+/// Anteil des Durchmessers, in dem die Zahl Platz hat — der Rest bleibt als
+/// Rand frei, damit die Zahl nicht an der Kante klebt.
+const _kZahlBereichAnteil = 0.62;
+
+/// Schriftgröße der Zahl — für alle drei Kacheln identisch, obwohl die
+/// Elemente unterschiedlich groß sind. Aus dem Durchmesser abgeleitet wären
+/// die Zahlen sonst verschieden groß (Button 34, Flamme 35, Münze 44) und die
+/// Zeile wirkte unruhig. Mehrstellige Zahlen verkleinert die FittedBox.
+const _kZahlGroesse = 36.0;
+
 class _StatCard extends StatelessWidget {
-  final String value, label;
-  final Color valueColor;
-  const _StatCard(
-      {required this.value,
-      required this.label,
-      required this.valueColor});
+  /// Das visuelle Element mit der Zahl darin (Flamme, Button oder Münze).
+  final Widget element;
+  final String label;
+
+  const _StatCard({required this.element, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1132,13 +1171,21 @@ class _StatCard extends StatelessWidget {
         ),
         padding: const EdgeInsets.all(14),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(value,
-                style: TextStyle(
-                    color: valueColor,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800)),
-            const SizedBox(height: 3),
+            // Feste Höhe für alle drei Elemente: Flamme, Button und Münze
+            // sind unterschiedlich hoch, die Beschriftungen sollen aber auf
+            // einer Linie stehen.
+            // FittedBox: auf schmalen Geräten ist die Kachel enger als das
+            // Element breit ist — dann wird herunterskaliert statt
+            // überzulaufen.
+            SizedBox(
+              height: _kElementHoehe,
+              child: Center(
+                child: FittedBox(fit: BoxFit.scaleDown, child: element),
+              ),
+            ),
+            const SizedBox(height: _kAbstandElementLabel),
             Text(label,
                 style: const TextStyle(
                     color: Color(0xFF888888),
@@ -1146,6 +1193,103 @@ class _StatCard extends StatelessWidget {
                     fontWeight: FontWeight.w700)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Zahl in einem runden Element (Button, Münze) — verkleinert sich
+/// automatisch, sobald sie zwei- oder dreistellig wird.
+class _RundZahl extends StatelessWidget {
+  final int zahl;
+  final Color farbe;
+  /// Durchmesser des umgebenden Elements — bestimmt nur den Platz, den die
+  /// Zahl hat. Die Schriftgröße ist bewusst für alle drei Kacheln gleich.
+  final double durchmesser;
+
+  const _RundZahl({
+    required this.zahl,
+    required this.farbe,
+    required this.durchmesser,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bereich = durchmesser * _kZahlBereichAnteil;
+    return SizedBox(
+      width: bereich,
+      height: bereich,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          '$zahl',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: _kZahlGroesse,
+            fontWeight: FontWeight.w900,
+            color: farbe,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Der grüne Stationsbutton des Lernpfads, hier ohne Druck-Interaktion.
+///
+/// Werte 1:1 aus home_screen.dart übernommen (_FreiBtn / _Druckbar3DBtn):
+/// Kreis 82, Sockel 5 in #3D8B3D, RadialGradient #5DBB63 -> #4A9E4A mit
+/// Zentrum (-0.3, -0.3) und Radius 0.8. Der 3D-Eindruck entsteht dort über
+/// den dunkleren Sockel, NICHT über eine Outline oder einen harten Schatten.
+class _StationsButton extends StatelessWidget {
+  final int zahl;
+  const _StationsButton({required this.zahl});
+
+  @override
+  Widget build(BuildContext context) {
+    const sockel = 5.0;
+    return SizedBox(
+      width: _kButtonGroesse,
+      height: _kButtonGroesse + sockel,
+      child: Stack(
+        children: [
+          Positioned(
+            top: sockel,
+            left: 0,
+            right: 0,
+            child: Container(
+              width: _kButtonGroesse,
+              height: _kButtonGroesse,
+              decoration: const BoxDecoration(
+                color: Color(0xFF3D8B3D),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              width: _kButtonGroesse,
+              height: _kButtonGroesse,
+              decoration: const BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [Color(0xFF5DBB63), Color(0xFF4A9E4A)],
+                  center: Alignment(-0.3, -0.3),
+                  radius: 0.8,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: _RundZahl(
+                    zahl: zahl,
+                    farbe: Colors.white,
+                    durchmesser: _kButtonGroesse),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

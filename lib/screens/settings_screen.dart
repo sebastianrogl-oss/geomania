@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/locale_service.dart';
+import '../services/profilbild_service.dart';
 import '../l10n/uebersetzungen.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/streak_feier_overlay.dart';
@@ -361,6 +362,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await AbzeichenPopup.zeigen(context, beispiele);
   }
 
+  // ── DEBUG: Sterne (nur kDebugMode) ────────────────────────────────────────
+  //
+  // Beide Buttons schreiben dieselben Keys wie der echte Spielbetrieb:
+  // die verdienten Sterne den Zähler aus FortschrittService (den auch
+  // stationAbschliessen füllt), die ausgegebenen den aus ProfilbildService.
+  // Es gibt keine getrennte Test-Haltung.
+  Future<void> _sterneHinzufuegen() async {
+    await FortschrittService.debugSterneHinzufuegen(1000);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🐞 +1000 Sterne'),
+    ));
+  }
+
+  Future<void> _sterneZuruecksetzen() async {
+    await FortschrittService.debugSterneZuruecksetzen();
+    await ProfilbildService.debugSterneKaeufeZuruecksetzen();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🐞 Sterne auf 0, gekaufte Profilbilder entfernt'),
+    ));
+  }
+
   // ── DEBUG: Testmodus (nur kDebugMode, nie im Release-Build) ────────────────
   //
   // Erlaubt Entwicklern, eine EXAKTE Land+Modus-Kombination direkt zu öffnen
@@ -493,6 +517,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('3 Abzeichen gleichzeitig simulieren (Debug)'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: () => _abzeichenSimulieren(3),
+                ),
+                _Zeile(
+                  icon: Icons.star_rounded,
+                  title: t('+1000 Sterne (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _sterneHinzufuegen,
+                ),
+                _Zeile(
+                  icon: Icons.money_off_rounded,
+                  title: t('Sterne zurücksetzen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _sterneZuruecksetzen,
                 ),
               ]),
               const SizedBox(height: 24),

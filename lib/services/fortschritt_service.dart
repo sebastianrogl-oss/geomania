@@ -565,6 +565,25 @@ class FortschrittService {
         '${gestern.toIso8601String()}');
   }
 
+  /// Erhöht die verdienten Sterne. Schreibt denselben Zähler wie der echte
+  /// Stationsabschluss (stationAbschliessen), damit es keine zweite
+  /// Sternhaltung gibt.
+  static Future<void> debugSterneHinzufuegen(int anzahl) async {
+    final prefs = await SharedPreferences.getInstance();
+    final vorher = prefs.getInt(_kGesamtRichtig) ?? 0;
+    await prefs.setInt(_kGesamtRichtig, vorher + anzahl);
+    // ignore: avoid_print
+    print('[Sterne/DEBUG] verdient $vorher -> ${vorher + anzahl}');
+  }
+
+  /// Setzt die verdienten Sterne auf 0.
+  static Future<void> debugSterneZuruecksetzen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kGesamtRichtig, 0);
+    // ignore: avoid_print
+    print('[Sterne/DEBUG] verdiente Sterne auf 0 zurückgesetzt');
+  }
+
   /// Setzt Streak und letzte Aktivität zurück, damit der Neustart-Fall
   /// (0 → 1) erneut getestet werden kann.
   static Future<void> debugStreakZuruecksetzen() async {

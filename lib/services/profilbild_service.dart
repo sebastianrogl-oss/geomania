@@ -126,4 +126,17 @@ class ProfilbildService {
     return true;
   }
 
+  /// Nur für den Debug-Bereich: setzt die ausgegebenen Sterne zurück und
+  /// entfernt die über Sterne gekauften Profilbilder, damit der Kaufvorgang
+  /// mehrfach durchgespielt werden kann.
+  ///
+  /// Nutzt dieselben Keys wie der echte Kauf — es gibt keine getrennte
+  /// Test-Haltung. Über Werbung freigeschaltete Bilder bleiben unberührt.
+  static Future<void> debugSterneKaeufeZuruecksetzen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kAusgegeben);
+    for (final pfad in sternePreise.keys) {
+      await prefs.remove('$_kFreigeschaltetPrefix$pfad');
+    }
+  }
 }

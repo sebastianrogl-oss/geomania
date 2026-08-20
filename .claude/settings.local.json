@@ -425,7 +425,15 @@
       "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb devices; & $adb shell pidof com.northlight.geomania)",
       "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb devices)",
       "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb devices; $p = & $adb shell pidof com.northlight.geomania; if \\($p\\) { \"App laeuft, PID $p\" } else { \"App laeuft NICHT\" })",
-      "Bash(sort -t' ' -k2 -n)"
+      "Bash(sort -t' ' -k2 -n)",
+      "Bash(sed -n '/^enum LernModus/,/^}/p' lib/data/lernpfad_data.dart)",
+      "Bash(sed -n '/^class Frage/,/^}/p' lib/services/station_session_service.dart)",
+      "Bash(awk \"/^const _europaBlock/,/\\\\];/\" lib/data/lernpfad_data.dart)",
+      "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb shell \"run-as com.northlight.geomania cat /data/data/com.northlight.geomania/shared_prefs/FlutterSharedPreferences.xml\" 2>&1 | Select-String -Pattern \"lp_gesamt_richtig|sterne_ausgegeben\")",
+      "Bash(unzip -l build/app/outputs/flutter-apk/app-debug.apk)",
+      "Bash(ffprobe -v error -show_entries stream=codec_name,profile,width,height,r_frame_rate,duration -show_entries format=size,duration,bit_rate -of default=noprint_wrappers=1 assets/videos/coiny_test.mp4)",
+      "Bash(dart \"C:/Users/sebas/AppData/Local/Temp/claude/C--Users-sebas-geomania/30f8d956-9094-4e62-ac02-cdcb2acf10fa/scratchpad/mp4_info.dart\" assets/videos/coiny_test.mp4)",
+      "Bash(python *)"
     ]
   }
 }

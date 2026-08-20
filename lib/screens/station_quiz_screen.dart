@@ -704,14 +704,16 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     }
 
     // Normale Station speichern
-    await FortschrittService.stationAbschliessen(
+    final vergebeneSterne = await FortschrittService.stationAbschliessen(
       widget.station!.id,
       _session!.richtigeAntworten,
       _session!.falscheAntworten,
       falscheFragenJson: _session!.falscheFragenAlsJson(),
     );
     // ignore: avoid_print
-    print('[StationFertig] stationAbschliessen() fertig');
+    print('[StationFertig] stationAbschliessen() fertig, '
+        'vergebeneSterne=$vergebeneSterne');
+
 
     // Kontinent-/Meilenstein-Abzeichen hängen am Lernpfad-Fortschritt, nicht
     // an Tages-Challenges -> hier prüfen, statt erst beim nächsten Challenge-

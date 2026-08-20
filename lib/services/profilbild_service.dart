@@ -76,4 +76,54 @@ class ProfilbildService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('$_kFreigeschaltetPrefix$pfad', true);
   }
+
+  // ── Sterne-Freischaltung ───────────────────────────────────────────────────
+  //
+  // Die dritte Reihe des Auswahl-Rasters (4 Bilder, direkt unter den
+  // kostenlosen Globus-/Coin-Reihen) wird über Sterne statt über Werbung
+  // freigeschaltet — für diese vier entfällt der Rewarded-Ad-Weg damit.
+  // Alle übrigen Icons bleiben unverändert per Werbung erhältlich.
+  //
+  // Zur Einordnung der Preise: im gesamten Lernpfad sind 5151 Sterne
+  // erreichbar, ein einzelner Kontinent bringt je nach Größe 255 bis 954.
+  static const sternePreise = <String, int>{
+    'assets/icons/deko/afrika_elefant.png': 150,
+    'assets/icons/deko/afrika_giraffe.png': 500,
+    'assets/icons/deko/afrika_nashorn.png': 1200,
+    'assets/icons/deko/asien_panda.png': 2500,
+  };
+
+  /// Bereits ausgegebene Sterne. Der Gesamtstand (lp_gesamt_richtig in
+  /// FortschrittService) bleibt davon unberührt und sinkt nie — er dient
+  /// weiterhin Statistiken und dem Header. Bezahlt wird mit der Differenz.
+  static const _kAusgegeben = 'sterne_ausgegeben';
+
+  static bool kostetSterne(String pfad) => sternePreise.containsKey(pfad);
+
+  static Future<int> ausgegebeneSterne() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kAusgegeben) ?? 0;
+  }
+
+  /// Verdiente minus ausgegebene Sterne — der Stand, mit dem bezahlt wird.
+  static Future<int> verfuegbareSterne(int verdient) async {
+    final ausgegeben = await ausgegebeneSterne();
+    return (verdient - ausgegeben).clamp(0, verdient);
+  }
+
+  /// Zieht den Preis ab und schaltet das Bild dauerhaft frei.
+  ///
+  /// Gibt false zurück, wenn das Bild keinen Preis hat oder die Sterne nicht
+  /// reichen — der Aufrufer hat das zwar schon geprüft, aber die Buchung soll
+  /// sich nicht darauf verlassen.
+  static Future<bool> kaufeMitSternen(String pfad, int verfuegbar) async {
+    final preis = sternePreise[pfad];
+    if (preis == null || verfuegbar < preis) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final ausgegeben = prefs.getInt(_kAusgegeben) ?? 0;
+    await prefs.setInt(_kAusgegeben, ausgegeben + preis);
+    await prefs.setBool('$_kFreigeschaltetPrefix$pfad', true);
+    return true;
+  }
+
 }

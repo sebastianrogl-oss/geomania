@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:vibration/vibration.dart';
 import '../data/lernpfad_data.dart';
+import '../services/einstellungen_service.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
@@ -523,6 +525,12 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
   // separat immer frei, siehe ProfilbildService.istImmerKostenlos, und
   // stehen NICHT in diesem Set).
   Set<String> _freigeschaltet = {};
+  /// Verfügbarer Sternestand (verdient minus ausgegeben).
+  int _sterne = 0;
+  /// Stand vor dem letzten Kauf — Ausgangswert des Herunterzählens.
+  int _sterneVorher = 0;
+  /// Zuletzt gekauftes Bild — bekommt einmalig den Scale-Puls.
+  String? _geradeFreigeschaltet;
 
   @override
   void initState() {
@@ -531,6 +539,7 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
     _gewaehlt = widget.aktuellesProfilbild;
     _pruefeSwipeHinweis();
     _ladeFreigeschaltet();
+    _ladeSterne();
   }
 
   Future<void> _ladeFreigeschaltet() async {
@@ -541,6 +550,82 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
       }
     }
     if (mounted) setState(() => _freigeschaltet = freigeschaltet);
+  }
+
+  Future<void> _ladeSterne() async {
+    final snap = await FortschrittService.ladeSnapshot();
+    final verfuegbar =
+        await ProfilbildService.verfuegbareSterne(snap.gesamtRichtig);
+    if (mounted) setState(() => _sterne = verfuegbar);
+  }
+
+  /// Kauf eines Profilbilds: bestätigen, buchen, direkt aktivieren.
+  Future<void> _kaufe(String pfad, int preis) async {
+    final bestaetigt = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        content: Text(
+          t('Dieses Profilbild für {n} Sterne freischalten?',
+              {'n': '$preis'}),
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1A1A1A),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(t('Abbrechen'),
+                style: const TextStyle(color: Color(0xFF888888))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(t('Freischalten'),
+                style: const TextStyle(
+                    color: Color(0xFF4A9E4A), fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    if (bestaetigt != true || !mounted) return;
+
+    final erfolg = await ProfilbildService.kaufeMitSternen(pfad, _sterne);
+    if (!erfolg || !mounted) return;
+
+    setState(() {
+      _freigeschaltet.add(pfad);
+      _sterneVorher = _sterne;
+      _sterne -= preis;
+      // Löst den Scale-Puls auf genau diesem Bild aus.
+      _geradeFreigeschaltet = pfad;
+    });
+    _vibriere();
+    _waehle(pfad);
+  }
+
+  Future<void> _vibriere() async {
+    if (!await EinstellungenService.vibrationAktiv) return;
+    final hatAmplitude = await Vibration.hasAmplitudeControl();
+    if (!mounted) return;
+    if (hatAmplitude) {
+      Vibration.vibrate(duration: 90, amplitude: 130);
+    } else {
+      Vibration.vibrate(duration: 90);
+    }
+  }
+
+  /// Kurzer Hinweis, wenn die Sterne nicht reichen.
+  void _zeigeFehlendeSterne(int fehlend) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(t('Noch {n} Sterne nötig', {'n': '$fehlend'})),
+      duration: const Duration(seconds: 2),
+    ));
   }
 
   Future<void> _pruefeSwipeHinweis() async {
@@ -590,6 +675,42 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
+          ),
+          const SizedBox(height: 10),
+          // Verfügbarer Sternestand — macht sichtbar, womit bezahlt wird.
+          // Zählt nach einem Kauf animiert herunter.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('⭐', style: TextStyle(fontSize: 15)),
+              const SizedBox(width: 5),
+              TweenAnimationBuilder<int>(
+                // Von-Wert ist der Stand vor dem letzten Kauf, damit sichtbar
+                // heruntergezählt wird statt einfach umzuspringen.
+                tween: IntTween(begin: _sterneVorher, end: _sterne),
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeOut,
+                builder: (context, wert, child) => Text(
+                  '$wert',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                t('Verfügbare Sterne'),
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF888888),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Stack(
@@ -662,6 +783,11 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                     crossAxisCount: 4,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
+                    // Zelle bewusst höher als breit: der Kreis bleibt
+                    // quadratisch, darunter bleibt Platz für den
+                    // Sterne-Preis. Als Verhältnis statt fester Pixel, damit
+                    // der Platz auf jeder Bildschirmbreite mitwächst.
+                    childAspectRatio: 0.78,
                   ),
                   itemCount: ProfilbildService.verfuegbareBilder.length,
                   itemBuilder: (_, i) {
@@ -669,10 +795,19 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                     final ausgewaehlt = pfad == _gewaehlt;
                     final frei = ProfilbildService.istImmerKostenlos(pfad) ||
                         _freigeschaltet.contains(pfad);
+                    // Vier Bilder kosten Sterne statt einer Werbung.
+                    final preis = ProfilbildService.sternePreise[pfad];
+                    final kostetSterne = !frei && preis != null;
+                    final bezahlbar = kostetSterne && _sterne >= preis;
+
                     return GestureDetector(
                       onTap: frei
                           ? () => _waehle(pfad)
-                          : () => showModalBottomSheet(
+                          : kostetSterne
+                              ? (bezahlbar
+                                  ? () => _kaufe(pfad, preis)
+                                  : () => _zeigeFehlendeSterne(preis - _sterne))
+                              : () => showModalBottomSheet(
                                 context: context,
                                 backgroundColor: Colors.transparent,
                                 isScrollControlled: true,
@@ -687,7 +822,16 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                                   },
                                 ),
                               ),
-                      child: Stack(
+                      // Nach dem Kauf pulsiert genau dieses Bild einmal.
+                      child: _KaufPuls(
+                        aktiv: _geradeFreigeschaltet == pfad,
+                        child: Column(
+                          children: [
+                            // Der Kreis nimmt den quadratischen Teil der
+                            // Zelle ein, der Preis sitzt darunter — dadurch
+                            // kann er nicht mehr abgeschnitten werden.
+                            Expanded(
+                              child: Stack(
                         fit: StackFit.expand,
                         children: [
                           Container(
@@ -736,7 +880,10 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                               ),
                             ),
                           ),
-                          if (!frei)
+                          // Bilder mit Werbe-Freischaltung behalten das
+                          // Schloss; Sterne-Bilder zeigen stattdessen unten
+                          // ihren Preis.
+                          if (!frei && !kostetSterne)
                             Positioned(
                               right: 0,
                               bottom: 0,
@@ -752,6 +899,42 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                               ),
                             ),
                         ],
+                      ),
+                            ),
+                            // Preis unter dem Kreis: grün wenn bezahlbar,
+                            // sonst grau.
+                            if (kostetSterne)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: bezahlbar
+                                          ? const Color(0xFF4A9E4A)
+                                          : const Color(0xFFD0CEC8),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '⭐ $preis',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: bezahlbar
+                                          ? const Color(0xFF4A9E4A)
+                                          : const Color(0xFF888888),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -770,6 +953,61 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
       ),
     );
   }
+}
+
+/// Einmaliger Scale-Puls nach dem Freischalten — das Bild wechselt sichtbar
+/// von ausgegraut zu farbig.
+class _KaufPuls extends StatefulWidget {
+  final bool aktiv;
+  final Widget child;
+  const _KaufPuls({required this.aktiv, required this.child});
+
+  @override
+  State<_KaufPuls> createState() => _KaufPulsState();
+}
+
+class _KaufPulsState extends State<_KaufPuls>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+        weight: 50,
+        tween: Tween(begin: 1.0, end: 1.12)
+            .chain(CurveTween(curve: Curves.easeOut)),
+      ),
+      TweenSequenceItem(
+        weight: 50,
+        tween: Tween(begin: 1.12, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+      ),
+    ]).animate(_ctrl);
+    if (widget.aktiv) _ctrl.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _KaufPuls old) {
+    super.didUpdateWidget(old);
+    if (!old.aktiv && widget.aktiv) _ctrl.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ScaleTransition(scale: _scale, child: widget.child);
 }
 
 // ── Profilbild per Werbung freischalten ─────────────────────────────────────

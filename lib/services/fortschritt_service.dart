@@ -159,13 +159,20 @@ class FortschrittService {
 
   /// Markiert Station als abgeschlossen. [falscheFragenJson] ist eine
   /// JSON-Liste von Fragen-IDs die der Section-Pool erhält.
-  static Future<void> stationAbschliessen(
+  /// Schließt eine Station ab und gibt die dabei VERGEBENEN Sterne zurück.
+  ///
+  /// Das ist beim ersten Abschluss die Zahl der richtigen Antworten, bei
+  /// jedem weiteren Durchlauf 0 — die Schluss-Ansicht zeigt damit ohne eigene
+  /// Zusatzabfrage genau das, was tatsächlich gutgeschrieben wurde.
+  static Future<int> stationAbschliessen(
     String stationId,
     int richtig,
     int falsch, {
     String? falscheFragenJson,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+    // VOR dem Setzen lesen — entscheidet unten über die Sterne.
+    final warSchonAbgeschlossen = prefs.getBool('$_sDone$stationId') ?? false;
     await prefs.setBool('$_sDone$stationId', true);
     await prefs.remove('$_sGestartet$stationId');
     await prefs.remove('$_sIdx$stationId');
@@ -181,9 +188,17 @@ class FortschrittService {
       await prefs.setString('$_sFalsche$stationId', falscheFragenJson);
     }
 
-    final prevGesamt = prefs.getInt(_kGesamtRichtig) ?? 0;
-    await prefs.setInt(_kGesamtRichtig, prevGesamt + richtig);
+    // Sterne (= gesamtRichtig) gibt es NUR beim ersten Abschluss einer
+    // Station. Wer eine bereits abgeschlossene Station noch einmal spielt,
+    // sammelt dadurch keine Sterne ein zweites Mal. Die Wiederholungsrunde
+    // läuft ohnehin über wiederholungAbschliessen() und kommt hier nie an.
+    final vergebeneSterne = warSchonAbgeschlossen ? 0 : richtig;
+    if (vergebeneSterne > 0) {
+      final prevGesamt = prefs.getInt(_kGesamtRichtig) ?? 0;
+      await prefs.setInt(_kGesamtRichtig, prevGesamt + vergebeneSterne);
+    }
     await prefs.setString(_kLetzteAkt, DateTime.now().toIso8601String());
+    return vergebeneSterne;
   }
 
   // ── Continuation: Station-Fortschritt speichern/laden ─────────────────────

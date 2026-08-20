@@ -14,6 +14,13 @@ const Map<String, String> uebersetzungenLernpfad = {
   // (widgets/abzeichen_popup.dart) — bewusst derselbe Text in beiden.
   'Tippen für weiter': 'Tap to continue',
 
+  // Profilbild-Freischaltung mit Sternen (screens/profil_screen.dart)
+  'Dieses Profilbild für {n} Sterne freischalten?':
+      'Unlock this profile picture for {n} stars?',
+  'Freischalten': 'Unlock',
+  'Noch {n} Sterne nötig': '{n} more stars needed',
+  'Verfügbare Sterne': 'Available stars',
+
   'Abschluss ✅': 'Finale ✅',
   'Abschluss': 'Finale',
   'Abschnitt ✅': 'Section ✅',

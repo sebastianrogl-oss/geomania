@@ -201,6 +201,12 @@ class FortschrittService {
     return vergebeneSterne;
   }
 
+  // Der frühere kontinentLaenderFortschritt() ist entfallen: er zählte die
+  // laenderCodes ganzer abgeschlossener Stationen — das ist der Fragen-POOL,
+  // aus dem nur ein Teil gezogen wird, weshalb eine Station mit 8 Fragen
+  // zweistellige Länderzahlen meldete. Ersetzt durch die tatsächlich richtig
+  // beantworteten Fragen, siehe GelernteFaktenService.
+
   // ── Continuation: Station-Fortschritt speichern/laden ─────────────────────
 
   /// Speichert den laufenden Stand einer Station (für Fortsetzen bei Abbruch).

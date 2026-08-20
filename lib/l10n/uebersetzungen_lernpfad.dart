@@ -21,6 +21,17 @@ const Map<String, String> uebersetzungenLernpfad = {
   'Noch {n} Sterne nötig': '{n} more stars needed',
   'Verfügbare Sterne': 'Available stars',
 
+  // Schluss-Ansicht nach einer Station (screens/station_abschluss_screen.dart)
+  'Perfekt!': 'Perfect!',
+  'Stark gemacht!': 'Well played!',
+  'Gut gemacht!': 'Nice work!',
+  'Weiter üben!': 'Keep practicing!',
+  'Zeit': 'Time',
+  'Richtige': 'Correct',
+  'Sterne': 'Stars',
+  'Du hast {n} Länderfakten gelernt': 'You\'ve learned {n} country facts',
+  '{a} von {b} Ländern in {welt}': '{a} of {b} countries in {welt}',
+
   // ── Halbzeit-Sprüche (data/halbzeit_sprueche.dart) ──────────────────────
   // Sinngemäß übersetzt, nicht wörtlich — der freche Ton soll erhalten
   // bleiben.

@@ -16,6 +16,7 @@ import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
 import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
+import '../services/gelernte_fakten_service.dart';
 import '../services/skala_service.dart';
 import '../services/station_session_service.dart';
 import '../widgets/abzeichen_popup.dart';
@@ -23,6 +24,7 @@ import '../widgets/flaggen_widget.dart';
 import '../widgets/halbzeit_inhalt.dart';
 import '../widgets/level_skip_button.dart';
 import '../widgets/streak_feier_overlay.dart';
+import 'station_abschluss_screen.dart';
 import '../theme/app_theme.dart';
 
 // ── Geo-Cache (einmal laden, überall nutzen) ──────────────────────────────────
@@ -276,6 +278,11 @@ class StationQuizScreen extends StatefulWidget {
 class _StationQuizScreenState extends State<StationQuizScreen> {
   StationSession? _session;
   bool _loading = true;
+  // Startzeitpunkt der Station für die Dauer in der Schluss-Ansicht.
+  DateTime? _stationStart;
+  // Gelernte Länder beim Stationsstart — die Schluss-Ansicht bildet daraus
+  // die Differenz und weiß so, welche Länder in DIESER Station dazukamen.
+  Set<String> _gelerntVorher = const {};
   // Der Halbzeit-Moment erscheint höchstens einmal pro Station.
   bool _halbzeitGezeigt = false;
   // Solange gesetzt, zeigt der Inhaltsbereich den Halbzeit-Moment statt einer
@@ -384,6 +391,15 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     }
 
     if (!mounted) return;
+    // Ab hier läuft die Station für den Spieler — Startpunkt für die in der
+    // Schluss-Ansicht gezeigte Dauer. Bewusst erst nach dem Laden, damit
+    // Lade- und GeoJSON-Zeit nicht mitzählen.
+    _stationStart = DateTime.now();
+    // Stand VOR der Station festhalten: die Schluss-Ansicht bildet daraus
+    // die Differenz und weiß, welche Länder neu dazugekommen sind.
+    GelernteFaktenService.gelernteLaender().then((menge) {
+      if (mounted) _gelerntVorher = menge;
+    });
     setState(() {
       _session = session;
       _loading = false;
@@ -553,6 +569,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   void _sortierWeiter() {
     if (_session == null) return;
     if (_feedbackRichtig) {
+      _faktErfassen();
       _session!.richtigeAntwortVerarbeiten();
     } else {
       _session!.falscheAntwortVerarbeiten();
@@ -583,6 +600,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   void _preisWeiter() {
     if (_session == null) return;
     if (_feedbackRichtig) {
+      _faktErfassen();
       _session!.richtigeAntwortVerarbeiten();
     } else {
       _session!.falscheAntwortVerarbeiten();
@@ -602,6 +620,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   void _weiterTippen() {
     if (_session == null) return;
     if (_feedbackRichtig) {
+      _faktErfassen();
       _session!.richtigeAntwortVerarbeiten();
     } else {
       _session!.falscheAntwortVerarbeiten();
@@ -658,6 +677,18 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   }
 
   // ── Vorrücken / Station fertig ─────────────────────────────────────────────
+
+  /// Verbucht die gerade richtig beantwortete Frage dauerhaft.
+  ///
+  /// Muss VOR richtigeAntwortVerarbeiten() laufen — danach zeigt
+  /// aktuelleFrage bereits auf die nächste Frage. Bewusst nicht awaited: das
+  /// Schreiben in die Prefs darf den Übergang zur nächsten Frage nicht
+  /// verzögern, und ein Fehler dabei soll das Quiz nicht anhalten.
+  void _faktErfassen() {
+    final frage = _session?.aktuelleFrage;
+    if (frage == null) return;
+    unawaited(GelernteFaktenService.frageRichtig(frage));
+  }
 
   Future<void> _vorruecken() async {
     if (!mounted) return;
@@ -775,6 +806,25 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     print('[StationFertig] stationAbschliessen() fertig, '
         'vergebeneSterne=$vergebeneSterne');
 
+    // Schluss-Ansicht: Ergebnis, Kennzahlen und Kontinent-Fortschritt. Läuft
+    // VOR Abzeichen-Popup und Interstitial, damit der Spieler zuerst sein
+    // Ergebnis sieht; blockiert bis "Weiter" getippt wurde.
+    final kontext = stationKontext(widget.station!.id);
+    if (mounted && kontext != null) {
+      await StationAbschlussScreen.zeigen(
+        context,
+        welt: kontext.$1,
+        richtig: _session!.richtigeAntworten,
+        gesamtFragen:
+            _session!.richtigeAntworten + _session!.falscheAntworten,
+        sterne: vergebeneSterne,
+        dauer: _stationStart == null
+            ? Duration.zero
+            : DateTime.now().difference(_stationStart!),
+        gelerntVorher: _gelerntVorher,
+      );
+    }
+    if (!mounted) return;
 
     // Kontinent-/Meilenstein-Abzeichen hängen am Lernpfad-Fortschritt, nicht
     // an Tages-Challenges -> hier prüfen, statt erst beim nächsten Challenge-

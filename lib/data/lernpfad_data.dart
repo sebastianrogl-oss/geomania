@@ -136,20 +136,24 @@ class LernWelt {
 // dafür, dass sie erst gezogen werden, nachdem die leichtere Variante
 // desselben Themas in genau diesem Abschnitt schon vorkam.
 
+// Nicht mehr in den Pools, die Generatoren bleiben aber erhalten:
+// bipGesamt, flaeche, extremFrageLeicht (vorher Einsteiger),
+// bekanntesGebaeude (Fortgeschritten) und extremFrage (Profi). Sie liessen
+// sich jederzeit wieder eintragen — extremFrage bleibt ausserdem als
+// Funktion in Gebrauch, siehe die Fallback-Kette im Fragen-Generator.
 const List<LernModus> _modiEinsteiger = [
   LernModus.flaggenQuizBild,
   LernModus.flaggenQuizMultiple,
   LernModus.hauptstaedteMultiple,
   LernModus.waehrungsQuiz,
   LernModus.umrissBild,
-  LernModus.bipGesamt,
-  LernModus.flaeche,
   LernModus.umrissMultiple,
-  LernModus.extremFrageLeicht,
   LernModus.nachbarland,
   LernModus.hauptstaedteEingabe,
   LernModus.flaggenQuizEingabe,
   LernModus.umrissEingabe,
+  LernModus.zweiWahrheiten,
+  LernModus.laenderRanking,
 ];
 
 const List<LernModus> _modiFortgeschritten = [
@@ -157,14 +161,15 @@ const List<LernModus> _modiFortgeschritten = [
   LernModus.sortierSpiel,
   LernModus.waehrungZuLand,
   LernModus.zufallsFakt,
-  LernModus.bekanntesGebaeude,
   LernModus.grenzkettenRaetsel,
+  LernModus.nachbarschaftsKette,
+  LernModus.flaechenVergleich,
+  LernModus.wasGehoertNichtDazu,
 ];
 
 const List<LernModus> _modiProfi = [
   ..._modiFortgeschritten,
   LernModus.preisSchaetzen,
-  LernModus.extremFrage,
 ];
 
 // Meister enthält den vollständigen Modus-Satz.
@@ -172,6 +177,80 @@ const List<LernModus> _modiMeister = [
   ..._modiProfi,
   LernModus.wirtschaftssektoren,
 ];
+
+/// Modi, die in einer bestimmten Lernwelt NICHT gezogen werden duerfen.
+///
+/// Nicht jeder Modus traegt in jeder Welt: der Laenderpool einer Station ist
+/// ein Block des Kontinents, und manche Modi brauchen mehr Vielfalt, als ein
+/// solcher Block hergibt. Ohne Sperre wuerde der Generator dort auf einen
+/// anderen Modus ausweichen — der Spieler bekaeme ein anderes Spiel als
+/// angekuendigt.
+///
+/// Die Werte sind gemessen, nicht geschaetzt (je Welt ueber alle ihre
+/// Stationen geprueft, ob 8 Fragen ohne Wiederholung und ohne Ausweichen
+/// entstehen):
+/// - nachbarschaftsKette braucht einen zusammenhaengenden Grenzgraphen im
+///   Block. Karibikinseln haben keine Landgrenze, in Ozeanien hat genau ein
+///   Land eine — dort scheitert der Modus auf JEDER Fragenzahl.
+/// - flaechenVergleich braucht Laenderpaare mit Groessenverhaeltnis 2 bis
+///   100. In Europa sind sich die Laender dafuer zu aehnlich, in den kleinen
+///   Welten fehlen die Paare ganz.
+/// - wasGehoertNichtDazu braucht Merkmale, die INNERHALB des Quartetts
+///   trennen. In einem Kontinent-Block sind Kontinent und Halbkugel fuer
+///   alle gleich, damit bleibt fast nie genau ein begruendbarer Aussenseiter
+///   uebrig.
+/// grenzkettenRaetsel steht zusaetzlich in Suedamerika und Ozeanien: dort gibt
+/// es KEINE kuratierten Raetsel (laender_grenzketten.dart fuehrt nur Europa,
+/// Afrika, Asien und Nordamerika), der Generator wiche also sofort auf das
+/// Flaggen-Quiz aus. Vor der Pool-Umstellung fiel das nicht auf, weil die
+/// groesseren Pools den Modus in diesen beiden Welten nie gezogen hatten.
+const Map<String, Set<LernModus>> kModusSperrenProWelt = {
+  'europa': {LernModus.flaechenVergleich, LernModus.wasGehoertNichtDazu},
+  'suedamerika': {
+    LernModus.flaechenVergleich,
+    LernModus.wasGehoertNichtDazu,
+    LernModus.grenzkettenRaetsel,
+  },
+  'nordamerika': {
+    LernModus.nachbarschaftsKette,
+    LernModus.flaechenVergleich,
+    LernModus.wasGehoertNichtDazu,
+  },
+  'afrika': {LernModus.wasGehoertNichtDazu},
+  'asien': {LernModus.flaechenVergleich, LernModus.wasGehoertNichtDazu},
+  'ozeanien': {
+    LernModus.nachbarschaftsKette,
+    LernModus.flaechenVergleich,
+    LernModus.wasGehoertNichtDazu,
+    LernModus.grenzkettenRaetsel,
+  },
+  'welt': {},
+};
+
+/// Obergrenze der Fragenzahl je Modus, verrechnet mit der Weltvorgabe per
+/// Minimum (siehe [_st]).
+///
+/// Bewusst eine Liste je MODUS und keine Modus-mal-Welt-Matrix: letztere
+/// haette 21 x 7 Felder, von denen fast alle denselben Wert truegen, und
+/// muesste bei jedem neuen Modus komplett durchgesehen werden.
+/// nachbarschaftsKette steht bewusst NICHT hier: gemessen liegt ihre Grenze
+/// bei 10, der Modus läuft aber nur in Welten mit höchstens 9 Fragen
+/// (Europa 8, Asien 8, Welt 8, Afrika 9, Südamerika über die Ausnahme
+/// unten). Ein Eintrag wäre wirkungslos. Bekäme eine Welt je mehr als 10
+/// Fragen, müsste er nachgetragen werden — darüber wiederholen sich
+/// Start-Ziel-Paare im selben Länderblock.
+const Map<LernModus, int> kFragenObergrenze = {
+  // Fuenf Laender sortieren dauert laenger als eine Frage beantworten.
+  LernModus.sortierSpiel: 3,
+  // Mehr Paare mit brauchbarem Groessenverhaeltnis gibt Afrika nicht her.
+  LernModus.flaechenVergleich: 7,
+};
+
+/// Einzige Ausnahme von [kFragenObergrenze]: In Suedamerika liegen zwischen
+/// zwei beliebigen Laendern hoechstens drei Grenzuebertritte, der Graph ist
+/// zu dicht fuer mehr Aufgaben. Ein zweiter Eintrag dieser Art waere der
+/// Punkt, an dem sich eine richtige Tabelle lohnt.
+const int kKetteFragenSuedamerika = 4;
 
 List<LernModus> modiFuerLevel(int level) => switch (level) {
       1 => _modiEinsteiger,
@@ -247,9 +326,17 @@ bool _eingabeErlaubt(LernModus m, List<LernModus> bisher) {
 List<LernModus> erzeugeModusSequenz(
   int stationsAnzahl,
   int abschnittLevel,
-  bool istAllerErsterAbschnitt,
-) {
-  final pool = modiFuerLevel(abschnittLevel);
+  bool istAllerErsterAbschnitt, {
+  /// Lernwelt, fuer die die Sequenz gebaut wird — entscheidet ueber die
+  /// Sperren aus [kModusSperrenProWelt]. Ohne Angabe gilt kein Ausschluss
+  /// (genutzt von Tests und Debug-Werkzeugen).
+  String? weltId,
+}) {
+  final gesperrt = weltId == null
+      ? const <LernModus>{}
+      : (kModusSperrenProWelt[weltId] ?? const <LernModus>{});
+  final pool =
+      modiFuerLevel(abschnittLevel).where((m) => !gesperrt.contains(m)).toList();
   final sequenz = <LernModus>[];
   LernModus? letzter;
   String? letztesThema;
@@ -407,10 +494,18 @@ LernStation _st(
   String wid, int a, int i, LernModus m, List<String> l, int fragenProStation, {
   List<String> k = const [],
 }) {
+  // Obergrenze des Modus gegen die Vorgabe der Welt — die kleinere gewinnt.
+  // Eine Welt mit 6 Fragen bekommt also keine 10, nur weil der Modus sie
+  // vertragen wuerde.
+  final grenze = (m == LernModus.nachbarschaftsKette && wid == 'suedamerika')
+      ? kKetteFragenSuedamerika
+      : kFragenObergrenze[m];
   return LernStation(
     id: '${wid}_${a}_${i.toString().padLeft(2, '0')}',
     modus: m,
-    fragenAnzahl: m == LernModus.sortierSpiel ? 3 : fragenProStation,
+    fragenAnzahl: grenze == null
+        ? fragenProStation
+        : (grenze < fragenProStation ? grenze : fragenProStation),
     laenderCodes: l,
     kategorien: k,
     schwierigkeitsgrad: a,
@@ -439,7 +534,8 @@ List<LernStation> _baueAbschnitt(
   final polster = anzahl == 0 ? 0 : ((1 - anzahl) % 4 + 4) % 4;
   final gesamt = anzahl + polster;
   final modi = erzeugeModusSequenz(
-      gesamt, modusPoolLevel ?? stufe, istAllerErsterAbschnitt);
+      gesamt, modusPoolLevel ?? stufe, istAllerErsterAbschnitt,
+      weltId: wid);
   return [
     for (int i = 0; i < gesamt; i++)
       _st(wid, stufe, i + 1, modi[i], laender, fragenProStation),

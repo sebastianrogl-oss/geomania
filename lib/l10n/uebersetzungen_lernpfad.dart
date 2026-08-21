@@ -14,6 +14,107 @@ const Map<String, String> uebersetzungenLernpfad = {
   // (widgets/abzeichen_popup.dart) — bewusst derselbe Text in beiden.
   'Tippen für weiter': 'Tap to continue',
 
+  // ── Neue Modi, vorerst nur ueber den Debug-Bereich erreichbar ───────────
+  // Modusnamen (data/lernpfad_data.dart)
+  'Flächen-Vergleich': 'Area Comparison',
+  'Zwei Wahrheiten, eine Lüge': 'Two Truths, One Lie',
+
+  // Flächen-Vergleich (services/station_session_service.dart)
+  'Wie oft passt {klein} in {gross}?':
+      'How many times does {klein} fit into {gross}?',
+
+  // Zwei Wahrheiten, eine Lüge — Fragetext und die vier Aussage-Vorlagen.
+  // Die Platzhalter werden mit bereits lokalisierten Werten gefüllt
+  // (Country.name/.capital, t(currencyName), SkalaService-Format).
+  'Welche Aussage über {land} stimmt NICHT?':
+      'Which statement about {land} is FALSE?',
+  'Die Hauptstadt ist {stadt}.': 'The capital is {stadt}.',
+  'Die Währung heißt {waehrung}.': 'The currency is called {waehrung}.',
+  'Ein Nachbarland ist {nachbar}.': 'One neighbouring country is {nachbar}.',
+  // Ohne Satzpunkt: die formatierte Zahl endet je nach Groessenordnung selbst
+  // auf einen ("3.4M"), der Punkt kommt in _bevoelkerungsAussage dazu.
+  'Die Bevölkerung liegt bei etwa {n}': 'The population is around {n}',
+
+  // Begründungen der Lüge (Zwei Wahrheiten) — entstehen beim Erzeugen der
+  // Lüge, wo echter und ausgetauschter Wert beide vorliegen.
+  'Die Hauptstadt ist {richtig}, nicht {falsch}.':
+      'The capital is {richtig}, not {falsch}.',
+  'Die Währung ist {richtig}, nicht {falsch}.':
+      'The currency is the {richtig}, not the {falsch}.',
+  '{land} und {falsch} haben keine gemeinsame Grenze.':
+      '{land} and {falsch} do not share a border.',
+  'Die Bevölkerung liegt bei etwa {richtig}, nicht bei {falsch}':
+      'The population is around {richtig}, not {falsch}',
+
+  // Was gehört nicht dazu? (services/station_session_service.dart)
+  'Was gehört nicht dazu?': 'Odd One Out',
+  'Welches Land passt nicht zu den anderen?':
+      'Which country doesn\'t belong?',
+  'Die anderen drei liegen alle in {wert}.':
+      'The other three are all in {wert}.',
+  'Die anderen drei bezahlen alle mit {wert}.':
+      'The other three all pay with the {wert}.',
+  'Die anderen drei sind alle EU-Mitglied.':
+      'The other three are all EU members.',
+  'Die anderen drei sind alle kein EU-Mitglied.':
+      'None of the other three is an EU member.',
+  'Die anderen drei sind alle Binnenstaaten ohne Meereszugang.':
+      'The other three are all landlocked.',
+  'Die anderen drei haben alle einen Meereszugang.':
+      'The other three all have a coastline.',
+  'Die anderen drei liegen alle auf der Nordhalbkugel.':
+      'The other three are all in the northern hemisphere.',
+  'Die anderen drei liegen alle auf der Südhalbkugel.':
+      'The other three are all in the southern hemisphere.',
+  'Die anderen drei leben hauptsächlich von: {wert}.':
+      'The other three all live mainly from: {wert}.',
+  'Die anderen drei grenzen alle an {land}.':
+      'The other three all border {land}.',
+
+  // Hilfe-Dialog: Kategorienamen kommen aus _Merkmal.label im Generator.
+  'Kategorien': 'Categories',
+  'Mögliche Gemeinsamkeiten': 'Possible connections',
+  'Drei der vier Länder teilen genau eines dieser Merkmale.':
+      'Three of the four countries share exactly one of these.',
+  'Kontinent': 'Continent',
+  'Währung': 'Currency',
+  'EU-Mitgliedschaft': 'EU membership',
+  'Binnenstaat oder Küste': 'Landlocked or coastal',
+  'Nord- oder Südhalbkugel': 'Northern or southern hemisphere',
+  'Wichtigster Wirtschaftssektor': 'Main economic sector',
+  'Gemeinsame Grenze zu einem Land': 'A shared border with one country',
+  'Schließen': 'Close',
+
+  // Länder-Ranking mit Zahlenschloss
+  'Länder-Ranking': 'Country Ranking',
+  'Welchen Platz belegt {land} in der Kategorie {kategorie}?':
+      'What rank does {land} hold for {kategorie}?',
+  'Platz 1 = höchster Wert · {n} Länder gewertet':
+      'Rank 1 = highest value · {n} countries ranked',
+  'Platz {n}': 'Rank {n}',
+  'Genau richtig!': 'Spot on!',
+  '{n} Plätze daneben · {p} Punkte': 'Off by {n} ranks · {p} points',
+  'Bestätigen': 'Confirm',
+
+  // Nachbarschafts-Kette
+  'Nachbarschafts-Kette': 'Border Chain',
+  'Finde einen Weg von {start} nach {ziel} — nur über Nachbarländer.':
+      'Find a route from {start} to {ziel} — through neighbouring countries only.',
+  'Dein Weg · {n} Schritte': 'Your route · {n} steps',
+  'Nachbarn von {land}': 'Neighbours of {land}',
+  'Schritt zurück': 'Undo step',
+  'Von hier geht es nicht weiter — nimm einen Schritt zurück.':
+      'Dead end — take a step back.',
+  'Kürzester Weg!': 'Shortest route!',
+  'Ziel erreicht · {p} Punkte': 'Destination reached · {p} points',
+  'Der kürzeste Weg braucht {n} Schritte — du hast {m} gebraucht.':
+      'The shortest route takes {n} steps — you took {m}.',
+  'Der kürzeste Weg:': 'The shortest route:',
+
+  // Debug-Auswahl (screens/settings_screen.dart)
+  'Neue Modi testen (Debug)': 'Test new modes (debug)',
+  'Welchen Modus testen?': 'Which mode do you want to test?',
+
   // Profilbild-Freischaltung mit Sternen (screens/profil_screen.dart)
   'Dieses Profilbild für {n} Sterne freischalten?':
       'Unlock this profile picture for {n} stars?',

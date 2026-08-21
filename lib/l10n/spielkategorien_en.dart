@@ -27,6 +27,11 @@ const Map<String, String> spielkategorienEn = {
   'Inflationsrate': 'Inflation rate',
   'Staatsschulden': 'National debt',
 
+  // Einheiten, die bis zuletzt ohne englische Fassung waren. "% BIP" braucht
+  // das Länder-Ranking, die übrigen vier erscheinen in Higher/Lower und im
+  // Ranking-Quiz.
+  '% BIP': '% of GDP',
+
   'Einwohner': 'people',
   'Jahre': 'years',
   'USD/Monat': 'USD/month',

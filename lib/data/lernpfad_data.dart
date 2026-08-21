@@ -194,6 +194,7 @@ const List<LernModus> _modiEinsteiger = [
   LernModus.waehrungsQuiz,
   LernModus.flaggenQuizMultiple,
   LernModus.nachbarland,
+  LernModus.sortierSpiel, // Spiel
   LernModus.umrissMultiple,
   LernModus.hauptstaedteEingabe,
   LernModus.flaggenQuizEingabe,

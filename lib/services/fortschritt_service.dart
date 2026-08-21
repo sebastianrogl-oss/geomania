@@ -155,6 +155,42 @@ class FortschrittService {
   // Länder-Round-Robin (pro Welt+Abschnitt+Kernthema)
   static const _rrPrefix = 'lp_rr_';
 
+  // ── DEBUG: alles freischalten ─────────────────────────────────────────────
+  //
+  // Bewusst ein eigener Schalter statt gesetzter Fortschritts-Schlüssel.
+  //
+  // Stationen haben nämlich gar keinen Freischalt-Schlüssel: eine Station
+  // gilt als frei, wenn die VORHERIGE abgeschlossen ist (siehe
+  // istStationFreigeschaltet und ladeSnapshot). Wer über diesen Weg
+  // freischalten wollte, müsste 593 Stationen als abgeschlossen markieren —
+  // und würde damit Sterne, Abzeichen, Statistiken und die
+  // Wiederholungsrunde verfälschen.
+  //
+  // Dieser Schalter hebelt nur die PRÜFUNG aus. Kein einziger lp_s_done_-,
+  // lp_a_frei_- oder lp_w_frei_-Schlüssel wird geschrieben; nach dem
+  // Zurücksetzen steht exakt der vorherige Spielstand wieder da.
+  static const _kDebugAllesFrei = 'debug_alles_frei';
+
+  /// True, wenn der Debug-Schalter aktiv ist. Im Release-Build immer false,
+  /// selbst wenn der Schlüssel in den Prefs stünde.
+  static Future<bool> debugAllesFrei() async {
+    if (!kDebugMode) return false;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kDebugAllesFrei) ?? false;
+  }
+
+  static Future<void> debugAllesFreischalten() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kDebugAllesFrei, true);
+    resetSignal.value++;
+  }
+
+  static Future<void> debugFreischaltungZuruecksetzen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kDebugAllesFrei);
+    resetSignal.value++;
+  }
+
   // ── Station abschließen ────────────────────────────────────────────────────
 
   /// Markiert Station als abgeschlossen. [falscheFragenJson] ist eine
@@ -452,6 +488,7 @@ class FortschrittService {
   static Future<bool> istStationFreigeschaltet(String stationId) async {
     final kontext = stationKontext(stationId);
     if (kontext == null) return false;
+    if (await debugAllesFrei()) return true;
     final (_, abschnitt, _) = kontext;
     if (!await istAbschnittFreigeschaltet(abschnitt.id)) return false;
     final idx = abschnitt.stationen.indexWhere((s) => s.id == stationId);
@@ -461,6 +498,7 @@ class FortschrittService {
   }
 
   static Future<bool> istAbschnittFreigeschaltet(String abschnittId) async {
+    if (await debugAllesFrei()) return true;
     for (final w in lernwelten) {
       final idx = w.abschnitte.indexWhere((a) => a.id == abschnittId);
       if (idx < 0) continue;
@@ -475,6 +513,7 @@ class FortschrittService {
   static Future<bool> istWeltFreigeschaltet(String weltId) async {
     final welt = weltById(weltId);
     if (welt == null) return false;
+    if (await debugAllesFrei()) return true;
     if (welt.reihenfolge == 1) return true;
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('$_wFrei$weltId') ?? false;
@@ -654,15 +693,22 @@ class FortschrittService {
     final abgAbschnitte     = <String>{};
     final statusMap         = <String, StationDetails>{};
 
+    // Debug-Schalter: hebt nur die Freischalt-PRÜFUNG aus, der gelesene
+    // Fortschritt (done, richtig, falsch, gespielt) bleibt unverändert.
+    final allesFrei = kDebugMode && (prefs.getBool(_kDebugAllesFrei) ?? false);
+
     for (final welt in lernwelten) {
-      final weltFrei =
-          welt.reihenfolge == 1 || (prefs.getBool('$_wFrei${welt.id}') ?? false);
+      final weltFrei = allesFrei ||
+          welt.reihenfolge == 1 ||
+          (prefs.getBool('$_wFrei${welt.id}') ?? false);
       if (weltFrei) freieWelten.add(welt.id);
 
       for (int ai = 0; ai < welt.abschnitte.length; ai++) {
         final abschnitt = welt.abschnitte[ai];
-        final abschnittFrei = weltFrei &&
-            (ai == 0 || (prefs.getBool('$_aFrei${abschnitt.id}') ?? false));
+        final abschnittFrei = allesFrei ||
+            (weltFrei &&
+                (ai == 0 ||
+                    (prefs.getBool('$_aFrei${abschnitt.id}') ?? false)));
         if (abschnittFrei) freieAbschnitte.add(abschnitt.id);
 
         if (prefs.getBool('$_aDone${abschnitt.id}') ?? false) {
@@ -672,11 +718,12 @@ class FortschrittService {
         for (int si = 0; si < abschnitt.stationen.length; si++) {
           final station = abschnitt.stationen[si];
           final done = prefs.getBool('$_sDone${station.id}') ?? false;
-          final stationFrei = abschnittFrei &&
-              (si == 0 ||
-                  (prefs.getBool(
-                          '$_sDone${abschnitt.stationen[si - 1].id}') ??
-                      false));
+          final stationFrei = allesFrei ||
+              (abschnittFrei &&
+                  (si == 0 ||
+                      (prefs.getBool(
+                              '$_sDone${abschnitt.stationen[si - 1].id}') ??
+                          false)));
           final gestartet =
               prefs.getBool('$_sGestartet${station.id}') ?? false;
           final idx = prefs.getInt('$_sIdx${station.id}') ?? 0;

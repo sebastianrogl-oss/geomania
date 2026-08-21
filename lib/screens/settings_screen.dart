@@ -385,6 +385,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ));
   }
 
+  // ── DEBUG: Alles freischalten (nur kDebugMode) ────────────────────────────
+  //
+  // Schaltet nur die PRÜFUNG aus, statt Fortschritt zu schreiben — siehe
+  // FortschrittService.debugAllesFreischalten. Sterne, Abzeichen und
+  // Statistiken bleiben dadurch unangetastet.
+  Future<void> _allesFreischalten() async {
+    await FortschrittService.debugAllesFreischalten();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🐞 Alle Stationen freigeschaltet'),
+    ));
+  }
+
+  Future<void> _freischaltungZuruecksetzen() async {
+    await FortschrittService.debugFreischaltungZuruecksetzen();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🐞 Freischaltung zurückgesetzt'),
+    ));
+  }
+
   // ── DEBUG: Neue Modi (nur kDebugMode) ─────────────────────────────────────
   //
   // Flächen-Vergleich und Zwei Wahrheiten stehen bewusst in KEINER Modi-Liste
@@ -594,6 +615,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('Neue Modi testen (Debug)'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: _neueModiTesten,
+                ),
+                _Zeile(
+                  icon: Icons.lock_open_rounded,
+                  title: t('Alle Stationen freischalten (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _allesFreischalten,
+                ),
+                _Zeile(
+                  icon: Icons.lock_reset_rounded,
+                  title: t('Freischaltung zurücksetzen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _freischaltungZuruecksetzen,
                 ),
               ]),
               const SizedBox(height: 24),

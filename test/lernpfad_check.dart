@@ -590,7 +590,14 @@ void main() {
     final fruehWerte = <int>[];
     final spaetWerte = <int>[];
 
-    for (int durchlauf = 0; durchlauf < 3; durchlauf++) {
+    // Zehn Durchläufe, nicht drei. Der geprüfte Effekt ist echt, aber klein:
+    // gemessen liegen die späten Stationen im Schnitt rund 0,085
+    // Schwierigkeitspunkte über den frühen. Mit drei Durchläufen streute das
+    // Ergebnis um etwa ±0,05 und kippte dadurch in jedem fünfzehnten Lauf ins
+    // Negative — der Test schlug fehl, obwohl nichts kaputt war. Mit zehn
+    // Durchläufen lag der Abstand in fünfzehn Messungen zwischen +0,051 und
+    // +0,122 und damit nie mehr an der Null.
+    for (int durchlauf = 0; durchlauf < 10; durchlauf++) {
       for (final id in abschnittIds) {
         SharedPreferences.setMockInitialValues({});
         final a = abschnittById(id)!;

@@ -73,14 +73,24 @@ void main() {
   test('Skala ist adaptiv: kleines Land bekommt kleine Skala (nicht die feste Kontinent-Breite)', () async {
     // Vatikanstadt (Bevölkerung ~800) und Russland (Bevölkerung ~143 Mio)
     // sind beide in Europa — die Skalen dürfen sich nicht ähneln.
+    //
+    // Die 60 Fragen sind kein Selbstzweck: _preisSchaetzen zieht die Kategorie
+    // je Frage ZUFÄLLIG aus allen, für die das Land echte Daten hat, und die
+    // Station lässt sich nicht auf eine Kategorie festlegen. Mit den früheren
+    // 20 Fragen war die Wahrscheinlichkeit, dass "bevoelkerung" bei Russland
+    // (sieben gültige Kategorien) gar nicht vorkommt, rund 5 % — der Test
+    // schlug damit etwa in jedem zwanzigsten Lauf fehl, ohne dass irgendetwas
+    // kaputt war. Mit 60 Ziehungen liegt sie unter 0,1 Promille.
+    const kZiehungen = 60;
+
     final vatikanFragen = await FragenGenerator.generiereFragenFuerStation(LernStation(
-      id: 'test_va', modus: LernModus.preisSchaetzen, fragenAnzahl: 20,
+      id: 'test_va', modus: LernModus.preisSchaetzen, fragenAnzahl: kZiehungen,
       laenderCodes: const ['VA'], kategorien: const [], schwierigkeitsgrad: 1,
     ));
     final vatikan =
         vatikanFragen.where((f) => f.meta['kategorie'] == 'bevoelkerung').toList();
     final russlandFragen = await FragenGenerator.generiereFragenFuerStation(LernStation(
-      id: 'test_ru', modus: LernModus.preisSchaetzen, fragenAnzahl: 20,
+      id: 'test_ru', modus: LernModus.preisSchaetzen, fragenAnzahl: kZiehungen,
       laenderCodes: const ['RU'], kategorien: const [], schwierigkeitsgrad: 1,
     ));
     final russland =

@@ -136,28 +136,30 @@ void main() {
     }
   });
 
-  test('3) Neue Modi kommen tatsächlich im Lernpfad vor', () {
-    final neueModi = {
-      LernModus.nachbarland,
-      LernModus.bipGesamt,
-      LernModus.flaeche,
-      LernModus.extremFrage,
-      LernModus.waehrungZuLand,
-    };
+  test('3) Jeder Modus aus dem Pool kommt im Lernpfad auch wirklich vor', () {
+    // Früher stand hier eine feste Liste der damals neuen Modi. Die ist bei
+    // jeder Pool-Umstellung veraltet — zuletzt, als bipGesamt, flaeche und
+    // extremFrage aus den Pools genommen wurden und der Test rot wurde,
+    // obwohl genau das gewollt war.
+    //
+    // Stattdessen jetzt die allgemeine Regel: was im Pool des höchsten Levels
+    // steht, muss auch irgendwo gezogen werden. Ein Modus, der im Pool steht,
+    // aber durch kModusSperrenProWelt oder die Auswahllogik nirgends zum Zug
+    // kommt, ist ein echter Fehler — und der fällt hier auf, ohne dass jemand
+    // eine Liste pflegen muss.
     final gefunden = <LernModus, int>{};
     for (final welt in lernwelten) {
       for (final a in welt.abschnitte) {
         for (final s in a.stationen) {
-          if (neueModi.contains(s.modus)) {
-            gefunden[s.modus] = (gefunden[s.modus] ?? 0) + 1;
-          }
+          gefunden[s.modus] = (gefunden[s.modus] ?? 0) + 1;
         }
       }
     }
-    for (final m in neueModi) {
+    for (final m in modiFuerLevel(4)) {
       // ignore: avoid_print
       print('${m.name}: ${gefunden[m] ?? 0}x');
-      expect(gefunden[m] ?? 0, greaterThan(0), reason: '${m.name} fehlt komplett');
+      expect(gefunden[m] ?? 0, greaterThan(0),
+          reason: '${m.name} steht im Pool, kommt aber in keiner Station vor');
     }
   });
 
@@ -180,32 +182,49 @@ void main() {
     // bleibt trotzdem in Kraft, siehe Test 4j).
     expect(level1Modi.contains(LernModus.extremFrage), false);
     expect(level1Modi.contains(LernModus.wirtschaftssektoren), false);
-    // Level 4 enthält den kompletten Modus-Satz.
-    expect(level4Modi.length, LernModus.values.length);
+
+    // Level 4 enthält den kompletten POOL-Satz — nicht mehr den kompletten
+    // Enum. Fünf Modi (bipGesamt, flaeche, extremFrage, extremFrageLeicht,
+    // bekanntesGebaeude) sind aus den Pools genommen worden, ihre Generatoren
+    // aber erhalten geblieben. Gegen LernModus.values.length zu prüfen hiesse
+    // zu verlangen, dass auch pensionierte Modi vorkommen.
+    expect(level4Modi.length, modiFuerLevel(4).length);
   });
 
   test('4c) Level 1 (Einsteiger) hat einen deutlich größeren Pool (9+ Modi)', () {
     expect(modiFuerLevel(1).length, greaterThanOrEqualTo(9));
   });
 
-  test('4d) Neue Einsteiger-Modi kommen tatsächlich im Lernpfad vor', () {
-    final neueModi = {
-      LernModus.extremFrageLeicht,
+  test('4d) Die Spiel-Modi des Einsteiger-Pools kommen in Level 1 auch vor', () {
+    // Vorher stand hier extremFrageLeicht, das inzwischen aus den Pools
+    // genommen wurde. An seiner Stelle prüft der Test jetzt die drei
+    // Spiel-Modi, die Level 1 seit der Rhythmus-Umstellung hat.
+    //
+    // Der Punkt ist nicht, DASS sie irgendwo vorkommen — das deckt Test 3 ab
+    // — sondern dass sie schon in Level 1 vorkommen. Genau dort sollen sie
+    // die langen Abfrage-Ketten aufbrechen; landeten sie durch eine
+    // Pool-Umstellung erst ab Level 2, fiele das sonst niemandem auf.
+    final spielModiL1 = {
+      LernModus.zweiWahrheiten,
+      LernModus.laenderRanking,
+      LernModus.sortierSpiel,
     };
     final gefunden = <LernModus, int>{};
     for (final welt in lernwelten) {
       for (final a in welt.abschnitte) {
+        if (a.stufe != 1 || welt.id == 'welt') continue;
         for (final s in a.stationen) {
-          if (neueModi.contains(s.modus)) {
+          if (spielModiL1.contains(s.modus)) {
             gefunden[s.modus] = (gefunden[s.modus] ?? 0) + 1;
           }
         }
       }
     }
-    for (final m in neueModi) {
+    for (final m in spielModiL1) {
       // ignore: avoid_print
-      print('${m.name}: ${gefunden[m] ?? 0}x');
-      expect(gefunden[m] ?? 0, greaterThan(0), reason: '${m.name} fehlt komplett');
+      print('${m.name} in Level 1: ${gefunden[m] ?? 0}x');
+      expect(gefunden[m] ?? 0, greaterThan(0),
+          reason: '${m.name} kommt in keinem Einsteiger-Abschnitt vor');
     }
   });
 
@@ -224,21 +243,81 @@ void main() {
     }
   });
 
-  test('4f) HARTE REGEL: kein Modus wiederholt sich, bevor nicht der ganze Pool einmal dran war', () {
+  test('4f) HARTE REGEL: höchstens kMaxAbfrageKette Abfrage-Stationen am Stück',
+      () {
+    // Diese Prüfung hat die frühere Regel "kein Modus wiederholt sich, bevor
+    // nicht der ganze Pool einmal dran war" ersetzt. Die alte Regel verteilte
+    // zwar gleichmäßig, sagte aber nichts über den RHYTHMUS: sie war erfüllt,
+    // während zwanzig Abfrage-Stationen am Stück liefen. Das gewichtete
+    // Round-Robin hat sie bewusst aufgegeben — Spiel-Modi dürfen jetzt früher
+    // wiederkommen als Abfrage-Modi, das ist der ganze Zweck der Gewichtung.
+    //
+    // Geprüft wird deshalb der ganze Pfad am Stück und NICHT je Abschnitt:
+    // genau an den Abschnitts- und Weltgrenzen entstanden die langen Ketten,
+    // weil ein Abschnitt mit Abfrage endete und der nächste damit begann.
+    var kette = 0;
+    var laengsteKette = 0;
+    var spiele = 0;
+    var gesamt = 0;
+    String? schlimmsteStelle;
+
     for (final welt in lernwelten) {
       for (final a in welt.abschnitte) {
-        final poolGroesse = modiFuerLevel(_poolLevelFuer(welt, a)).length;
-        final gesehen = <LernModus>{};
         for (final s in a.stationen) {
-          if (gesehen.contains(s.modus)) {
-            expect(gesehen.length, poolGroesse,
-                reason: '${a.id}: ${s.modus.name} wiederholt sich, bevor alle '
-                    '$poolGroesse Modi des Pools einmal dran waren '
-                    '(bisher nur ${gesehen.length}: $gesehen)');
+          gesamt++;
+          if (istSpielModus(s.modus)) {
+            spiele++;
+            kette = 0;
+          } else {
+            kette++;
+            if (kette > laengsteKette) {
+              laengsteKette = kette;
+              schlimmsteStelle = s.id;
+            }
           }
-          gesehen.add(s.modus);
         }
       }
+    }
+
+    final anteil = spiele * 100 / gesamt;
+    // ignore: avoid_print
+    print('längste Abfrage-Kette: $laengsteKette (bei $schlimmsteStelle), '
+        'Spiel-Anteil: ${anteil.toStringAsFixed(1)} %, '
+        'Lockerungen: $lockerungenAbfrageKette');
+
+    expect(laengsteKette, lessThanOrEqualTo(kMaxAbfrageKette),
+        reason: 'Abfrage-Kette der Länge $laengsteKette bei $schlimmsteStelle');
+
+    // Die Vierer-Regel wird gelockert, wenn unter den erlaubten Kandidaten
+    // kein Spiel-Modus ist (siehe erzeugeModusSequenz). Derzeit kommt das im
+    // ganzen Pfad kein einziges Mal vor. Schlüge das um, wäre die Kette oben
+    // zwar weiterhin kurz, aber nur weil die Regel nachgegeben hat — deshalb
+    // hier getrennt geprüft.
+    expect(lockerungenAbfrageKette, 0,
+        reason: 'Die Vierer-Regel musste $lockerungenAbfrageKette mal '
+            'gelockert werden');
+
+    // Untergrenze, kein Sollwert: gemessen sind es 40,2 %. Die 33 % sind ein
+    // Rückfall-Wächter mit Luft nach unten — er soll anschlagen, wenn eine
+    // Pool-Änderung die Spiel-Modi wieder verdrängt, und nicht bei jeder
+    // Verschiebung um einen Prozentpunkt.
+    expect(anteil, greaterThanOrEqualTo(33.0),
+        reason: 'Spiel-Anteil auf ${anteil.toStringAsFixed(1)} % gefallen');
+  });
+
+  test('4f2) Auch die schwächste Welt hat noch genug Spiel-Modi', () {
+    // Der Gesamtanteil kann eine einzelne Welt verdecken. Südamerika und
+    // Ozeanien liegen durch ihre Sperrlisten am unteren Ende (je 26 %), die
+    // 20 % sind auch hier Wächter und kein Sollwert.
+    for (final welt in lernwelten) {
+      final stationen = welt.abschnitte.expand((a) => a.stationen).toList();
+      final spiele = stationen.where((s) => istSpielModus(s.modus)).length;
+      final anteil = spiele * 100 / stationen.length;
+      // ignore: avoid_print
+      print('${welt.id}: ${anteil.toStringAsFixed(0)} % Spiel-Modi');
+      expect(anteil, greaterThanOrEqualTo(20.0),
+          reason: '${welt.id} hat nur ${anteil.toStringAsFixed(1)} % '
+              'Spiel-Modi');
     }
   });
 
@@ -293,31 +372,45 @@ void main() {
     expect(gefunden, greaterThan(0), reason: 'zufallsFakt kommt nirgends vor');
   });
 
-  test('4h) bekanntesGebaeude kommt vor, verrät das Land nicht, Optionen sauber', () async {
-    int gefunden = 0;
+  test('4h) Die pensionierten Modi kommen in keinem Pool und keiner Station vor',
+      () {
+    // Hier standen vorher zwei Prüfungen zu bekanntesGebaeude: dass der Modus
+    // vorkommt (4h) und dass er nicht in Level 1 steht (4i). Die erste ist
+    // hinfällig, seit der Modus aus den Pools genommen wurde; die zweite war
+    // damit nur noch trivial wahr.
+    //
+    // An ihrer Stelle die umgekehrte Aussage, die etwas taugt: Diese fünf
+    // Modi sind bewusst stillgelegt. Ihre Generatoren bleiben erhalten und
+    // liessen sich jederzeit wieder eintragen — aber solange sie draussen
+    // sind, sollen sie es auch bleiben und nicht durch eine unbedachte
+    // Pool-Änderung zurückkommen.
+    //
+    // extremFrage ist der Sonderfall: als Modus stillgelegt, als FUNKTION
+    // aber weiter in Gebrauch — sie ist Teil der Ausweichkette im
+    // Fragen-Generator. Geprüft wird deshalb der Modus, nicht die Funktion.
+    const pensioniert = {
+      LernModus.bipGesamt,
+      LernModus.flaeche,
+      LernModus.extremFrage,
+      LernModus.extremFrageLeicht,
+      LernModus.bekanntesGebaeude,
+    };
+
+    for (final m in pensioniert) {
+      for (var level = 1; level <= 4; level++) {
+        expect(modiFuerLevel(level).contains(m), false,
+            reason: '${m.name} steht wieder im Pool von Level $level');
+      }
+    }
+
     for (final welt in lernwelten) {
       for (final a in welt.abschnitte) {
         for (final s in a.stationen) {
-          if (s.modus != LernModus.bekanntesGebaeude) continue;
-          gefunden++;
-          final fragen = await FragenGenerator.generiereFragenFuerStation(s);
-          expect(fragen.length, s.fragenAnzahl, reason: s.id);
-          for (final f in fragen) {
-            expect(f.frage, startsWith('In welchem Land steht '));
-            expect(f.laenderCode, '', reason: '${f.id} verrät das Land');
-            expect(f.antwortOptionen, contains(f.richtigeAntwort));
-            expect(f.antwortOptionen.length, 4, reason: f.id);
-            expect(f.antwortOptionen.toSet().length, f.antwortOptionen.length,
-                reason: '${f.id}: doppelte Antwortoptionen');
-          }
+          expect(pensioniert.contains(s.modus), false,
+              reason: '${s.id} nutzt den stillgelegten Modus ${s.modus.name}');
         }
       }
     }
-    expect(gefunden, greaterThan(0), reason: 'bekanntesGebaeude kommt nirgends vor');
-  });
-
-  test('4i) bekanntesGebaeude ist NICHT in Level 1 (Einsteiger)', () {
-    expect(modiFuerLevel(1).contains(LernModus.bekanntesGebaeude), false);
   });
 
   test('4b) flaggenQuizBild ist wieder ein aktiver Modus (nicht mehr nur Fallback)', () {
@@ -788,15 +881,50 @@ void main() {
     }
   });
 
-  test('5) Fragen-Generierung crasht nie und liefert nie 0 Fragen', () async {
+  test('5) Fragen-Generierung crasht nie, liefert genug und nie doppelt',
+      () async {
+    // Vorher wurde hier exakt s.fragenAnzahl verlangt. Das ist zu streng:
+    // die Modi in kOhneWiederholung dürfen innerhalb einer Station keine
+    // Frage zweimal bringen, und in einem dünnen Länderblock geht ihnen der
+    // Stoff aus. Sie brechen dann sauber ab, statt zu wiederholen — richtig
+    // so, aber eben eine Frage weniger.
+    //
+    // Betroffen sind derzeit drei von 594 Stationen, alle in nordamerika_3
+    // ("Die kleinen Karibikstaaten", der dünnste Block im Pfad):
+    // nordamerika_3_01 und _18 (laenderRanking) sowie _14 (zweiWahrheiten),
+    // je 7 statt 8 Fragen.
+    //
+    // Die Untergrenze existiert, damit aus "eine Frage weniger" nicht
+    // unbemerkt "die halbe Station fehlt" wird. Fünf Fragen sind noch eine
+    // Station; bei vier wäre etwas kaputt und niemand hätte es gemerkt.
+    const kMindestFragen = 5;
+
     for (final welt in lernwelten) {
       for (final a in welt.abschnitte) {
         for (final s in a.stationen) {
           final fragen = await FragenGenerator.generiereFragenFuerStation(s);
-          expect(fragen, isNotEmpty,
-              reason: '${s.id} (${s.modus.name}) erzeugt 0 Fragen');
-          expect(fragen.length, s.fragenAnzahl,
-              reason: '${s.id} (${s.modus.name}) falsche Fragenanzahl');
+
+          // Stationen mit eigener Obergrenze (sortierSpiel plant nur 3, siehe
+          // kFragenObergrenze) dürfen nicht an der 5 scheitern — für sie gilt
+          // ihre eigene Vorgabe als Untergrenze.
+          final untergrenze =
+              s.fragenAnzahl < kMindestFragen ? s.fragenAnzahl : kMindestFragen;
+
+          expect(fragen.length, greaterThanOrEqualTo(untergrenze),
+              reason: '${s.id} (${s.modus.name}) liefert nur ${fragen.length} '
+                  'von ${s.fragenAnzahl} Fragen');
+          expect(fragen.length, lessThanOrEqualTo(s.fragenAnzahl),
+              reason: '${s.id} (${s.modus.name}) liefert ${fragen.length} '
+                  'Fragen, geplant waren ${s.fragenAnzahl}');
+
+          // Die eigentliche Zusicherung hinter der gelockerten Anzahl: lieber
+          // eine Frage weniger als eine doppelt. Geprüft wird die ID, nicht
+          // der Fragetext — Modi wie flaggenQuizBild stellen bei jeder Frage
+          // dieselbe Frage zu einer anderen Flagge, doppelter TEXT ist dort
+          // also normal und kein Fehler.
+          final ids = fragen.map((f) => f.id).toList();
+          expect(ids.toSet().length, ids.length,
+              reason: '${s.id} (${s.modus.name}) hat doppelte Fragen');
         }
       }
     }

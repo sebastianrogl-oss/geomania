@@ -1122,7 +1122,10 @@ class FragenGenerator {
 
       return Frage(
         id: '${station.id}_nb_${e.key}',
-        frage: 'Welches Land grenzt an ${co.name}?',
+        // Über t() mit Platzhalter statt direkter Interpolation: interpoliert
+        // ließe sich der Satz gar nicht übersetzen, weil der Ländername
+        // mitten im Schlüssel stünde.
+        frage: t('Welches Land grenzt an {land}?', {'land': co.name}),
         richtigeAntwort: richtigName,
         antwortOptionen: optionen,
         modus: LernModus.nachbarland,
@@ -1312,7 +1315,19 @@ class FragenGenerator {
   // Frage-Text passend zur Kategorie UND Richtung (größte/meiste vs.
   // kleinste/wenigste) — dieselbe Zuordnung wird von _extremFrage() und
   // _extremFrageLeicht() genutzt, damit beide Varianten konsistent klingen.
-  static String _extremFrageText(String katId, bool kleinstes) => switch (katId) {
+  /// Fragetext des Superlativ-Quiz.
+  ///
+  /// Der deutsche Satz ist zugleich der Übersetzungsschlüssel — dasselbe
+  /// Muster wie lernModusLabel(). Vorher lieferte die Funktion rohe Strings,
+  /// die als Frage durchgereicht und im Screen ungefiltert angezeigt wurden;
+  /// im englischen Modus stand dort Deutsch.
+  ///
+  /// Das wiegt schwerer, als die Zahl der Sätze vermuten lässt: dieser Modus
+  /// ist der Rückfall ALLER fünf neuen Modi bei zu dünner Datenlage (siehe
+  /// die _extremFrage-Aufrufe dort), er wird also auch dann sichtbar, wenn
+  /// man ihn gar nicht angesteuert hat.
+  static String _extremFrageText(String katId, bool kleinstes) =>
+      t(switch (katId) {
         'bevoelkerung' => kleinstes
             ? 'Welches dieser Länder hat die wenigsten Einwohner?'
             : 'Welches dieser Länder hat die meisten Einwohner?',
@@ -1335,7 +1350,7 @@ class FragenGenerator {
             ? 'Welches dieser Länder hat den niedrigsten Mindestlohn?'
             : 'Welches dieser Länder hat den höchsten Mindestlohn?',
         _ => 'Welches dieser Länder hat die meisten Einwohner?',
-      };
+      });
 
   // Rotiert reihum durch alle 7 Vergleichs-Kategorien (statt nur "meiste/
   // wenigste Einwohner" + "BIP") und fragt abwechselnd nach dem größten UND

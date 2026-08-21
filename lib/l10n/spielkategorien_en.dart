@@ -31,6 +31,10 @@ const Map<String, String> spielkategorienEn = {
   // das Länder-Ranking, die übrigen vier erscheinen in Higher/Lower und im
   // Ranking-Quiz.
   '% BIP': '% of GDP',
+  'Mrd. USD': 'B USD',
+  'Kinder/Frau': 'children/woman',
+  'L/Kopf': 'L/person',
+  'Medaillen': 'medals',
 
   'Einwohner': 'people',
   'Jahre': 'years',

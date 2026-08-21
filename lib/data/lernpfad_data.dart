@@ -155,6 +155,24 @@ const Set<LernModus> kSpielModi = {
 
 bool istSpielModus(LernModus m) => kSpielModi.contains(m);
 
+/// Modi, die nicht als ERSTE Station einer Lernwelt taugen.
+///
+/// Nicht "Spiel-Modus" ist das Kriterium, sondern eine eigene Bedienung:
+/// Sortieren zieht Karten in eine Reihenfolge, Preis-Schaetzen und
+/// Laender-Ranking brauchen Regler beziehungsweise Zahlenschloss, die
+/// Nachbarschafts-Kette baut einen Weg Schritt fuer Schritt. Wer eine Welt
+/// betritt, soll zuerst etwas antippen duerfen.
+///
+/// Zwei Wahrheiten, Was gehoert nicht dazu, Flaechen-Vergleich und das
+/// Grenzketten-Raetsel stehen bewusst NICHT hier: sie sind zwar Spiel-Modi,
+/// bedient werden sie aber wie jedes Quiz — durch Antippen einer Karte.
+const Set<LernModus> kNichtAlsWelteinstieg = {
+  LernModus.sortierSpiel,
+  LernModus.preisSchaetzen,
+  LernModus.laenderRanking,
+  LernModus.nachbarschaftsKette,
+};
+
 // Nicht mehr in den Pools, die Generatoren bleiben aber erhalten:
 // bipGesamt, flaeche, extremFrageLeicht (vorher Einsteiger),
 // bekanntesGebaeude (Fortgeschritten) und extremFrage (Profi). Sie liessen
@@ -379,6 +397,30 @@ double _gewicht(LernModus m) => istSpielModus(m) ? 0.5 : 1.0;
 /// Spiel-Modus verfuegbar war. Nur fuer Messungen.
 int lockerungenAbfrageKette = 0;
 
+/// Startversatz in der Pool-Liste je Lernwelt.
+///
+/// Ohne ihn beginnt jede Welt mit derselben Abfolge: das Verfahren ist
+/// deterministisch, und bei gleichem Pool und lauter Zaehlern auf 0
+/// entscheidet allein die Listenreihenfolge. Europa und Afrika waren dadurch
+/// Station fuer Station identisch.
+///
+/// Der Versatz ROTIERT die Liste, er mischt sie nicht. Die relativen
+/// Abstaende zwischen den Spiel-Modi bleiben damit erhalten — die
+/// Verschraenkung wirkt weiter, nur an anderer Stelle beginnend.
+///
+/// Feste Werte statt einer Ableitung aus dem Namen: so laesst sich jede Welt
+/// einzeln nachjustieren, und ein umbenannter Weltschluessel aendert nicht
+/// unbemerkt den ganzen Lernpfad.
+const Map<String, int> kPoolVersatzProWelt = {
+  'europa': 0,
+  'suedamerika': 2,
+  'nordamerika': 4,
+  'afrika': 6,
+  'asien': 8,
+  'ozeanien': 10,
+  'welt': 12,
+};
+
 List<LernModus> erzeugeModusSequenz(
   int stationsAnzahl,
   int abschnittLevel,
@@ -396,12 +438,24 @@ List<LernModus> erzeugeModusSequenz(
   /// Nimmt die Laenge der Abfrage-Kette am ENDE dieses Abschnitts entgegen,
   /// damit der naechste Abschnitt dort weiterzaehlen kann.
   void Function(int)? ketteNachher,
+
+  /// Ob dies der erste Abschnitt seiner Lernwelt ist. Dann darf die erste
+  /// Station kein Modus mit eigener Bedienung sein — siehe
+  /// [kNichtAlsWelteinstieg].
+  bool istErsterAbschnittDerWelt = false,
 }) {
   final gesperrt = weltId == null
       ? const <LernModus>{}
       : (kModusSperrenProWelt[weltId] ?? const <LernModus>{});
-  final pool =
+  final gefiltert =
       modiFuerLevel(abschnittLevel).where((m) => !gesperrt.contains(m)).toList();
+  // Rotation um den Weltversatz — siehe kPoolVersatzProWelt.
+  final versatz = weltId == null
+      ? 0
+      : (kPoolVersatzProWelt[weltId] ?? 0) % gefiltert.length;
+  final pool = versatz == 0
+      ? gefiltert
+      : [...gefiltert.sublist(versatz), ...gefiltert.sublist(0, versatz)];
   final sequenz = <LernModus>[];
   LernModus? letzter;
   String? letztesThema;
@@ -443,6 +497,17 @@ List<LernModus> erzeugeModusSequenz(
       kandidaten = pool.where((m) => m != letzter).toList();
     }
     if (kandidaten.isEmpty) kandidaten = pool;
+
+    // Erste Station einer Welt: kein Modus mit eigener Bedienung. Ohne diese
+    // Regel entschied der Weltversatz darueber, und in Asien stand das
+    // Sortier-Spiel an Position 1 — der mechanisch anspruchsvollste Modus als
+    // Allererstes. Steht vor der Vierer-Regel, weil beim ersten Zug ohnehin
+    // noch keine Abfrage-Kette gelaufen sein kann.
+    if (istErsterAbschnittDerWelt && i == 0) {
+      final zugaenglich =
+          kandidaten.where((m) => !kNichtAlsWelteinstieg.contains(m)).toList();
+      if (zugaenglich.isNotEmpty) kandidaten = zugaenglich;
+    }
 
     // Vierer-Regel: sind schon genug Abfrage-Stationen gelaufen, MUSS die
     // naechste ein Spiel sein. Greift NACH allen Sperren — ist unter den
@@ -612,6 +677,7 @@ LernStation _st(
 List<LernStation> _baueAbschnitt(
   String wid, int stufe, List<String> laender, int anzahl, {
   bool istAllerErsterAbschnitt = false,
+  bool istErsterAbschnittDerWelt = false,
   int fragenProStation = 8,
   int? modusPoolLevel,
 }) {
@@ -621,7 +687,8 @@ List<LernStation> _baueAbschnitt(
       gesamt, modusPoolLevel ?? stufe, istAllerErsterAbschnitt,
       weltId: wid,
       ketteVorher: _laufendeKette,
-      ketteNachher: (k) => _laufendeKette = k);
+      ketteNachher: (k) => _laufendeKette = k,
+      istErsterAbschnittDerWelt: istErsterAbschnittDerWelt);
   return [
     for (int i = 0; i < gesamt; i++)
       _st(wid, stufe, i + 1, modi[i], laender, fragenProStation),
@@ -648,10 +715,14 @@ Map<String, List<LernStation>> _baueAlleAbschnitte() {
   lockerungenAbfrageKette = 0;
   final r = <String, List<LernStation>>{};
 
+  final weltenGesehen = <String>{};
   void bau(String wid, int stufe, List<String> laender, int anzahl,
       {bool erster = false, int fragen = 8, int? poolLevel}) {
+    // Der erste Aufruf je Welt ist deren Einstiegs-Abschnitt.
+    final ersterDerWelt = weltenGesehen.add(wid);
     r['${wid}_$stufe'] = _baueAbschnitt(wid, stufe, laender, anzahl,
         istAllerErsterAbschnitt: erster,
+        istErsterAbschnittDerWelt: ersterDerWelt,
         fragenProStation: fragen,
         modusPoolLevel: poolLevel);
   }

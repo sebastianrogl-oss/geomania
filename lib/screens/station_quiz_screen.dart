@@ -14,12 +14,14 @@ import '../l10n/wirtschaftssektoren_en.dart';
 import '../services/locale_service.dart';
 import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
+import '../services/benachrichtigungs_service.dart';
 import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/gelernte_fakten_service.dart';
 import '../services/skala_service.dart';
 import '../services/station_session_service.dart';
 import '../widgets/abzeichen_popup.dart';
+import '../widgets/erinnerung_dialog.dart';
 import '../widgets/flaggen_widget.dart';
 import '../widgets/halbzeit_inhalt.dart';
 import '../widgets/level_skip_button.dart';
@@ -893,6 +895,18 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // ignore: avoid_print
     print('[StationFertig] streakErhoehenUndFeiern() fertig: '
         '$alterStreak -> $neuerStreak');
+
+    // Hält die Uhrzeit für die "übliche Spielzeit" fest und plant die
+    // Erinnerungen neu — dadurch entfällt die heutige Erinnerung von selbst.
+    // MUSS nach dem Streak-Update laufen: die Streak-Warnung liest den Stand,
+    // den dieses gerade geschrieben hat.
+    //
+    // Bewusst VOR dem Wiederholungsrunde-Zweig: auch eine Wiederholungsrunde
+    // ist Spielzeit und soll die Erinnerung für heute verfallen lassen.
+    // Bewusst nicht hinter `if (!mounted)`: die Buchführung hängt nicht daran,
+    // ob der Bildschirm noch steht.
+    await BenachrichtigungsService.stationAbgeschlossen();
+
     if (!mounted) return;
 
     if (widget.istWiederholungsrunde) {
@@ -951,6 +965,17 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       await AbzeichenPopup.zeigen(context, neueAbzeichen);
       // ignore: avoid_print
       print('[StationFertig] AbzeichenPopup.zeigen() fertig');
+    }
+    if (!mounted) return;
+
+    // Erlaubnis für Erinnerungen erfragen — nach der ersten abgeschlossenen
+    // Station, nicht beim ersten Start. Der Platz ist bewusst gewählt: nach
+    // Ergebnis und Abzeichen (der Spieler hat gerade etwas geschafft) und noch
+    // VOR dem Interstitial, denn eine Vollbild-Werbung würde den Dialog
+    // verdecken.
+    if (await BenachrichtigungsService.sollDialogZeigen()) {
+      if (!mounted) return;
+      await ErinnerungDialog.zeigen(context);
     }
     if (!mounted) return;
 

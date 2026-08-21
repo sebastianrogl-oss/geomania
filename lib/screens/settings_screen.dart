@@ -7,10 +7,12 @@ import '../data/countries.dart';
 import '../data/lernpfad_data.dart';
 import '../services/ad_service.dart';
 import '../services/auth_service.dart';
+import '../services/benachrichtigungs_service.dart';
 import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/locale_service.dart';
 import '../services/profilbild_service.dart';
+import '../services/spielzeit_service.dart';
 import '../l10n/uebersetzungen.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/streak_feier_overlay.dart';
@@ -33,6 +35,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _anzeigename = '';
   bool _sound = true;
   bool _vibration = true;
+
+  // ── Erinnerungen ───────────────────────────────────────────────────────────
+  bool _erinnerungen = true;
+  bool _streakWarnung = true;
+  bool _systemErlaubnis = false;
+  int _erinnerungsMinute = SpielzeitService.kVorgabeMinute;
+  bool _zeitManuell = false;
+  int _spielzeitEintraege = 0;
   // Fallback, falls PackageInfo.fromPlatform() fehlschlägt (z.B. Plugin auf
   // der Plattform nicht verfügbar) — besser eine plausible als gar keine
   // Versionsangabe.
@@ -68,6 +78,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _sound = sound;
       _vibration = vibration;
     });
+    await _ladeErinnerungen();
+  }
+
+  /// Getrennt von [_load], weil es nach jeder Änderung erneut gebraucht wird —
+  /// die Erlaubnis kann sich außerhalb der App geändert haben, und die
+  /// ermittelte Uhrzeit wandert mit jedem Spieltag.
+  Future<void> _ladeErinnerungen() async {
+    final aktiv = await BenachrichtigungsService.erinnerungenAktiv();
+    final streak = await BenachrichtigungsService.streakWarnungAktiv();
+    final erlaubnis = await BenachrichtigungsService.systemErlaubnisVorhanden();
+    final manuell = await SpielzeitService.manuelleMinute();
+    final minute = await SpielzeitService.erinnerungsMinute();
+    final eintraege = (await SpielzeitService.protokollierteMinuten()).length;
+    if (!mounted) return;
+    setState(() {
+      _erinnerungen = aktiv;
+      _streakWarnung = streak;
+      _systemErlaubnis = erlaubnis;
+      _erinnerungsMinute = minute;
+      _zeitManuell = manuell != null;
+      _spielzeitEintraege = eintraege;
+    });
   }
 
   // Liest die Versionsnummer zur Laufzeit aus den nativen Plattform-Metadaten
@@ -88,6 +120,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _spracheWaehlen(String code) async {
     await LocaleService.setzeSprache(code);
+    // Die Texte der geplanten Benachrichtigungen sind zum Planungszeitpunkt
+    // festgelegt und würden sonst noch tagelang in der alten Sprache
+    // erscheinen.
+    await BenachrichtigungsService.neuPlanen();
+  }
+
+  // ── Erinnerungen ───────────────────────────────────────────────────────────
+
+  Future<void> _toggleErinnerungen(bool wert) async {
+    setState(() => _erinnerungen = wert);
+    await BenachrichtigungsService.setzeErinnerungenAktiv(wert);
+
+    // Beim EINschalten ohne Systemerlaubnis nachfassen: den eigenen Dialog
+    // braucht es hier nicht mehr — wer den Schalter umlegt, hat die Frage
+    // schon beantwortet.
+    if (wert && !_systemErlaubnis) {
+      await BenachrichtigungsService.systemErlaubnisAnfragen();
+    }
+    await _ladeErinnerungen();
+  }
+
+  Future<void> _toggleStreakWarnung(bool wert) async {
+    setState(() => _streakWarnung = wert);
+    await BenachrichtigungsService.setzeStreakWarnungAktiv(wert);
+    await _ladeErinnerungen();
+  }
+
+  /// Uhrzeit von Hand setzen — oder die Automatik wiederherstellen.
+  Future<void> _erinnerungszeitAendern() async {
+    final gewaehlt = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+          hour: _erinnerungsMinute ~/ 60, minute: _erinnerungsMinute % 60),
+      helpText: t('Erinnerungszeit'),
+    );
+    if (gewaehlt == null) return;
+
+    await SpielzeitService.setzeManuelleMinute(
+        gewaehlt.hour * 60 + gewaehlt.minute);
+    await BenachrichtigungsService.neuPlanen();
+    await _ladeErinnerungen();
+  }
+
+  Future<void> _erinnerungszeitAutomatisch() async {
+    await SpielzeitService.setzeManuelleMinute(null);
+    await BenachrichtigungsService.neuPlanen();
+    await _ladeErinnerungen();
+  }
+
+  /// Uhrzeit plus die Herkunft der Angabe. Ohne den Zusatz wäre nicht
+  /// erkennbar, ob die App schon genug über den eigenen Rhythmus weiß oder
+  /// bloß die Vorgabe zeigt.
+  String _zeitUntertitel() {
+    final zeit = SpielzeitService.formatiere(_erinnerungsMinute);
+    if (_zeitManuell) return t('{zeit} · von dir gesetzt', {'zeit': zeit});
+    if (_spielzeitEintraege < SpielzeitService.kMindestEintraege) {
+      return t('{zeit} · Vorgabe, noch zu wenige Spieltage', {'zeit': zeit});
+    }
+    return t('{zeit} · aus deinen letzten {n} Spieltagen',
+        {'zeit': zeit, 'n': '$_spielzeitEintraege'});
   }
 
   // ── Anzeigename ────────────────────────────────────────────────────────────
@@ -563,6 +655,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ]),
             const SizedBox(height: 24),
 
+            // Auf Web gibt es keine planbaren Benachrichtigungen (siehe
+            // BenachrichtigungsService.verfuegbar) — dort bliebe der ganze
+            // Bereich wirkungslos und wird deshalb gar nicht erst gezeigt.
+            if (BenachrichtigungsService.verfuegbar) ...[
+              _SectionHeader(t('ERINNERUNGEN')),
+              _Card(children: [
+                _SwitchZeile(
+                  icon: Icons.notifications_active_outlined,
+                  title: t('Erinnerungen'),
+                  value: _erinnerungen,
+                  onChanged: _toggleErinnerungen,
+                ),
+                const _Trenner(),
+                _Zeile(
+                  icon: Icons.schedule_rounded,
+                  title: t('Erinnerungszeit'),
+                  subtitle: _zeitUntertitel(),
+                  onTap: _erinnerungen ? _erinnerungszeitAendern : null,
+                ),
+                // Nur anbieten, wenn es auch etwas zurückzusetzen gibt.
+                if (_zeitManuell) ...[
+                  const _Trenner(),
+                  _Zeile(
+                    icon: Icons.auto_mode_rounded,
+                    title: t('Wieder automatisch ermitteln'),
+                    onTap: _erinnerungszeitAutomatisch,
+                  ),
+                ],
+                const _Trenner(),
+                _SwitchZeile(
+                  icon: Icons.local_fire_department_outlined,
+                  title: t('Streak-Warnung'),
+                  value: _streakWarnung,
+                  onChanged: _erinnerungen ? _toggleStreakWarnung : null,
+                ),
+              ]),
+              // Ohne Systemerlaubnis richtet der Schalter oben nichts aus —
+              // der Hinweis nennt den einzigen Weg zurück.
+              if (!_systemErlaubnis) ...[
+                const SizedBox(height: 8),
+                _ErlaubnisHinweis(
+                  onTap: BenachrichtigungsService.systemEinstellungenOeffnen,
+                ),
+              ],
+              const SizedBox(height: 24),
+            ],
+
             // Nur im Debug-Build sichtbar — niemals im Release, siehe
             // _testmodusOeffnen()-Kommentar.
             if (kDebugMode) ...[
@@ -807,7 +946,12 @@ class _SwitchZeile extends StatelessWidget {
   final IconData icon;
   final String title;
   final bool value;
-  final ValueChanged<bool> onChanged;
+
+  /// Null schaltet die Zeile ab (ausgegrauter Schalter). Genutzt für die
+  /// Streak-Warnung, solange die Erinnerungen insgesamt aus sind — ein
+  /// bedienbarer Unterschalter unter einem ausgeschalteten Hauptschalter wäre
+  /// irreführend.
+  final ValueChanged<bool>? onChanged;
 
   const _SwitchZeile({
     required this.icon,
@@ -818,16 +962,20 @@ class _SwitchZeile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final aus = onChanged == null;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: _textMid),
+          Icon(icon,
+              size: 20, color: aus ? _textMid.withValues(alpha: 0.5) : _textMid),
           const SizedBox(width: 14),
           Expanded(
             child: Text(title,
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w700, color: _textDark)),
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: aus ? _textMid : _textDark)),
           ),
           Switch(
             value: value,
@@ -835,6 +983,51 @@ class _SwitchZeile extends StatelessWidget {
             activeThumbColor: _accent,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Hinweis, dass das Betriebssystem Benachrichtigungen sperrt.
+///
+/// Bewusst nicht als weitere _Card-Zeile, sondern abgesetzt und in Warnfarbe:
+/// solange das hier steht, bewirken die Schalter darüber nichts, und das soll
+/// nicht wie eine beiläufige Nebeninformation aussehen.
+class _ErlaubnisHinweis extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ErlaubnisHinweis({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3E0),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFB8570A), width: 1.5),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.notifications_off_outlined,
+                size: 20, color: Color(0xFFB8570A)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                t('Benachrichtigungen sind für GeoMania im System '
+                    'ausgeschaltet. Zum Einschalten hier tippen.'),
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF8A4308),
+                    height: 1.35),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

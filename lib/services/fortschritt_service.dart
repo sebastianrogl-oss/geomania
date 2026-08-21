@@ -593,6 +593,35 @@ class FortschrittService {
     return (alterStreak, streak);
   }
 
+  /// Der Tages-Streak, aber nur solange er noch LÄUFT — sonst 0.
+  ///
+  /// [_kStreak] behält seinen alten Wert, bis wieder gespielt wird: wer eine
+  /// Woche pausiert, hat dort weiterhin die 12 stehen, obwohl die Serie längst
+  /// gerissen ist. Erst der nächste streakAktualisieren()-Aufruf setzt sie auf
+  /// 1 zurück. Für die Anzeige im Spiel spielt das keine Rolle, für die
+  /// Streak-Warnung schon: sie würde sonst eine Serie bewerben, die es nicht
+  /// mehr gibt.
+  ///
+  /// "Läuft noch" heißt: zuletzt heute oder gestern gespielt. Gestern zählt,
+  /// weil genau dann die Warnung gebraucht wird.
+  static Future<int> laufenderStreak() async {
+    final prefs = await SharedPreferences.getInstance();
+    final streak = prefs.getInt(_kStreak) ?? 0;
+    if (streak <= 0) return 0;
+
+    final letzteStr = prefs.getString(_kLetzteAkt);
+    if (letzteStr == null) return 0;
+
+    final letzte = DateTime.tryParse(letzteStr);
+    if (letzte == null) return 0;
+
+    final heute = DateTime.now();
+    final tage = DateTime(heute.year, heute.month, heute.day)
+        .difference(DateTime(letzte.year, letzte.month, letzte.day))
+        .inDays;
+    return tage <= 1 ? streak : 0;
+  }
+
   // ── DEBUG-Hilfen für den Streak (nur vom Debug-Bereich der Einstellungen
   // aufgerufen, siehe settings_screen.dart) ─────────────────────────────────
 

@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'firebase_options.dart';
 import 'services/ad_service.dart';
 import 'services/auth_service.dart';
+import 'services/benachrichtigungs_service.dart';
 import 'services/fortschritt_service.dart';
 import 'services/locale_service.dart';
 import 'screens/home_screen.dart';
@@ -35,7 +38,19 @@ void main() async {
   // Sprache startet statt kurz Deutsch aufzublitzen.
   await LocaleService.laden();
 
+  // Richtet Zeitzone, Plugin und Android-Kanal ein — fragt aber BEWUSST noch
+  // keine Erlaubnis an. Die kommt erst nach der ersten abgeschlossenen
+  // Station, siehe BenachrichtigungsService.sollDialogZeigen. Auf Web ein
+  // No-op, dort gibt es keine planbaren Benachrichtigungen.
+  await BenachrichtigungsService.initialisieren();
+
   runApp(const GeoManiaApp());
+
+  // Den Vorrat geplanter Benachrichtigungen bei jedem Start auffrischen: er
+  // reicht nur BenachrichtigungsService.kVorlaufTage weit, und die
+  // Systemerlaubnis kann zwischenzeitlich entzogen worden sein. Nicht
+  // awaited — die App soll deswegen nicht später starten.
+  unawaited(BenachrichtigungsService.neuPlanen());
 
   // google_mobile_ads unterstützt Flutter Web nicht — jeder Plugin-Aufruf
   // würde dort mit MissingPluginException abstürzen. Betrifft nur Chrome-

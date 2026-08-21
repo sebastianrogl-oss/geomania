@@ -1687,7 +1687,23 @@ class FragenGenerator {
     return (kandidaten.toList()..shuffle(_rng)).take(3).toList();
   }
 
-  static List<Frage> _flaechenVergleich(LernStation station, List<String> pool) {
+  /// Ausweich-Modus der fuenf neuen Modi, wenn die Datenlage einer Station
+  /// nicht reicht.
+  ///
+  /// Hauptstaedte statt des frueheren Superlativ-Quiz, aus drei Gruenden:
+  /// die Daten decken alle 197 Laender ab, der Ausweichweg kann also nicht
+  /// selbst ins Leere laufen; sechs bestehende Modi weichen ohnehin dorthin
+  /// aus, das Muster ist etabliert; und der Modus steht weiterhin in jedem
+  /// Pool, faellt dem Spieler also nicht als Fremdkoerper auf. Das
+  /// Superlativ-Quiz ist seit der Pool-Umstellung nirgends mehr regulaer zu
+  /// sehen — als Ausweichziel haette es wie ein Fehler gewirkt.
+  static Future<List<Frage>> _ausweichHauptstaedte(
+          LernStation station, List<String> pool) =>
+      _hauptstaedteMultiple(
+          station, pool, _kontinent(station), station.schwierigkeitsgrad);
+
+  static Future<List<Frage>> _flaechenVergleich(
+      LernStation station, List<String> pool) async {
     // Nur Länder mit Flächendaten UND brauchbarem Umriss: der Modus zeigt
     // beide Silhouetten, die Zwergstaaten aus kUmrissAusschluss fallen
     // deshalb genauso raus wie im Umriss-Quiz.
@@ -1695,7 +1711,7 @@ class FragenGenerator {
         .where((c) =>
             (_ranking(c)?.area ?? 0) > 0 && kannAlsUmrissErscheinen(c))
         .toList();
-    if (kandidaten.length < 2) return _extremFrage(station, pool);
+    if (kandidaten.length < 2) return _ausweichHauptstaedte(station, pool);
 
     final flaeche = {for (final c in kandidaten) c: _ranking(c)!.area!};
     final fragen = <Frage>[];
@@ -1968,9 +1984,10 @@ class FragenGenerator {
     return null;
   }
 
-  static List<Frage> _zweiWahrheiten(LernStation station, List<String> pool) {
+  static Future<List<Frage>> _zweiWahrheiten(
+      LernStation station, List<String> pool) async {
     final brauchbar = pool.where((c) => _country(c) != null).toList();
-    if (brauchbar.isEmpty) return _extremFrage(station, pool);
+    if (brauchbar.isEmpty) return _ausweichHauptstaedte(station, pool);
 
     final fragen = <Frage>[];
     // Ein Durchlauf über die gemischte Liste: dadurch kann kein Land zweimal
@@ -2189,11 +2206,11 @@ class FragenGenerator {
   /// Debug-Bereich, im Spielbetrieb ohne Bedeutung.
   static int letzteQuartettVersuche = 0;
 
-  static List<Frage> _wasGehoertNichtDazu(
-      LernStation station, List<String> pool) {
+  static Future<List<Frage>> _wasGehoertNichtDazu(
+      LernStation station, List<String> pool) async {
     final kandidaten =
         pool.where((c) => _country(c) != null && _land(c) != null).toList();
-    if (kandidaten.length < 8) return _extremFrage(station, pool);
+    if (kandidaten.length < 8) return _ausweichHauptstaedte(station, pool);
 
     final fragen = <Frage>[];
     // Kein Land darf in zwei Quartetten derselben Station auftauchen — das
@@ -2311,11 +2328,12 @@ class FragenGenerator {
     'gdpPerCapita', // Block 7, 44 %, 192
   ];
 
-  static List<Frage> _laenderRanking(LernStation station, List<String> pool) {
+  static Future<List<Frage>> _laenderRanking(
+      LernStation station, List<String> pool) async {
     final erlaubt = rankingCategories
         .where((k) => _kRankingKategorien.contains(k.id))
         .toList();
-    if (erlaubt.isEmpty) return _extremFrage(station, pool);
+    if (erlaubt.isEmpty) return _ausweichHauptstaedte(station, pool);
 
     final fragen = <Frage>[];
     final benutzt = <String>{};
@@ -2477,12 +2495,12 @@ class FragenGenerator {
     return d;
   }
 
-  static List<Frage> _nachbarschaftsKette(
-      LernStation station, List<String> pool) {
+  static Future<List<Frage>> _nachbarschaftsKette(
+      LernStation station, List<String> pool) async {
     final g = grenzGraph();
     // Nur Länder mit Landgrenze kommen als Start in Frage.
     final kandidaten = pool.where(g.containsKey).toList()..shuffle(_rng);
-    if (kandidaten.isEmpty) return _extremFrage(station, pool);
+    if (kandidaten.isEmpty) return _ausweichHauptstaedte(station, pool);
 
     final fragen = <Frage>[];
     // Kein Land zweimal in einer Station — weder als Start noch als Ziel.
@@ -2539,7 +2557,7 @@ class FragenGenerator {
     // höchstens 3 Grenzübertritte. Statt einer leeren Fragenliste — die eine
     // Station unspielbar machen würde — auf einen anderen Modus ausweichen,
     // wie es auch das Grenzketten-Rätsel für Kontinente ohne Einträge tut.
-    if (fragen.isEmpty) return _extremFrage(station, pool);
+    if (fragen.isEmpty) return _ausweichHauptstaedte(station, pool);
     return fragen;
   }
 }

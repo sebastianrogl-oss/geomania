@@ -182,6 +182,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
         {'zeit': zeit, 'n': '$_spielzeitEintraege'});
   }
 
+  // ── DEBUG: Benachrichtigungen (nur kDebugMode) ────────────────────────────
+
+  Future<void> _debugSofortSenden() async {
+    await BenachrichtigungsService.debugSofortSenden();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🔔 Benachrichtigung gesendet'),
+      backgroundColor: Color(0xFFB8570A),
+    ));
+  }
+
+  Future<void> _debugErlaubnisZuruecksetzen() async {
+    await BenachrichtigungsService.debugDialogZuruecksetzen();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🔔 Erlaubnis-Dialog zurückgesetzt — die SYSTEM-Erlaubnis '
+          'bleibt bestehen'),
+      backgroundColor: Color(0xFFB8570A),
+    ));
+    await _ladeErinnerungen();
+  }
+
+  /// Zeigt den tatsächlichen Stand aus dem Betriebssystem, nicht die eigene
+  /// Buchführung — nur so fällt auf, wenn beide auseinanderlaufen.
+  Future<void> _debugGeplanteAnzeigen() async {
+    final geplant = await BenachrichtigungsService.geplante();
+    final erlaubnis = await BenachrichtigungsService.systemErlaubnisVorhanden();
+    final stand = await BenachrichtigungsService.erlaubnisStand();
+    final zaehler = await BenachrichtigungsService.stationsZaehler();
+    final minuten = await SpielzeitService.protokollierteMinuten();
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('🐞 Geplante Benachrichtigungen'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Systemerlaubnis: ${erlaubnis ? "ja" : "nein"}\n'
+                  'Dialog-Stand: ${stand.name}\n'
+                  'Stationen gezählt: $zaehler\n'
+                  'Spielzeiten: ${minuten.map(SpielzeitService.formatiere).join(", ")}',
+                  style: const TextStyle(fontSize: 12, color: _textMid)),
+              const SizedBox(height: 14),
+              if (geplant.isEmpty)
+                const Text('Nichts geplant.',
+                    style: TextStyle(fontSize: 13, color: _textMid))
+              else
+                for (final g in geplant)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('#${g.id}  ${g.zeitpunkt}',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: _textDark)),
+                        Text('${g.titel} — ${g.text}',
+                            style: const TextStyle(
+                                fontSize: 12, color: _textMid)),
+                      ],
+                    ),
+                  ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Schließen'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Anzeigename ────────────────────────────────────────────────────────────
 
   void _anzeigenameAendern() {
@@ -766,6 +847,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('Freischaltung zurücksetzen (Debug)'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: _freischaltungZuruecksetzen,
+                ),
+                _Zeile(
+                  icon: Icons.notifications_active_rounded,
+                  title: t('Benachrichtigung sofort senden (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugSofortSenden,
+                ),
+                _Zeile(
+                  icon: Icons.replay_rounded,
+                  title: t('Erlaubnis-Dialog zurücksetzen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugErlaubnisZuruecksetzen,
+                ),
+                _Zeile(
+                  icon: Icons.list_alt_rounded,
+                  title: t('Geplante Benachrichtigungen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugGeplanteAnzeigen,
                 ),
               ]),
               const SizedBox(height: 24),

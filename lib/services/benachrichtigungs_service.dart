@@ -77,6 +77,7 @@ class BenachrichtigungsService {
   // ID-Bereiche, damit sich die beiden Anlässe nie gegenseitig überschreiben.
   static const int _idTaeglichBasis = 1000;
   static const int _idStreak = 2000;
+  static const int _idDebug = 9999;
 
   static const String _kanalId = 'geomania_erinnerungen';
 
@@ -428,5 +429,59 @@ class BenachrichtigungsService {
     await prefs.setStringList(
         schluessel, (neuerRest ?? const <int>[]).map((i) => '$i').toList());
     return gezogen;
+  }
+
+  // ── Debug ──────────────────────────────────────────────────────────────────
+
+  /// Schickt sofort eine Benachrichtigung — umgeht die Planung vollständig.
+  static Future<void> debugSofortSenden() async {
+    if (!verfuegbar) return;
+    await initialisieren();
+    final (titel, text) = ErinnerungsSprueche.taeglich.first;
+    await _plugin.show(
+      id: _idDebug,
+      title: t(titel),
+      body: t(text),
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _kanalId,
+          'Erinnerungen',
+          channelDescription: 'Tägliche Erinnerung und Streak-Warnung',
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
+  }
+
+  /// Alle geplanten Benachrichtigungen mit ihrem Zeitpunkt (aus der Nutzlast).
+  static Future<List<({int id, String titel, String text, String zeitpunkt})>>
+      geplante() async {
+    if (!verfuegbar) return const [];
+    await initialisieren();
+    final offen = await _plugin.pendingNotificationRequests();
+    final liste = [
+      for (final p in offen)
+        (
+          id: p.id,
+          titel: p.title ?? '',
+          text: p.body ?? '',
+          zeitpunkt: p.payload ?? '?',
+        ),
+    ];
+    liste.sort((a, b) => a.zeitpunkt.compareTo(b.zeitpunkt));
+    return liste;
+  }
+
+  /// Setzt den Erlaubnis-Ablauf zurück, damit er erneut durchgespielt werden
+  /// kann.
+  ///
+  /// Die SYSTEM-Erlaubnis bleibt davon unberührt — die kann eine App nicht
+  /// zurücknehmen. Um den Systemdialog erneut zu sehen, muss die App neu
+  /// installiert werden; hier lässt sich nur der eigene Dialog wieder
+  /// hervorholen.
+  static Future<void> debugDialogZuruecksetzen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kErlaubnisStand);
+    await prefs.remove(_kStationsZaehler);
   }
 }

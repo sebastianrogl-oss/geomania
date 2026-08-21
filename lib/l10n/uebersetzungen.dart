@@ -6,6 +6,7 @@ import 'uebersetzungen_challenges.dart';
 import 'uebersetzungen_connections.dart';
 import 'uebersetzungen_currencyquiz.dart';
 import 'uebersetzungen_economicblocks.dart';
+import 'uebersetzungen_erinnerungen.dart';
 import 'uebersetzungen_financehub.dart';
 import 'uebersetzungen_flagquiz.dart';
 import 'uebersetzungen_gdpquiz.dart';
@@ -60,6 +61,7 @@ final Map<String, String> uebersetzungen = {
   ...uebersetzungenConnections,
   ...uebersetzungenCurrencyQuiz,
   ...uebersetzungenEconomicBlocks,
+  ...uebersetzungenErinnerungen,
   ...uebersetzungenFinanceHub,
   ...uebersetzungenFlagQuiz,
   ...uebersetzungenGdpQuiz,

@@ -84,13 +84,30 @@ class ProfilbildService {
   // freigeschaltet — für diese vier entfällt der Rewarded-Ad-Weg damit.
   // Alle übrigen Icons bleiben unverändert per Werbung erhältlich.
   //
-  // Zur Einordnung der Preise: im gesamten Lernpfad sind 5151 Sterne
-  // erreichbar, ein einzelner Kontinent bringt je nach Größe 255 bis 954.
+  // Zur Einordnung der Preise: im gesamten Lernpfad sind 4605 Sterne
+  // erreichbar (ausgezählt über alle 594 Stationen, ein Stern je erstmalig
+  // richtiger Frage).
+  //
+  // Verlauf: 5151 vor der Modus-Umstellung, 5095 danach, 4605 seit die
+  // Welt-Welt von 12 auf 8 Fragen gekürzt wurde. Grundlage sind
+  // fragenProStation je Welt und kFragenObergrenze je Modus, beide in
+  // lernpfad_data.dart — wer dort etwas ändert, sollte die Zahl hier
+  // nachrechnen.
+  //
+  // Die Preise sind auf 4605 nachkalibriert (vorher 150/500/1200/2500 gegen
+  // 5151). Sie treffen damit wieder die urspruenglich gewollten Anteile:
+  // das teuerste Bild kostet 48 % aller erreichbaren Sterne, alle vier
+  // zusammen 83 %.
+  //
+  // ACHTUNG: Diese Anteile sind der eigentliche Massstab, nicht die absoluten
+  // Zahlen. Sinkt die Gesamtzahl erneut — etwa weil eine Welt weniger Fragen
+  // pro Station bekommt — werden die Preise still teurer, ohne dass jemand
+  // sie anfasst. Genau so ist die Staffel zwischenmal auf 94 % gerutscht.
   static const sternePreise = <String, int>{
     'assets/icons/deko/afrika_elefant.png': 150,
-    'assets/icons/deko/afrika_giraffe.png': 500,
-    'assets/icons/deko/afrika_nashorn.png': 1200,
-    'assets/icons/deko/asien_panda.png': 2500,
+    'assets/icons/deko/afrika_giraffe.png': 450,
+    'assets/icons/deko/afrika_nashorn.png': 1000,
+    'assets/icons/deko/asien_panda.png': 2200,
   };
 
   /// Bereits ausgegebene Sterne. Der Gesamtstand (lp_gesamt_richtig in

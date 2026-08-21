@@ -385,6 +385,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ));
   }
 
+  // ── DEBUG: Neue Modi (nur kDebugMode) ─────────────────────────────────────
+  //
+  // Flächen-Vergleich und Zwei Wahrheiten stehen bewusst in KEINER Modi-Liste
+  // der Level (siehe Kommentar am LernModus-Enum) und können deshalb nie über
+  // eine echte Station erscheinen. Dieser Weg ist ihr einziger Zugang,
+  // solange sie in Erprobung sind.
+  Future<void> _neueModiTesten() async {
+    const neueModi = [
+      LernModus.flaechenVergleich,
+      LernModus.zweiWahrheiten,
+      LernModus.wasGehoertNichtDazu,
+      LernModus.laenderRanking,
+      LernModus.nachbarschaftsKette,
+    ];
+    final modus = await showDialog<LernModus>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text('🐞 ${t('Welchen Modus testen?')}'),
+        children: [
+          for (final m in neueModi)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, m),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  lernModusLabel(m),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (modus == null || !mounted) return;
+
+    // Weltweiter Pool statt eines einzelnen Landes wie beim Testmodus: der
+    // Flächen-Vergleich braucht Länder-PAARE mit passendem Größenverhältnis,
+    // und beide Modi sollen die Bandbreite der Daten zeigen.
+    //
+    // Zeitgestempelte ID aus demselben Grund wie beim Testmodus: dadurch
+    // kennt stationKontext() die Station nicht, die Pensionierungs-
+    // Substitution greift nicht und der gewählte Modus bleibt erhalten.
+    final debugStation = LernStation(
+      id: 'debug_neuemodi_${DateTime.now().millisecondsSinceEpoch}',
+      modus: modus,
+      fragenAnzahl: 5,
+      laenderCodes: countries.map((c) => c.iso2).toList(),
+      kategorien: const [],
+      schwierigkeitsgrad: 2,
+    );
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => StationQuizScreen(station: debugStation)),
+    );
+  }
+
   // ── DEBUG: Testmodus (nur kDebugMode, nie im Release-Build) ────────────────
   //
   // Erlaubt Entwicklern, eine EXAKTE Land+Modus-Kombination direkt zu öffnen
@@ -529,6 +588,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('Sterne zurücksetzen (Debug)'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: _sterneZuruecksetzen,
+                ),
+                _Zeile(
+                  icon: Icons.science_rounded,
+                  title: t('Neue Modi testen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _neueModiTesten,
                 ),
               ]),
               const SizedBox(height: 24),

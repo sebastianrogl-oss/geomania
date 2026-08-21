@@ -319,6 +319,13 @@ class FortschrittService {
           if (item is Map<String, dynamic>) {
             final id = item['id'] as String? ?? '';
             if (id.isEmpty) continue;
+            // Zweite Sperre für die Unterhaltungsmodi. Gemerkt werden sie
+            // schon beim Antworten nicht (StationSession.
+            // falscheAntwortVerarbeiten), dieser Filter fängt zusätzlich
+            // Einträge ab, die vor der Umstellung gespeichert wurden.
+            if (kOhneWiederholung.any((m) => m.name == item['modus'])) {
+              continue;
+            }
             haeufigkeit[id] = (haeufigkeit[id] ?? 0) + 1;
             fragenDaten[id] = item;
           }

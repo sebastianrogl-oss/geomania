@@ -127,7 +127,14 @@ class StationSession {
         .skip(aktuellerIndex + 1)
         .any((f) => f.id == frage.id);
     if (nochNichtDrin) aktiveFragen.add(frage);
-    if (!falscheFragen.any((f) => f.id == frage.id)) {
+    // falscheFragen ist der Pool der WIEDERHOLUNGSRUNDE (siehe
+    // falscheFragenAlsJson und FortschrittService.stationAbschliessen).
+    // Unterhaltungsmodi bleiben davon ausgenommen: das erneute Vorlegen
+    // derselben Frage bringt dort keinen Lerneffekt. Die Frage wird
+    // trotzdem noch einmal in DIESER Station gestellt (siehe oben) — das
+    // ist der reguläre zweite Versuch, keine Wiederholungsrunde.
+    if (!kOhneWiederholung.contains(frage.modus) &&
+        !falscheFragen.any((f) => f.id == frage.id)) {
       falscheFragen.add(frage);
     }
     aktuellerIndex++;

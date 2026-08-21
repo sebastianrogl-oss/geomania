@@ -37,6 +37,26 @@ enum LernModus {
   nachbarschaftsKette,  // Weg von A nach B ueber Nachbarlaender selbst bauen
 }
 
+/// Modi, deren falsch beantwortete Fragen NICHT in die Wiederholungsrunde
+/// wandern.
+///
+/// Es sind Unterhaltungsmodi, keine reinen Lernabfragen: die Fragen entstehen
+/// aus zufälligen Länderkombinationen. Wer dieselbe Kombination oder dieselbe
+/// erfundene Aussage ein zweites Mal vorgelegt bekommt, erinnert die Antwort,
+/// statt etwas dazuzulernen.
+///
+/// Steht bewusst hier beim Enum und nicht in einem der Services: sowohl der
+/// Sitzungs-Service (beim Merken) als auch der Fortschritts-Service (beim
+/// Einsammeln) greifen darauf zu, und beide importieren diese Datei ohnehin.
+/// Weitere Modi lassen sich hier eintragen, ohne andere Stellen anzufassen.
+const Set<LernModus> kOhneWiederholung = {
+  LernModus.flaechenVergleich,
+  LernModus.zweiWahrheiten,
+  LernModus.wasGehoertNichtDazu,
+  LernModus.laenderRanking,
+  LernModus.nachbarschaftsKette,
+};
+
 // ── Klassen ───────────────────────────────────────────────────────────────────
 
 class LernStation {

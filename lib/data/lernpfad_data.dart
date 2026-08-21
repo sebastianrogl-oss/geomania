@@ -136,40 +136,80 @@ class LernWelt {
 // dafür, dass sie erst gezogen werden, nachdem die leichtere Variante
 // desselben Themas in genau diesem Abschnitt schon vorkam.
 
+/// Modi mit eigener Mechanik oder Denkaufgabe. Alles Uebrige gilt als
+/// ABFRAGE-Modus (Frage zeigen, Antwort waehlen).
+///
+/// Zentrale Zuordnung: von hier haengen die Gewichtung im Round-Robin und die
+/// Obergrenze fuer Abfrage-Ketten ab. Ein neuer Modus muss nur hier
+/// einsortiert werden.
+const Set<LernModus> kSpielModi = {
+  LernModus.sortierSpiel,
+  LernModus.preisSchaetzen,
+  LernModus.grenzkettenRaetsel,
+  LernModus.zweiWahrheiten,
+  LernModus.laenderRanking,
+  LernModus.nachbarschaftsKette,
+  LernModus.flaechenVergleich,
+  LernModus.wasGehoertNichtDazu,
+};
+
+bool istSpielModus(LernModus m) => kSpielModi.contains(m);
+
 // Nicht mehr in den Pools, die Generatoren bleiben aber erhalten:
 // bipGesamt, flaeche, extremFrageLeicht (vorher Einsteiger),
 // bekanntesGebaeude (Fortgeschritten) und extremFrage (Profi). Sie liessen
 // sich jederzeit wieder eintragen — extremFrage bleibt ausserdem als
 // Funktion in Gebrauch, siehe die Fallback-Kette im Fragen-Generator.
+//
+// Die Reihenfolge der Listen ist NICHT beliebig: erzeugeModusSequenz waehlt
+// bei Gleichstand der Zaehler den ersten passenden Eintrag, und zu Beginn
+// eines Abschnitts stehen alle Zaehler auf 0. Standen die Abfrage-Modi wie
+// frueher geblockt am Anfang, begann JEDER Abschnitt JEDER Welt mit
+// derselben Zehnerfolge aus reiner Abfrage. Spiel-Modi sind deshalb
+// eingestreut — etwa jede dritte Position.
 const List<LernModus> _modiEinsteiger = [
   LernModus.flaggenQuizBild,
-  LernModus.flaggenQuizMultiple,
+  LernModus.zweiWahrheiten, // Spiel
   LernModus.hauptstaedteMultiple,
-  LernModus.waehrungsQuiz,
   LernModus.umrissBild,
-  LernModus.umrissMultiple,
+  LernModus.laenderRanking, // Spiel
+  LernModus.waehrungsQuiz,
+  LernModus.flaggenQuizMultiple,
   LernModus.nachbarland,
+  LernModus.umrissMultiple,
   LernModus.hauptstaedteEingabe,
   LernModus.flaggenQuizEingabe,
   LernModus.umrissEingabe,
-  LernModus.zweiWahrheiten,
-  LernModus.laenderRanking,
 ];
 
+// Bewusst ausgeschrieben statt [..._modiEinsteiger, …]: die fuenf neuen
+// Spiel-Modi und die zwei neuen Abfrage-Modi sollen zwischen den vorhandenen
+// stehen, nicht hinter ihnen.
 const List<LernModus> _modiFortgeschritten = [
-  ..._modiEinsteiger,
-  LernModus.sortierSpiel,
+  LernModus.flaggenQuizBild,
+  LernModus.zweiWahrheiten, // Spiel
+  LernModus.hauptstaedteMultiple,
+  LernModus.umrissBild,
+  LernModus.laenderRanking, // Spiel
+  LernModus.waehrungsQuiz,
+  LernModus.flaggenQuizMultiple,
+  LernModus.sortierSpiel, // Spiel
+  LernModus.nachbarland,
+  LernModus.umrissMultiple,
+  LernModus.grenzkettenRaetsel, // Spiel
+  LernModus.hauptstaedteEingabe,
   LernModus.waehrungZuLand,
+  LernModus.nachbarschaftsKette, // Spiel
+  LernModus.flaggenQuizEingabe,
   LernModus.zufallsFakt,
-  LernModus.grenzkettenRaetsel,
-  LernModus.nachbarschaftsKette,
-  LernModus.flaechenVergleich,
-  LernModus.wasGehoertNichtDazu,
+  LernModus.flaechenVergleich, // Spiel
+  LernModus.umrissEingabe,
+  LernModus.wasGehoertNichtDazu, // Spiel
 ];
 
 const List<LernModus> _modiProfi = [
   ..._modiFortgeschritten,
-  LernModus.preisSchaetzen,
+  LernModus.preisSchaetzen, // Spiel
 ];
 
 // Meister enthält den vollständigen Modus-Satz.
@@ -323,6 +363,22 @@ bool _eingabeErlaubt(LernModus m, List<LernModus> bisher) {
 /// nie derselbe Modus und nie dasselbe Thema zweimal direkt hintereinander,
 /// Round-Robin über die verfügbaren Modi für eine gleichmäßige Verteilung.
 /// Die allererste Station im gesamten Lernpfad ist immer flaggenQuizBild.
+/// Hoechstzahl aufeinanderfolgender Abfrage-Stationen.
+///
+/// Vier Stationen sind etwa fuenf Minuten Spielzeit — danach soll etwas
+/// anderes kommen. Ohne diese Grenze entstanden Ketten von bis zu zwanzig,
+/// weil ein Abschnitt mit Abfrage endete und der naechste damit begann.
+const int kMaxAbfrageKette = 4;
+
+/// Gewicht im Round-Robin. Ein Spiel-Modus "verbraucht" pro Einsatz nur
+/// halb so viel wie ein Abfrage-Modus und kommt dadurch frueher wieder an
+/// die Reihe — ohne dass die Abfrage-Modi ihre Mehrheit verlieren.
+double _gewicht(LernModus m) => istSpielModus(m) ? 0.5 : 1.0;
+
+/// Zaehlt, wie oft [kMaxAbfrageKette] gelockert werden musste, weil kein
+/// Spiel-Modus verfuegbar war. Nur fuer Messungen.
+int lockerungenAbfrageKette = 0;
+
 List<LernModus> erzeugeModusSequenz(
   int stationsAnzahl,
   int abschnittLevel,
@@ -331,6 +387,15 @@ List<LernModus> erzeugeModusSequenz(
   /// Sperren aus [kModusSperrenProWelt]. Ohne Angabe gilt kein Ausschluss
   /// (genutzt von Tests und Debug-Werkzeugen).
   String? weltId,
+
+  /// Wie viele Abfrage-Stationen unmittelbar VOR diesem Abschnitt lagen.
+  /// Sorgt dafuer, dass die Vierer-Regel ueber Abschnittsgrenzen hinweg
+  /// greift statt bei jedem Abschnitt neu zu zaehlen.
+  int ketteVorher = 0,
+
+  /// Nimmt die Laenge der Abfrage-Kette am ENDE dieses Abschnitts entgegen,
+  /// damit der naechste Abschnitt dort weiterzaehlen kann.
+  void Function(int)? ketteNachher,
 }) {
   final gesperrt = weltId == null
       ? const <LernModus>{}
@@ -341,6 +406,7 @@ List<LernModus> erzeugeModusSequenz(
   LernModus? letzter;
   String? letztesThema;
   final zaehler = <LernModus, int>{};
+  var kette = ketteVorher;
 
   for (int i = 0; i < stationsAnzahl; i++) {
     // Allererste Station im ganzen Pfad: immer flaggenQuizBild.
@@ -349,6 +415,7 @@ List<LernModus> erzeugeModusSequenz(
       letzter = LernModus.flaggenQuizBild;
       letztesThema = 'flaggen';
       zaehler[LernModus.flaggenQuizBild] = 1;
+      kette = 1;
       continue;
     }
 
@@ -377,15 +444,30 @@ List<LernModus> erzeugeModusSequenz(
     }
     if (kandidaten.isEmpty) kandidaten = pool;
 
-    // Unter den Kandidaten: die mit dem niedrigsten Zähler bevorzugen
-    // (gleichmäßige Verteilung).
-    kandidaten.sort((a, b) => (zaehler[a] ?? 0).compareTo(zaehler[b] ?? 0));
+    // Vierer-Regel: sind schon genug Abfrage-Stationen gelaufen, MUSS die
+    // naechste ein Spiel sein. Greift NACH allen Sperren — ist unter den
+    // erlaubten Kandidaten kein Spiel-Modus, wird die Regel gelockert statt
+    // die Sequenz zu blockieren.
+    if (kette >= kMaxAbfrageKette) {
+      final spiele = kandidaten.where(istSpielModus).toList();
+      if (spiele.isNotEmpty) {
+        kandidaten = spiele;
+      } else {
+        lockerungenAbfrageKette++;
+      }
+    }
+
+    // Unter den Kandidaten: den mit dem niedrigsten GEWICHTETEN Zähler
+    // bevorzugen. Ein Spiel-Modus zaehlt pro Einsatz nur halb, steht nach
+    // einem Einsatz also gleichauf mit einem Abfrage-Modus, der noch gar
+    // nicht dran war.
+    double last(LernModus m) => (zaehler[m] ?? 0) * _gewicht(m);
+    kandidaten.sort((a, b) => last(a).compareTo(last(b)));
 
     // Bei Gleichstand: bevorzugt die noch nicht genutzte Variante eines
     // Themas (z.B. flaggenQuizMultiple, wenn flaggenQuizBild schon kam).
-    final minZaehler = zaehler[kandidaten.first] ?? 0;
-    final beste =
-        kandidaten.where((m) => (zaehler[m] ?? 0) == minZaehler).toList();
+    final minLast = last(kandidaten.first);
+    final beste = kandidaten.where((m) => last(m) == minLast).toList();
     beste.sort((a, b) => _variantenPrioritaet(a, zaehler)
         .compareTo(_variantenPrioritaet(b, zaehler)));
 
@@ -394,7 +476,9 @@ List<LernModus> erzeugeModusSequenz(
     zaehler[gewaehlt] = (zaehler[gewaehlt] ?? 0) + 1;
     letzter = gewaehlt;
     letztesThema = lernModusThema(gewaehlt);
+    kette = istSpielModus(gewaehlt) ? 0 : kette + 1;
   }
+  ketteNachher?.call(kette);
   return sequenz;
 }
 
@@ -535,74 +619,80 @@ List<LernStation> _baueAbschnitt(
   final gesamt = anzahl + polster;
   final modi = erzeugeModusSequenz(
       gesamt, modusPoolLevel ?? stufe, istAllerErsterAbschnitt,
-      weltId: wid);
+      weltId: wid,
+      ketteVorher: _laufendeKette,
+      ketteNachher: (k) => _laufendeKette = k);
   return [
     for (int i = 0; i < gesamt; i++)
       _st(wid, stufe, i + 1, modi[i], laender, fragenProStation),
   ];
 }
 
-// ── WELT 1 — EUROPA ───────────────────────────────────────────────────────────
+// ── Alle Abschnitte, in EINEM Durchlauf ──────────────────────────────────────
+//
+// Bewusst eine Funktion statt 26 einzelner `final`: die Vierer-Regel muss
+// ueber Abschnitts- UND Weltgrenzen hinweg greifen (genau dort entstanden die
+// langen Ketten), dafuer braucht die Erzeugung einen laufenden Zaehler. Bei
+// einzelnen top-level `final` haengt die Auswertungsreihenfolge davon ab, wer
+// sie zuerst liest — der Lernpfad saehe je nach Zugriffsweg anders aus. Hier
+// ist die Reihenfolge festgeschrieben und damit reproduzierbar.
 
-final _europaA1St = _baueAbschnitt('europa', 1, _europaBlockA, 21,
-    istAllerErsterAbschnitt: true);
-final _europaA2St = _baueAbschnitt('europa', 2, _europaBlockB, 22);
-final _europaA3St = _baueAbschnitt('europa', 3, _europaBlockC, 22);
-final _europaA4St = _baueAbschnitt('europa', 4, _europaAll, 25);
+/// Laufende Abfrage-Kette zwischen zwei Abschnitten. Nur waehrend des Aufbaus
+/// in [_baueAlleAbschnitte] beschrieben.
+int _laufendeKette = 0;
 
-// ── WELT 2 — SÜDAMERIKA ───────────────────────────────────────────────────────
+final Map<String, List<LernStation>> _abschnitte = _baueAlleAbschnitte();
 
-final _suedamA1St =
-    _baueAbschnitt('suedamerika', 1, _suedamBlockA, 10, fragenProStation: 6);
-final _suedamA2St =
-    _baueAbschnitt('suedamerika', 2, _suedamBlockB, 12, fragenProStation: 6);
-final _suedamA3St =
-    _baueAbschnitt('suedamerika', 3, _suedamAll, 14, fragenProStation: 6);
+Map<String, List<LernStation>> _baueAlleAbschnitte() {
+  _laufendeKette = 0;
+  lockerungenAbfrageKette = 0;
+  final r = <String, List<LernStation>>{};
 
-// ── WELT 3 — NORDAMERIKA ──────────────────────────────────────────────────────
+  void bau(String wid, int stufe, List<String> laender, int anzahl,
+      {bool erster = false, int fragen = 8, int? poolLevel}) {
+    r['${wid}_$stufe'] = _baueAbschnitt(wid, stufe, laender, anzahl,
+        istAllerErsterAbschnitt: erster,
+        fragenProStation: fragen,
+        modusPoolLevel: poolLevel);
+  }
 
-final _nordamA1St = _baueAbschnitt('nordamerika', 1, _nordamBlockA, 12);
-final _nordamA2St = _baueAbschnitt('nordamerika', 2, _nordamBlockB, 14);
-final _nordamA3St = _baueAbschnitt('nordamerika', 3, _nordamBlockC, 18);
-final _nordamA4St = _baueAbschnitt('nordamerika', 4, _nordamAll, 20);
+  bau('europa', 1, _europaBlockA, 21, erster: true);
+  bau('europa', 2, _europaBlockB, 22);
+  bau('europa', 3, _europaBlockC, 22);
+  bau('europa', 4, _europaAll, 25);
 
-// ── WELT 4 — AFRIKA ───────────────────────────────────────────────────────────
+  bau('suedamerika', 1, _suedamBlockA, 10, fragen: 6);
+  bau('suedamerika', 2, _suedamBlockB, 12, fragen: 6);
+  bau('suedamerika', 3, _suedamAll, 14, fragen: 6);
 
-final _afrikaA1St =
-    _baueAbschnitt('afrika', 1, _afrikaBlockA, 18, fragenProStation: 9);
-final _afrikaA2St =
-    _baueAbschnitt('afrika', 2, _afrikaBlockB, 22, fragenProStation: 9);
-final _afrikaA3St =
-    _baueAbschnitt('afrika', 3, _afrikaBlockC, 26, fragenProStation: 9);
-final _afrikaA4St =
-    _baueAbschnitt('afrika', 4, _afrikaAll, 30, fragenProStation: 9);
+  bau('nordamerika', 1, _nordamBlockA, 12);
+  bau('nordamerika', 2, _nordamBlockB, 14);
+  bau('nordamerika', 3, _nordamBlockC, 18);
+  bau('nordamerika', 4, _nordamAll, 20);
 
-// ── WELT 5 — ASIEN ────────────────────────────────────────────────────────────
+  bau('afrika', 1, _afrikaBlockA, 18, fragen: 9);
+  bau('afrika', 2, _afrikaBlockB, 22, fragen: 9);
+  bau('afrika', 3, _afrikaBlockC, 26, fragen: 9);
+  bau('afrika', 4, _afrikaAll, 30, fragen: 9);
 
-final _asienA1St = _baueAbschnitt('asien', 1, _asienBlockA, 20);
-final _asienA2St = _baueAbschnitt('asien', 2, _asienBlockB, 20);
-final _asienA3St = _baueAbschnitt('asien', 3, _asienBlockC, 24);
-final _asienA4St = _baueAbschnitt('asien', 4, _asienAll, 28);
+  bau('asien', 1, _asienBlockA, 20);
+  bau('asien', 2, _asienBlockB, 20);
+  bau('asien', 3, _asienBlockC, 24);
+  bau('asien', 4, _asienAll, 28);
 
-// ── WELT 6 — OZEANIEN ─────────────────────────────────────────────────────────
+  bau('ozeanien', 1, _ozeanienBlockA, 10, fragen: 7);
+  bau('ozeanien', 2, _ozeanienBlockB, 12, fragen: 7);
+  bau('ozeanien', 3, _ozeanienAll, 14, fragen: 7);
 
-final _ozeanienA1St =
-    _baueAbschnitt('ozeanien', 1, _ozeanienBlockA, 10, fragenProStation: 7);
-final _ozeanienA2St =
-    _baueAbschnitt('ozeanien', 2, _ozeanienBlockB, 12, fragenProStation: 7);
-final _ozeanienA3St =
-    _baueAbschnitt('ozeanien', 3, _ozeanienAll, 14, fragenProStation: 7);
+  bau('welt', 1, _weltA1, 25, poolLevel: 4);
+  bau('welt', 2, _weltA2, 30, poolLevel: 4);
+  bau('welt', 3, _weltAlle, 35, poolLevel: 4);
+  bau('welt', 4, _weltAlle, 40, poolLevel: 4);
 
-// ── WELT 7 — DIE WELT ────────────────────────────────────────────────────────
+  return r;
+}
 
-final _weltA1St = _baueAbschnitt('welt', 1, _weltA1, 25,
-    fragenProStation: 8, modusPoolLevel: 4);
-final _weltA2St = _baueAbschnitt('welt', 2, _weltA2, 30,
-    fragenProStation: 8, modusPoolLevel: 4);
-final _weltA3St = _baueAbschnitt('welt', 3, _weltAlle, 35,
-    fragenProStation: 8, modusPoolLevel: 4);
-final _weltA4St = _baueAbschnitt('welt', 4, _weltAlle, 40,
-    fragenProStation: 8, modusPoolLevel: 4);
+List<LernStation> _st4(String id) => _abschnitte[id]!;
 
 // ── Hauptliste ────────────────────────────────────────────────────────────────
 
@@ -613,13 +703,13 @@ final List<LernWelt> lernwelten = [
     reihenfolge: 1,
     abschnitte: [
       LernAbschnitt(id: 'europa_1', stufe: 1, titel: 'Einsteiger',
-        untertitel: 'Die großen Länder Westeuropas', stationen: _europaA1St),
+        untertitel: 'Die großen Länder Westeuropas', stationen: _st4('europa_1')),
       LernAbschnitt(id: 'europa_2', stufe: 2, titel: 'Fortgeschritten',
-        untertitel: 'Nord- und Osteuropa', stationen: _europaA2St),
+        untertitel: 'Nord- und Osteuropa', stationen: _st4('europa_2')),
       LernAbschnitt(id: 'europa_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Kleinstaaten & der Balkan', stationen: _europaA3St),
+        untertitel: 'Kleinstaaten & der Balkan', stationen: _st4('europa_3')),
       LernAbschnitt(id: 'europa_4', stufe: 4, titel: 'Meister',
-        untertitel: 'Europa-Experte werden', stationen: _europaA4St,
+        untertitel: 'Europa-Experte werden', stationen: _st4('europa_4'),
         hatTimer: true),
     ],
   ),
@@ -629,11 +719,11 @@ final List<LernWelt> lernwelten = [
     reihenfolge: 2,
     abschnitte: [
       LernAbschnitt(id: 'suedamerika_1', stufe: 1, titel: 'Einsteiger',
-        untertitel: 'Der Kontinent des Regenwalds', stationen: _suedamA1St),
+        untertitel: 'Der Kontinent des Regenwalds', stationen: _st4('suedamerika_1')),
       LernAbschnitt(id: 'suedamerika_2', stufe: 2, titel: 'Fortgeschritten',
-        untertitel: 'Wirtschaft und Währungen', stationen: _suedamA2St),
+        untertitel: 'Wirtschaft und Währungen', stationen: _st4('suedamerika_2')),
       LernAbschnitt(id: 'suedamerika_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Südamerika-Experte', stationen: _suedamA3St,
+        untertitel: 'Südamerika-Experte', stationen: _st4('suedamerika_3'),
         hatTimer: true),
     ],
   ),
@@ -643,13 +733,13 @@ final List<LernWelt> lernwelten = [
     reihenfolge: 3,
     abschnitte: [
       LernAbschnitt(id: 'nordamerika_1', stufe: 1, titel: 'Einsteiger',
-        untertitel: 'USA, Kanada & Mittelamerika', stationen: _nordamA1St),
+        untertitel: 'USA, Kanada & Mittelamerika', stationen: _st4('nordamerika_1')),
       LernAbschnitt(id: 'nordamerika_2', stufe: 2, titel: 'Fortgeschritten',
-        untertitel: 'Karibik & ganz Mittelamerika', stationen: _nordamA2St),
+        untertitel: 'Karibik & ganz Mittelamerika', stationen: _st4('nordamerika_2')),
       LernAbschnitt(id: 'nordamerika_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Die kleinen Karibikstaaten', stationen: _nordamA3St),
+        untertitel: 'Die kleinen Karibikstaaten', stationen: _st4('nordamerika_3')),
       LernAbschnitt(id: 'nordamerika_4', stufe: 4, titel: 'Meister',
-        untertitel: 'Nordamerika-Experte', stationen: _nordamA4St,
+        untertitel: 'Nordamerika-Experte', stationen: _st4('nordamerika_4'),
         hatTimer: true),
     ],
   ),
@@ -659,13 +749,13 @@ final List<LernWelt> lernwelten = [
     reihenfolge: 4,
     abschnitte: [
       LernAbschnitt(id: 'afrika_1', stufe: 1, titel: 'Einsteiger',
-        untertitel: 'Die größten Länder Afrikas', stationen: _afrikaA1St),
+        untertitel: 'Die größten Länder Afrikas', stationen: _st4('afrika_1')),
       LernAbschnitt(id: 'afrika_2', stufe: 2, titel: 'Fortgeschritten',
-        untertitel: 'Zentral- und Ostafrika', stationen: _afrikaA2St),
+        untertitel: 'Zentral- und Ostafrika', stationen: _st4('afrika_2')),
       LernAbschnitt(id: 'afrika_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Westafrika & Inselstaaten', stationen: _afrikaA3St),
+        untertitel: 'Westafrika & Inselstaaten', stationen: _st4('afrika_3')),
       LernAbschnitt(id: 'afrika_4', stufe: 4, titel: 'Meister',
-        untertitel: 'Afrika-Experte werden', stationen: _afrikaA4St,
+        untertitel: 'Afrika-Experte werden', stationen: _st4('afrika_4'),
         hatTimer: true),
     ],
   ),
@@ -675,13 +765,13 @@ final List<LernWelt> lernwelten = [
     reihenfolge: 5,
     abschnitte: [
       LernAbschnitt(id: 'asien_1', stufe: 1, titel: 'Einsteiger',
-        untertitel: 'Die Wirtschaftsmächte Asiens', stationen: _asienA1St),
+        untertitel: 'Die Wirtschaftsmächte Asiens', stationen: _st4('asien_1')),
       LernAbschnitt(id: 'asien_2', stufe: 2, titel: 'Fortgeschritten',
-        untertitel: 'Naher Osten & Südostasien', stationen: _asienA2St),
+        untertitel: 'Naher Osten & Südostasien', stationen: _st4('asien_2')),
       LernAbschnitt(id: 'asien_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Zentralasien & der Kaukasus', stationen: _asienA3St),
+        untertitel: 'Zentralasien & der Kaukasus', stationen: _st4('asien_3')),
       LernAbschnitt(id: 'asien_4', stufe: 4, titel: 'Meister',
-        untertitel: 'Asien-Experte werden', stationen: _asienA4St,
+        untertitel: 'Asien-Experte werden', stationen: _st4('asien_4'),
         hatTimer: true),
     ],
   ),
@@ -691,11 +781,11 @@ final List<LernWelt> lernwelten = [
     reihenfolge: 6,
     abschnitte: [
       LernAbschnitt(id: 'ozeanien_1', stufe: 1, titel: 'Einsteiger',
-        untertitel: 'Australien & die Pazifikinseln', stationen: _ozeanienA1St),
+        untertitel: 'Australien & die Pazifikinseln', stationen: _st4('ozeanien_1')),
       LernAbschnitt(id: 'ozeanien_2', stufe: 2, titel: 'Fortgeschritten',
-        untertitel: 'Die entlegenen Inselstaaten', stationen: _ozeanienA2St),
+        untertitel: 'Die entlegenen Inselstaaten', stationen: _st4('ozeanien_2')),
       LernAbschnitt(id: 'ozeanien_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Ozeanien-Experte', stationen: _ozeanienA3St,
+        untertitel: 'Ozeanien-Experte', stationen: _st4('ozeanien_3'),
         hatTimer: true),
     ],
   ),
@@ -705,13 +795,13 @@ final List<LernWelt> lernwelten = [
     reihenfolge: 7,
     abschnitte: [
       LernAbschnitt(id: 'welt_1', stufe: 1, titel: 'Einsteiger',
-        untertitel: 'Die 50 bekanntesten Länder', stationen: _weltA1St),
+        untertitel: 'Die 50 bekanntesten Länder', stationen: _st4('welt_1')),
       LernAbschnitt(id: 'welt_2', stufe: 2, titel: 'Fortgeschritten',
-        untertitel: '100 Länder weltweit', stationen: _weltA2St),
+        untertitel: '100 Länder weltweit', stationen: _st4('welt_2')),
       LernAbschnitt(id: 'welt_3', stufe: 3, titel: 'Profi',
-        untertitel: 'Alle 195 Länder der Erde', stationen: _weltA3St),
+        untertitel: 'Alle 195 Länder der Erde', stationen: _st4('welt_3')),
       LernAbschnitt(id: 'welt_4', stufe: 4, titel: 'Meister',
-        untertitel: 'Weltmeister der Geographie', stationen: _weltA4St,
+        untertitel: 'Weltmeister der Geographie', stationen: _st4('welt_4'),
         hatTimer: true),
     ],
   ),

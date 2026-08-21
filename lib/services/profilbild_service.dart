@@ -84,20 +84,22 @@ class ProfilbildService {
   // freigeschaltet — für diese vier entfällt der Rewarded-Ad-Weg damit.
   // Alle übrigen Icons bleiben unverändert per Werbung erhältlich.
   //
-  // Zur Einordnung der Preise: im gesamten Lernpfad sind 4605 Sterne
+  // Zur Einordnung der Preise: im gesamten Lernpfad sind 4480 Sterne
   // erreichbar (ausgezählt über alle 594 Stationen, ein Stern je erstmalig
   // richtiger Frage).
   //
-  // Verlauf: 5151 vor der Modus-Umstellung, 5095 danach, 4605 seit die
-  // Welt-Welt von 12 auf 8 Fragen gekürzt wurde. Grundlage sind
-  // fragenProStation je Welt und kFragenObergrenze je Modus, beide in
-  // lernpfad_data.dart — wer dort etwas ändert, sollte die Zahl hier
-  // nachrechnen.
+  // Verlauf: 5151 vor der Modus-Umstellung, 5095 danach, 4605 nach der
+  // Kürzung der Welt-Welt auf 8 Fragen, 4480 seit der Rhythmus-Umstellung —
+  // dort kommt sortierSpiel häufiger vor, und das hat immer nur 3 Fragen.
   //
-  // Die Preise sind auf 4605 nachkalibriert (vorher 150/500/1200/2500 gegen
-  // 5151). Sie treffen damit wieder die urspruenglich gewollten Anteile:
-  // das teuerste Bild kostet 48 % aller erreichbaren Sterne, alle vier
-  // zusammen 83 %.
+  // Grundlage sind fragenProStation je Welt, kFragenObergrenze je Modus und
+  // die Modus-Verteilung selbst, alle in lernpfad_data.dart. Wer dort etwas
+  // ändert, sollte die Zahl hier nachrechnen.
+  //
+  // Die Preise wurden gegen 4605 nachkalibriert (vorher 150/500/1200/2500
+  // gegen 5151). Sie treffen die urspruenglich gewollten Anteile weiterhin:
+  // das teuerste Bild kostet 49 % aller erreichbaren Sterne, alle vier
+  // zusammen 85 %.
   //
   // ACHTUNG: Diese Anteile sind der eigentliche Massstab, nicht die absoluten
   // Zahlen. Sinkt die Gesamtzahl erneut — etwa weil eine Welt weniger Fragen

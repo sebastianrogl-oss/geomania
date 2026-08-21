@@ -4,6 +4,7 @@ import '../data/alle_laender.dart';
 import '../data/countries.dart';
 import '../data/country_rankings.dart';
 import '../data/currencies.dart';
+import '../data/economic_blocks.dart';
 import '../data/laender_fakten.dart';
 import '../data/laender_gebaeude.dart';
 import '../data/laender_grenzketten.dart';
@@ -626,6 +627,16 @@ class FragenGenerator {
       case LernModus.grenzkettenRaetsel:
         return await _grenzkettenRaetsel(
             station, pool, kontinent, schwierigkeit);
+      case LernModus.flaechenVergleich:
+        return _flaechenVergleich(station, pool);
+      case LernModus.zweiWahrheiten:
+        return _zweiWahrheiten(station, pool);
+      case LernModus.wasGehoertNichtDazu:
+        return _wasGehoertNichtDazu(station, pool);
+      case LernModus.laenderRanking:
+        return _laenderRanking(station, pool);
+      case LernModus.nachbarschaftsKette:
+        return _nachbarschaftsKette(station, pool);
     }
   }
 
@@ -1593,4 +1604,938 @@ class FragenGenerator {
     }
     return gezogen.map((id) => byId[id]!).toList();
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Flächen-Vergleich — "Wie oft passt X in Y?"
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Noch nicht im Lernpfad: erreichbar nur über den Debug-Bereich der
+  // Einstellungen (siehe Kommentar am LernModus-Enum).
+
+  /// Zulässiges Größenverhältnis eines Paares.
+  ///
+  /// Unter Faktor 2 ist der Unterschied auf der Karte kaum zu sehen und die
+  /// Frage hätte keine sinnvolle Antwort. Über Faktor 100 schrumpft das
+  /// kleinere Land beim gemeinsamen Maßstab auf wenige Pixel und ist als
+  /// Umriss nicht mehr erkennbar — genau das ist aber der Kern des Modus.
+  static const _kVergleichMinFaktor = 2.0;
+  static const _kVergleichMaxFaktor = 100.0;
+
+  /// Rundet auf eine Zahl, die als Antwort natürlich wirkt: unter 10 exakt,
+  /// bis 100 auf Fünfer, darüber auf Zehner. Ein Ergebnis wie "37×" wirkt
+  /// erfunden genau, "35×" liest sich wie eine echte Antwortmöglichkeit.
+  static int _rundeVergleichswert(double v) {
+    if (v < 10) return v.round().clamp(2, 9);
+    if (v <= 100) return (v / 5).round() * 5;
+    return (v / 10).round() * 10;
+  }
+
+  /// Drei plausible Ablenker eng um [echt] herum.
+  ///
+  /// Fenster vom 0,7- bis zum 1,6-fachen des echten Werts. Eine weite
+  /// Streuung machte die Frage zu leicht: wer 2×, 7×, 15× und 40× sieht,
+  /// schließt das Unsinnige aus, statt zu schätzen. Bei 6×, 7×, 8×, 10× muss
+  /// man das Größenverhältnis tatsächlich einschätzen.
+  ///
+  /// Bei kleinen echten Werten trägt dieses Fenster nicht: bei echt=2 reicht
+  /// es von 1,4 bis 3,2 und enthält nach dem Runden nur die 3 — die 1 fällt
+  /// weg, weil es in diesem Modus kein Verhältnis unter 2 gibt (siehe
+  /// _kVergleichMinFaktor). Dann wird additiv nach außen erweitert: die
+  /// nächstgelegenen Zahlen über und unter dem echten Wert, bis drei
+  /// verschiedene zusammen sind. Das bleibt genauso eng und funktioniert ab
+  /// dem kleinstmöglichen Wert.
+  static List<int> _vergleichsAblenker(int echt) {
+    final kandidaten = <int>{};
+    void nimm(num roh) {
+      final k = _rundeVergleichswert(roh.toDouble());
+      if (k >= 2 && k != echt) kandidaten.add(k);
+    }
+
+    // Multiplikatives Fenster in feinen Schritten abtasten — bei großen
+    // Werten rundet _rundeVergleichswert auf Fünfer bzw. Zehner, gröbere
+    // Schritte würden dort Lücken lassen.
+    for (var f = 0.70; f <= 1.601; f += 0.05) {
+      nimm(echt * f);
+    }
+    for (var d = 1; kandidaten.length < 3 && d <= 20; d++) {
+      nimm(echt - d);
+      nimm(echt + d);
+    }
+
+    return (kandidaten.toList()..shuffle(_rng)).take(3).toList();
+  }
+
+  static List<Frage> _flaechenVergleich(LernStation station, List<String> pool) {
+    // Nur Länder mit Flächendaten UND brauchbarem Umriss: der Modus zeigt
+    // beide Silhouetten, die Zwergstaaten aus kUmrissAusschluss fallen
+    // deshalb genauso raus wie im Umriss-Quiz.
+    final kandidaten = pool
+        .where((c) =>
+            (_ranking(c)?.area ?? 0) > 0 && kannAlsUmrissErscheinen(c))
+        .toList();
+    if (kandidaten.length < 2) return _extremFrage(station, pool);
+
+    final flaeche = {for (final c in kandidaten) c: _ranking(c)!.area!};
+    final fragen = <Frage>[];
+    // Innerhalb einer Station kommt jedes Land höchstens EINMAL vor — egal ob
+    // als großes oder als kleines. Damit kann sich auch keine Paarung
+    // wiederholen, und es fällt nicht auf, dass zweimal dasselbe Land die
+    // Vorlage gibt.
+    final benutzt = <String>{};
+
+    // Ein Durchlauf über die gemischte Kandidatenliste genügt: fällt ein Land
+    // aus (schon benutzt, kein passender Partner mehr frei), rückt einfach
+    // das nächste nach.
+    final reihenfolge = List<String>.from(kandidaten)..shuffle(_rng);
+    for (final gross in reihenfolge) {
+      {
+        if (fragen.length >= station.fragenAnzahl) break;
+        if (benutzt.contains(gross)) continue;
+        final grossFlaeche = flaeche[gross]!;
+
+        final partner = kandidaten.where((k) {
+          if (k == gross || benutzt.contains(k)) return false;
+          final f = grossFlaeche / flaeche[k]!;
+          return f >= _kVergleichMinFaktor && f <= _kVergleichMaxFaktor;
+        }).toList()
+          ..shuffle(_rng);
+        if (partner.isEmpty) continue;
+
+        final klein = partner.first;
+        benutzt.add(gross);
+        benutzt.add(klein);
+        final echt = _rundeVergleichswert(grossFlaeche / flaeche[klein]!);
+        final optionen = [
+          '$echt×',
+          ..._vergleichsAblenker(echt).map((v) => '$v×'),
+        ]..shuffle(_rng);
+
+        final grossCo = _country(gross);
+        final kleinCo = _country(klein);
+        fragen.add(Frage(
+          id: '${station.id}_fv_${fragen.length}',
+          frage: t('Wie oft passt {klein} in {gross}?', {
+            'klein': kleinCo?.name ?? landByIso[klein]?.name ?? klein,
+            'gross': grossCo?.name ?? landByIso[gross]?.name ?? gross,
+          }),
+          richtigeAntwort: '$echt×',
+          antwortOptionen: optionen,
+          modus: LernModus.flaechenVergleich,
+          // Das GROSSE Land steht im laenderCode: es gibt den Maßstab vor und
+          // ist das Land, auf das sich die Frage bezieht. Das kleine kommt
+          // über meta dazu — Frage trägt nur ein laenderCode-Feld.
+          laenderCode: gross,
+          meta: {'kleinesLand': klein, 'verhaeltnis': echt},
+        ));
+      }
+    }
+    return fragen;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Zwei Wahrheiten, eine Lüge
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Noch nicht im Lernpfad: erreichbar nur über den Debug-Bereich.
+
+  /// Baut eine Aussage samt ihrer Herkunft, oder null bei fehlendem Text.
+  ///
+  /// Die Familie verhindert, dass zwei Aussagen derselben Vorlage in einer
+  /// Frage landen — sonst stünden z.B. zwei Hauptstadt-Sätze nebeneinander,
+  /// von denen sich einer schon durch den Widerspruch verrät.
+  static (String, String)? _aussage(String familie, String? text) =>
+      (text == null || text.isEmpty) ? null : (text, familie);
+
+  /// Setzt den Satzpunkt nur, wenn nicht schon einer da ist.
+  ///
+  /// Formatierte Bevölkerungszahlen enden je nach Größenordnung selbst auf
+  /// einen Punkt ("3,4 Mio.") — ohne diese Prüfung stünde dort "3,4 Mio..".
+  static String _mitSatzpunkt(String s) => s.endsWith('.') ? s : '$s.';
+
+  static String _bevoelkerungsText(double einwohner) =>
+      SkalaService.bevoelkerung(einwohner).format(einwohner);
+
+  static String _bevoelkerungsAussage(double einwohner) => _mitSatzpunkt(
+      t('Die Bevölkerung liegt bei etwa {n}',
+          {'n': _bevoelkerungsText(einwohner)}));
+
+  /// Alle WAHREN Aussagen, die sich für [iso2] aus den Daten belegen lassen.
+  static List<(String, String)> _wahreAussagen(String iso2) {
+    final co = _country(iso2);
+    if (co == null) return const [];
+    final ergebnis = <(String, String)?>[];
+
+    ergebnis.add(_aussage(
+        'hauptstadt', t('Die Hauptstadt ist {stadt}.', {'stadt': co.capital})));
+
+    final waehrung = _waehrungByIso2![iso2];
+    if (waehrung != null) {
+      // "Die Währung heißt X" statt "Hier wird mit X bezahlt": die
+      // Währungsnamen stehen in currencies.dart im Nominativ, im Dativ
+      // ergäbe das falsches Deutsch ("mit Georgischer Lari bezahlt").
+      ergebnis.add(_aussage(
+          'waehrung',
+          t('Die Währung heißt {waehrung}.',
+              {'waehrung': t(waehrung.currencyName)})));
+    }
+
+    final echteNachbarn = nachbarn[iso2] ?? const <String>[];
+    if (echteNachbarn.isNotEmpty) {
+      final n = echteNachbarn[_rng.nextInt(echteNachbarn.length)];
+      // "Ein Nachbarland ist X" statt "{land} grenzt an X": Ländernamen im
+      // Plural (Malediven, Niederlande, Philippinen) bekämen sonst ein
+      // Verb im Singular. Das gefragte Land steht ohnehin schon in der
+      // Frage darüber, im Satz wird es nicht gebraucht.
+      ergebnis.add(_aussage(
+          'nachbar',
+          t('Ein Nachbarland ist {nachbar}.', {
+            'nachbar': _country(n)?.name ?? landByIso[n]?.name ?? n,
+          })));
+    }
+
+    if (co.population > 0) {
+      ergebnis.add(_aussage(
+          'bevoelkerung', _bevoelkerungsAussage(co.population.toDouble())));
+    }
+
+    // Kuratierte Fun-Facts: bereits als Aussagesatz formuliert und in
+    // sektorFunFactsEn/waehrungsFunFactsEn übersetzt, deshalb 1:1 nutzbar.
+    final sektor = _sektorByIso2![iso2];
+    if (sektor != null && sektor.funFact.isNotEmpty) {
+      ergebnis.add(_aussage('sektorFakt', t(sektor.funFact)));
+    }
+    // Währungs-Fun-Facts nur, wenn die Währung genau diesem Land gehört —
+    // der Euro-Fakt wäre sonst eine "Aussage über Portugal", die genauso auf
+    // 19 andere Länder zutrifft.
+    if (waehrung != null && waehrung.funFact.isNotEmpty) {
+      final teilen = _waehrungByIso2!.values
+          .where((w) => w.currencyCode == waehrung.currencyCode)
+          .length;
+      if (teilen == 1) {
+        ergebnis.add(_aussage('waehrungFakt', t(waehrung.funFact)));
+      }
+    }
+
+    return ergebnis.whereType<(String, String)>().toList();
+  }
+
+  /// Länder derselben Subregion (sonst desselben Kontinents, sonst der Welt)
+  /// als Quelle für den ausgetauschten Wert. Eine asiatische Hauptstadt bei
+  /// einem europäischen Land wäre auf den ersten Blick zu erkennen.
+  static List<String> _regionsNachbarn(String iso2) {
+    final land = _land(iso2);
+    if (land != null) {
+      final subregion = alleLaender
+          .where((l) => l.region == land.region && l.iso != iso2)
+          .map((l) => l.iso)
+          .where((i) => _country(i) != null)
+          .toList();
+      if (subregion.length >= 3) return subregion..shuffle(_rng);
+      final kontinent = alleLaender
+          .where((l) => l.kontinent == land.kontinent && l.iso != iso2)
+          .map((l) => l.iso)
+          .where((i) => _country(i) != null)
+          .toList();
+      if (kontinent.length >= 3) return kontinent..shuffle(_rng);
+    }
+    return countries.map((c) => c.iso2).where((i) => i != iso2).toList()
+      ..shuffle(_rng);
+  }
+
+  /// Die ERFUNDENE Aussage — eine wahre Vorlage mit ausgetauschtem Wert.
+  ///
+  /// Jede Variante prüft ihren Austausch gegen dieselben Daten, aus denen die
+  /// wahren Aussagen stammen; nur was dort nachweislich NICHT zutrifft, wird
+  /// verwendet. Vorlagen ohne solche Prüfmöglichkeit — die kuratierten
+  /// Fun-Facts — kommen als Lüge nicht in Frage.
+  /// Liefert zusätzlich zur Aussage die BEGRÜNDUNG, warum sie falsch ist.
+  ///
+  /// Möglich ist das, weil hier beide Werte vorliegen: der ausgetauschte und
+  /// der echte. Später aus dem fertigen Fragetext lässt sich das nicht mehr
+  /// rekonstruieren, deshalb wandert die Begründung gleich mit in die Frage.
+  static ({String text, String familie, String erklaerung})? _erfundeneAussage(
+      String iso2, Set<String> vergebeneFamilien) {
+    final co = _country(iso2);
+    if (co == null) return null;
+    final kandidatenLaender = _regionsNachbarn(iso2);
+    final familien = ['hauptstadt', 'waehrung', 'nachbar', 'bevoelkerung']
+        .where((f) => !vergebeneFamilien.contains(f))
+        .toList()
+      ..shuffle(_rng);
+
+    for (final familie in familien) {
+      switch (familie) {
+        case 'hauptstadt':
+          for (final anderes in kandidatenLaender) {
+            final fremd = _country(anderes)!;
+            // Gegen BEIDE Sprachformen prüfen: der Fragetext wird in der
+            // gerade aktiven Sprache erzeugt und gespeichert, ein späterer
+            // Sprachwechsel darf die Aussage nicht wahr werden lassen.
+            if (fremd.capitalDe == co.capitalDe) continue;
+            if (fremd.capital == co.capital) continue;
+            return (
+              text: t('Die Hauptstadt ist {stadt}.', {'stadt': fremd.capital}),
+              familie: familie,
+              erklaerung: t('Die Hauptstadt ist {richtig}, nicht {falsch}.',
+                  {'richtig': co.capital, 'falsch': fremd.capital}),
+            );
+          }
+        case 'waehrung':
+          final eigene = _waehrungByIso2![iso2];
+          if (eigene == null) continue;
+          for (final anderes in kandidatenLaender) {
+            final fremd = _waehrungByIso2![anderes];
+            if (fremd == null) continue;
+            // Über den Code vergleichen, nicht über den Namen: derselbe Euro
+            // trägt in beiden Einträgen denselben Code, während zwei
+            // verschiedene "Dollar" sich im Namen nur ähneln.
+            if (fremd.currencyCode == eigene.currencyCode) continue;
+            if (fremd.currencyName == eigene.currencyName) continue;
+            return (
+              text: t('Die Währung heißt {waehrung}.',
+                  {'waehrung': t(fremd.currencyName)}),
+              familie: familie,
+              erklaerung: t('Die Währung ist {richtig}, nicht {falsch}.', {
+                'richtig': t(eigene.currencyName),
+                'falsch': t(fremd.currencyName),
+              }),
+            );
+          }
+        case 'nachbar':
+          final echte = nachbarn[iso2] ?? const <String>[];
+          for (final anderes in kandidatenLaender) {
+            // Beide Richtungen prüfen: die Nachbarn-Map ist gepflegt, aber
+            // eine einseitig fehlende Kante würde hier eine wahre Aussage
+            // als Lüge ausgeben.
+            if (echte.contains(anderes)) continue;
+            if ((nachbarn[anderes] ?? const []).contains(iso2)) continue;
+            return (
+              text: t('Ein Nachbarland ist {nachbar}.',
+                  {'nachbar': _country(anderes)!.name}),
+              familie: familie,
+              // Bewusst als "haben keine gemeinsame Grenze" formuliert: die
+              // Konstruktion trägt beide Länder als Subjekte und funktioniert
+              // damit auch bei Namen im Plural (Malediven, Niederlande).
+              erklaerung: t('{land} und {falsch} haben keine gemeinsame Grenze.',
+                  {'land': co.name, 'falsch': _country(anderes)!.name}),
+            );
+          }
+        case 'bevoelkerung':
+          if (co.population <= 0) continue;
+          for (final anderes in kandidatenLaender) {
+            final fremd = _country(anderes)!;
+            if (fremd.population <= 0) continue;
+            // "etwa" macht kleine Abweichungen zur Auslegungsfrage — deshalb
+            // mindestens Faktor 4 Abstand. Dann ist die Aussage eindeutig
+            // falsch und nicht bloß ungenau.
+            final verhaeltnis = fremd.population / co.population;
+            if (verhaeltnis > 0.25 && verhaeltnis < 4) continue;
+            return (
+              text: _bevoelkerungsAussage(fremd.population.toDouble()),
+              familie: familie,
+              erklaerung: _mitSatzpunkt(t(
+                  'Die Bevölkerung liegt bei etwa {richtig}, nicht bei {falsch}',
+                  {
+                    'richtig': _bevoelkerungsText(co.population.toDouble()),
+                    'falsch': _bevoelkerungsText(fremd.population.toDouble()),
+                  })),
+            );
+          }
+      }
+    }
+    return null;
+  }
+
+  static List<Frage> _zweiWahrheiten(LernStation station, List<String> pool) {
+    final brauchbar = pool.where((c) => _country(c) != null).toList();
+    if (brauchbar.isEmpty) return _extremFrage(station, pool);
+
+    final fragen = <Frage>[];
+    // Ein Durchlauf über die gemischte Liste: dadurch kann kein Land zweimal
+    // gefragt werden. Länder ohne genug belegbare Aussagen werden einfach
+    // übersprungen.
+    {
+      final reihenfolge = List<String>.from(brauchbar)..shuffle(_rng);
+      for (final iso2 in reihenfolge) {
+        if (fragen.length >= station.fragenAnzahl) break;
+        final wahr = _wahreAussagen(iso2)..shuffle(_rng);
+        if (wahr.length < 2) continue;
+
+        // Zwei wahre Aussagen aus VERSCHIEDENEN Vorlagen.
+        final gewaehlt = <(String, String)>[];
+        final familien = <String>{};
+        for (final a in wahr) {
+          if (gewaehlt.length == 2) break;
+          if (familien.contains(a.$2)) continue;
+          gewaehlt.add(a);
+          familien.add(a.$2);
+        }
+        if (gewaehlt.length < 2) continue;
+
+        final luege = _erfundeneAussage(iso2, familien);
+        if (luege == null) continue;
+
+        final co = _country(iso2)!;
+        final optionen = [luege.text, gewaehlt[0].$1, gewaehlt[1].$1]
+          ..shuffle(_rng);
+        fragen.add(Frage(
+          id: '${station.id}_zw_${fragen.length}',
+          frage:
+              t('Welche Aussage über {land} stimmt NICHT?', {'land': co.name}),
+          richtigeAntwort: luege.text,
+          antwortOptionen: optionen,
+          modus: LernModus.zweiWahrheiten,
+          laenderCode: iso2,
+          meta: {
+            'luegenFamilie': luege.familie,
+            // Die Begründung entsteht beim Erzeugen der Lüge, wo echter und
+            // ausgetauschter Wert beide vorliegen — die Auflösung im Screen
+            // kann sie nicht mehr herleiten.
+            'erklaerung': luege.erklaerung,
+          },
+        ));
+      }
+    }
+    return fragen;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Was gehört nicht dazu?
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Noch nicht im Lernpfad: erreichbar nur über den Debug-Bereich.
+
+  /// Anzeigename einer Kontinent-ID aus alle_laender.dart.
+  ///
+  /// Bewusst NICHT kontinentNameFuerId() aus portfolio_daten.dart: dessen
+  /// ID-Raum stammt aus dem Portfolio-Modell und kennt nur ein gemeinsames
+  /// 'amerika'. Für 'nordamerika' und 'suedamerika' fiel es auf "Andere"
+  /// zurück — in beiden Sprachen falsch. Die Namen hier sind bereits über
+  /// uebersetzungen_lernen.dart übersetzt.
+  static String _kontinentAnzeige(String id) => t(switch (id) {
+        'europa' => 'Europa',
+        'asien' => 'Asien',
+        'afrika' => 'Afrika',
+        'nordamerika' => 'Nordamerika',
+        'suedamerika' => 'Südamerika',
+        'ozeanien' => 'Ozeanien',
+        _ => id,
+      });
+
+  /// Die prüfbaren Merkmale. Amtssprache fehlt bewusst — dafür liegen im
+  /// Projekt keine Daten vor (weder countries.dart noch alle_laender.dart
+  /// führen eine Sprache).
+  static List<_Merkmal> get _merkmale => [
+        _Merkmal(
+          'kontinent',
+          'Kontinent',
+          (iso) => _land(iso)?.kontinent,
+          (w) => t('Die anderen drei liegen alle in {wert}.',
+              {'wert': _kontinentAnzeige(w)}),
+        ),
+        _Merkmal(
+          'waehrung',
+          'Währung',
+          (iso) => _waehrungByIso2![iso]?.currencyCode,
+          (w) {
+            final name = _waehrungByIso2!.values
+                .firstWhere((c) => c.currencyCode == w)
+                .currencyName;
+            return t('Die anderen drei bezahlen alle mit {wert}.',
+                {'wert': t(name)});
+          },
+        ),
+        // EU-Mitgliedschaft als JA/NEIN statt als Block-Name: der generische
+        // Block-Wert wäre für die meisten Länder "Keiner davon" — und "diese
+        // drei sind in keinem Bündnis" ist keine Gemeinsamkeit, die man lernt.
+        _Merkmal(
+          'eu',
+          'EU-Mitgliedschaft',
+          (iso) => primaryBlockFor(iso) == 'EU' ? 'ja' : 'nein',
+          (w) => w == 'ja'
+              ? t('Die anderen drei sind alle EU-Mitglied.')
+              : t('Die anderen drei sind alle kein EU-Mitglied.'),
+        ),
+        _Merkmal(
+          'binnenstaat',
+          'Binnenstaat oder Küste',
+          (iso) {
+            final k = _ranking(iso)?.coastlineKm;
+            return k == null ? null : (k == 0 ? 'ja' : 'nein');
+          },
+          (w) => w == 'ja'
+              ? t('Die anderen drei sind alle Binnenstaaten ohne Meereszugang.')
+              : t('Die anderen drei haben alle einen Meereszugang.'),
+        ),
+        _Merkmal(
+          'halbkugel',
+          'Nord- oder Südhalbkugel',
+          (iso) {
+            final co = _country(iso);
+            return co == null ? null : (co.latitude >= 0 ? 'nord' : 'sued');
+          },
+          (w) => w == 'nord'
+              ? t('Die anderen drei liegen alle auf der Nordhalbkugel.')
+              : t('Die anderen drei liegen alle auf der Südhalbkugel.'),
+        ),
+        _Merkmal(
+          'hauptsektor',
+          'Wichtigster Wirtschaftssektor',
+          (iso) => _sektorByIso2![iso]?.mainSector,
+          (w) => t('Die anderen drei leben hauptsächlich von: {wert}.',
+              {'wert': t(w)}),
+        ),
+      ];
+
+  /// Die Merkmale, auf die "Was gehört nicht dazu?" prüfen kann — übersetzt,
+  /// für den Hilfe-Dialog im Quiz.
+  ///
+  /// Kommt aus derselben Liste, die der Generator auswertet, plus der
+  /// Grenz-Beziehung, die kein Merkmal eines einzelnen Landes ist. Dadurch
+  /// kann die angezeigte Liste nicht von den geprüften Merkmalen abweichen.
+  static List<String> get quartettKategorien => [
+        for (final m in _merkmale) t(m.label),
+        t('Gemeinsame Grenze zu einem Land'),
+      ];
+
+  /// Länder, an die GENAU DREI des Quartetts grenzen — je Außenseiter ein
+  /// Beispiel-Grenzland.
+  ///
+  /// Kein normales Merkmal: Nachbarschaft ist keine Eigenschaft eines
+  /// einzelnen Landes, sondern eine Beziehung. Zeigen mehrere solche Länder
+  /// auf verschiedene Außenseiter, landen beide in der Rückgabe und die
+  /// Eindeutigkeitsprüfung verwirft das Quartett von selbst.
+  static Map<String, String> _grenzKandidaten(List<String> vier) {
+    final umgebung = <String>{};
+    for (final iso in vier) {
+      umgebung.addAll(nachbarn[iso] ?? const []);
+    }
+    umgebung.removeAll(vier);
+
+    final ergebnis = <String, String>{};
+    for (final x in umgebung) {
+      final ohne =
+          vier.where((i) => !(nachbarn[i] ?? const []).contains(x)).toList();
+      if (ohne.length != 1) continue;
+      ergebnis.putIfAbsent(ohne.first, () => x);
+    }
+    return ergebnis;
+  }
+
+  /// Alle Länder des Quartetts, die sich als "gehört nicht dazu" begründen
+  /// ließen, samt der Begründung.
+  ///
+  /// Entscheidend für die Eindeutigkeit ist die Zahl der möglichen
+  /// AUSSENSEITER, nicht die der Merkmale: zeigen Kontinent und Währung beide
+  /// auf dasselbe Land, gibt es weiterhin genau eine richtige Antwort — die
+  /// Frage ist dann sogar besser begründet, nicht mehrdeutig. Erst zwei
+  /// verschiedene Außenseiter machen sie unlösbar.
+  static Map<String, String> _aussenseiterKandidaten(List<String> vier) {
+    final ergebnis = <String, String>{};
+
+    for (final m in _merkmale) {
+      final werte = {for (final i in vier) i: m.wert(i)};
+      // Fehlt für auch nur ein Land der Wert, ist das Merkmal für dieses
+      // Quartett nicht bewertbar — geraten wird nicht.
+      if (werte.values.any((v) => v == null)) continue;
+
+      final gruppen = <String, List<String>>{};
+      for (final e in werte.entries) {
+        (gruppen[e.value!] ??= []).add(e.key);
+      }
+      // Gesucht ist genau das Muster 3+1. "Alle vier gleich" und "alle vier
+      // verschieden" liefern keinen Außenseiter; 2+2 ebenfalls nicht — dort
+      // gibt es keinen einzelnen, der herausfällt.
+      if (gruppen.length != 2) continue;
+      final einzel = gruppen.values.where((g) => g.length == 1).toList();
+      final drei = gruppen.values.where((g) => g.length == 3).toList();
+      if (einzel.length != 1 || drei.length != 1) continue;
+
+      ergebnis.putIfAbsent(
+          einzel.first.first, () => m.aufloesung(werte[drei.first.first]!));
+    }
+
+    for (final e in _grenzKandidaten(vier).entries) {
+      final land = _country(e.value)?.name ?? landByIso[e.value]?.name ?? e.value;
+      ergebnis.putIfAbsent(e.key,
+          () => t('Die anderen drei grenzen alle an {land}.', {'land': land}));
+    }
+    return ergebnis;
+  }
+
+  /// Zählt die Versuche des letzten Generatorlaufs — nur für Messungen im
+  /// Debug-Bereich, im Spielbetrieb ohne Bedeutung.
+  static int letzteQuartettVersuche = 0;
+
+  static List<Frage> _wasGehoertNichtDazu(
+      LernStation station, List<String> pool) {
+    final kandidaten =
+        pool.where((c) => _country(c) != null && _land(c) != null).toList();
+    if (kandidaten.length < 8) return _extremFrage(station, pool);
+
+    final fragen = <Frage>[];
+    // Kein Land darf in zwei Quartetten derselben Station auftauchen — das
+    // schließt doppelte Quartette mit ein.
+    final benutzteLaender = <String>{};
+    // Damit nicht fünfmal hintereinander "drei liegen auf derselben
+    // Halbkugel" kommt: schon verwendete Merkmale werden zurückgestellt,
+    // solange es noch unbenutzte gibt.
+    final benutzteMerkmale = <String>{};
+    var versuche = 0;
+    // Obergrenze als Notbremse: ohne sie könnte ein Pool ohne jedes
+    // eindeutige Quartett (sehr kleiner Kontinent) endlos drehen.
+    const maxVersuche = 6000;
+
+    while (fragen.length < station.fragenAnzahl && versuche < maxVersuche) {
+      versuche++;
+
+      // Gezielt konstruieren statt blind würfeln: erst ein Merkmal wählen,
+      // dann drei Länder mit gleichem Wert und eines mit abweichendem. Rein
+      // zufällige Quartette hätten fast nie einen Außenseiter — und wenn,
+      // dann meist gleich mehrere.
+      final alle = _merkmale;
+      final offen = alle.where((x) => !benutzteMerkmale.contains(x.id)).toList();
+      final auswahl = offen.isEmpty ? alle : offen;
+      final m = auswahl[_rng.nextInt(auswahl.length)];
+
+      final nachWert = <String, List<String>>{};
+      for (final i in kandidaten) {
+        if (benutzteLaender.contains(i)) continue;
+        final w = m.wert(i);
+        if (w != null) (nachWert[w] ??= []).add(i);
+      }
+      final gruppen =
+          nachWert.entries.where((e) => e.value.length >= 3).toList();
+      if (gruppen.isEmpty) continue;
+
+      final ziel = gruppen[_rng.nextInt(gruppen.length)];
+      final drei = _pick(ziel.value, 3);
+      if (drei.length < 3) continue;
+      final abweichend = kandidaten
+          .where((i) =>
+              !drei.contains(i) &&
+              !benutzteLaender.contains(i) &&
+              m.wert(i) != null &&
+              m.wert(i) != ziel.key)
+          .toList();
+      if (abweichend.isEmpty) continue;
+
+      final aussen = abweichend[_rng.nextInt(abweichend.length)];
+      final vier = [...drei, aussen];
+
+      final moegliche = _aussenseiterKandidaten(vier);
+      // Genau ein begründbarer Außenseiter — und es muss der sein, auf den
+      // die Konstruktion gezielt hat.
+      if (moegliche.length != 1 || !moegliche.containsKey(aussen)) continue;
+
+      benutzteLaender.addAll(vier);
+      benutzteMerkmale.add(m.id);
+      fragen.add(Frage(
+        id: '${station.id}_wg_${fragen.length}',
+        frage: t('Welches Land passt nicht zu den anderen?'),
+        // ISO-Codes statt Namen: die Kacheln zeigen Flagge UND Namen, beides
+        // wird aus dem Code aufgelöst.
+        richtigeAntwort: aussen,
+        antwortOptionen: [...vier]..shuffle(_rng),
+        modus: LernModus.wasGehoertNichtDazu,
+        // Kein Landkopf: eine Vorschau würde hier nichts zeigen, was nicht
+        // ohnehin auf den vier Kacheln steht.
+        laenderCode: '',
+        meta: {'aufloesung': moegliche[aussen]!},
+      ));
+    }
+    letzteQuartettVersuche = versuche;
+    return fragen;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Länder-Ranking — Rangplatz per Zahlenschloss
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Noch nicht im Lernpfad: erreichbar nur über den Debug-Bereich.
+
+  /// Kategorien, in denen ein RANGPLATZ eine Aussage hat.
+  ///
+  /// Ausgewählt nach zwei Kriterien, beide an den Daten gemessen:
+  /// genug Länder mit Werten (sonst bezieht sich "Platz 40" auf ein
+  /// Restfeld), und genug verschiedene Werte (sonst entstehen lange
+  /// Gleichstands-Ketten, in denen die Reihenfolge willkürlich ist).
+  ///
+  /// Die Auswahl ist an den Daten gemessen, nicht geschätzt. Aufgenommen ist
+  /// eine Kategorie nur, wenn der größte Gleichstands-Block höchstens sieben
+  /// Länder umfasst und mindestens 150 Länder überhaupt Werte haben.
+  ///
+  /// Bewusst NICHT dabei, jeweils mit dem gemessenen Grund:
+  /// - Geburtenrate (größter Block 15, 92 % aller Länder im Gleichstand),
+  ///   Internetgeschwindigkeit (14 / 84 %), Pressefreiheit (12 / 87 %),
+  ///   Tourismus (11 / 77 %), Militärausgaben (9 / 75 %), Korruptionsindex
+  ///   (8 / 89 %), Alkoholkonsum (8 / 78 %): dort sind die Werte so grob
+  ///   gerundet, dass der Rangplatz innerhalb langer Ketten willkürlich wird.
+  /// - Mindestlohn (nur 148 Länder haben einen nationalen) und
+  ///   Olympia-Medaillen (nur 113 mit Wert, die Mehrheit bei 0): ein
+  ///   Rangplatz bezöge sich auf ein Restfeld.
+  /// - Inflationsrate: gut verteilt, aber der Rang wechselt mit dem
+  ///   Vorzeichen die Bedeutung.
+  static const _kRankingKategorien = [
+    'population', // Block 1, 0 % Gleichstand, 197 Länder
+    'area', // Block 1, 0 %, 197
+    'gdpTotal', // Block 1, 0 %, 192
+    'highest_point', // Block 2, 5 %, 195
+    'coastline', // Block 2, 11 %, 152 (Binnenstaaten haben keinen Wert)
+    'debt', // Block 3, 13 %, 176
+    'happiness', // Block 5, 48 %, 190
+    'lifeExpectancy', // Block 5, 57 %, 196
+    'forest', // Block 6, 78 %, 166
+    'gdpPerCapita', // Block 7, 44 %, 192
+  ];
+
+  static List<Frage> _laenderRanking(LernStation station, List<String> pool) {
+    final erlaubt = rankingCategories
+        .where((k) => _kRankingKategorien.contains(k.id))
+        .toList();
+    if (erlaubt.isEmpty) return _extremFrage(station, pool);
+
+    final fragen = <Frage>[];
+    final benutzt = <String>{};
+
+    for (var runde = 0;
+        runde < 4 && fragen.length < station.fragenAnzahl;
+        runde++) {
+      final kategorien = List.of(erlaubt)..shuffle(_rng);
+      for (final kat in kategorien) {
+        if (fragen.length >= station.fragenAnzahl) break;
+
+        // Die Rangliste geht über ALLE Länder mit Daten, nicht über den
+        // Stationspool: ein Rangplatz ist nur dann eine Aussage, wenn er sich
+        // auf das ganze Feld bezieht.
+        final feld = countryRankings
+            .where((r) => kat.getValue(r) != null)
+            .toList()
+          ..sort((a, b) => kat.getValue(b)!.compareTo(kat.getValue(a)!));
+        if (feld.length < 20) continue;
+
+        final imFeld = feld.map((r) => r.iso2).toSet();
+        // Kein Land zweimal in einer Station — das schließt die Kombination
+        // aus Land UND Kategorie mit ein.
+        final waehlbar =
+            pool.where((c) => imFeld.contains(c) && !benutzt.contains(c)).toList();
+        if (waehlbar.isEmpty) continue;
+
+        final iso = waehlbar[_rng.nextInt(waehlbar.length)];
+        final rang = feld.indexWhere((r) => r.iso2 == iso) + 1;
+        final wert = kat.getValue(feld[rang - 1])!;
+        final co = _country(iso);
+
+        benutzt.add(iso);
+        fragen.add(Frage(
+          id: '${station.id}_lr_${fragen.length}',
+          // "in der Kategorie X" statt "beim X": die Kategorienamen haben
+          // unterschiedliche Genera (die Bevölkerung, der Waldanteil, das
+          // BIP) — mit Artikel ergäbe eine feste Vorlage falsches Deutsch.
+          frage: t('Welchen Platz belegt {land} in der Kategorie {kategorie}?',
+              {'land': co?.name ?? iso, 'kategorie': kat.label}),
+          richtigeAntwort: '$rang',
+          antwortOptionen: const [],
+          modus: LernModus.laenderRanking,
+          laenderCode: iso,
+          meta: {
+            'kategorie': kat.id,
+            'kategorieLabel': kat.label,
+            'rang': rang,
+            'gesamt': feld.length,
+            'wert': wert,
+            'einheit': kat.unit,
+            'emoji': kat.emoji,
+          },
+        ));
+      }
+    }
+    return fragen;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Nachbarschafts-Kette — Weg von A nach B selbst bauen
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Noch nicht im Lernpfad: erreichbar nur über den Debug-Bereich.
+
+  /// Zulässige Weglänge in Grenzübertritten.
+  ///
+  /// Unter 3 wäre die Aufgabe in einem Zug gelöst, über 5 wird die Kette
+  /// unübersichtlich und die Zahl möglicher Irrwege zu groß.
+  static const kKetteMinSchritte = 3;
+  static const kKetteMaxSchritte = 5;
+
+  /// Symmetrische Nachbarschaft, einmal aufgebaut und dann gecacht.
+  ///
+  /// laender_nachbarn.dart ist nicht garantiert symmetrisch — das
+  /// Prüfskript zu den Grenzketten akzeptiert eine Kante ausdrücklich, wenn
+  /// sie nur in EINER Richtung eingetragen ist (a in nachbarn[b] ODER b in
+  /// nachbarn[a]). Für diesen Modus muss beides zusammenpassen: die Auswahl
+  /// im Screen und die Wegsuche im Generator dürfen nicht von verschiedenen
+  /// Kanten ausgehen, sonst bietet die Oberfläche einen Schritt an, den die
+  /// Bestenlösung nicht kennt — oder umgekehrt.
+  static Map<String, Set<String>>? _grenzGraphCache;
+
+  static Map<String, Set<String>> grenzGraph() {
+    if (_grenzGraphCache != null) return _grenzGraphCache!;
+    final g = <String, Set<String>>{};
+    void kante(String a, String b) {
+      if (a == b) return;
+      (g[a] ??= <String>{}).add(b);
+      (g[b] ??= <String>{}).add(a);
+    }
+
+    for (final e in nachbarn.entries) {
+      for (final n in e.value) {
+        kante(e.key, n);
+      }
+    }
+    // Nur Länder behalten, die auch in countries.dart stehen — der Screen
+    // zeigt Flagge und Name, beides kommt von dort.
+    final bekannt = countries.map((c) => c.iso2).toSet();
+    final gefiltert = <String, Set<String>>{};
+    for (final e in g.entries) {
+      if (!bekannt.contains(e.key)) continue;
+      final n = e.value.where(bekannt.contains).toSet();
+      if (n.isNotEmpty) gefiltert[e.key] = n;
+    }
+    _grenzGraphCache = gefiltert;
+    return gefiltert;
+  }
+
+  /// Kürzester Weg von [start] nach [ziel] als Länderfolge (inklusive
+  /// beider Enden), oder null wenn keiner existiert.
+  ///
+  /// Breitensuche: findet garantiert einen Weg mit der kleinsten Zahl an
+  /// Grenzübertritten. Inselstaaten ohne Landgrenze stehen gar nicht erst im
+  /// Graphen und fallen dadurch von selbst heraus.
+  static List<String>? kuerzesterWeg(String start, String ziel) {
+    final g = grenzGraph();
+    if (!g.containsKey(start) || !g.containsKey(ziel)) return null;
+    if (start == ziel) return [start];
+
+    final vorgaenger = <String, String>{start: start};
+    final schlange = <String>[start];
+    var kopf = 0;
+    while (kopf < schlange.length) {
+      final aktuell = schlange[kopf++];
+      for (final n in g[aktuell]!) {
+        if (vorgaenger.containsKey(n)) continue;
+        vorgaenger[n] = aktuell;
+        if (n == ziel) {
+          final weg = <String>[ziel];
+          var p = ziel;
+          while (p != start) {
+            p = vorgaenger[p]!;
+            weg.add(p);
+          }
+          return weg.reversed.toList();
+        }
+        schlange.add(n);
+      }
+    }
+    return null;
+  }
+
+  /// Alle vom Startland aus erreichbaren Länder mit ihrer Distanz.
+  static Map<String, int> _distanzen(String start) {
+    final g = grenzGraph();
+    final d = <String, int>{start: 0};
+    final schlange = <String>[start];
+    var kopf = 0;
+    while (kopf < schlange.length) {
+      final aktuell = schlange[kopf++];
+      for (final n in g[aktuell] ?? const <String>{}) {
+        if (d.containsKey(n)) continue;
+        d[n] = d[aktuell]! + 1;
+        schlange.add(n);
+      }
+    }
+    return d;
+  }
+
+  static List<Frage> _nachbarschaftsKette(
+      LernStation station, List<String> pool) {
+    final g = grenzGraph();
+    // Nur Länder mit Landgrenze kommen als Start in Frage.
+    final kandidaten = pool.where(g.containsKey).toList()..shuffle(_rng);
+    if (kandidaten.isEmpty) return _extremFrage(station, pool);
+
+    final fragen = <Frage>[];
+    // Kein Land zweimal in einer Station — weder als Start noch als Ziel.
+    final benutzt = <String>{};
+
+    for (final start in kandidaten) {
+      if (fragen.length >= station.fragenAnzahl) break;
+      if (benutzt.contains(start)) continue;
+
+      final d = _distanzen(start);
+      final ziele = d.entries
+          .where((e) =>
+              e.value >= kKetteMinSchritte &&
+              e.value <= kKetteMaxSchritte &&
+              !benutzt.contains(e.key) &&
+              e.key != start)
+          .map((e) => e.key)
+          .toList()
+        ..shuffle(_rng);
+      if (ziele.isEmpty) continue;
+
+      final ziel = ziele.first;
+      final weg = kuerzesterWeg(start, ziel);
+      if (weg == null) continue;
+
+      benutzt.add(start);
+      benutzt.add(ziel);
+      final startCo = _country(start), zielCo = _country(ziel);
+      fragen.add(Frage(
+        id: '${station.id}_nk_${fragen.length}',
+        frage: t('Finde einen Weg von {start} nach {ziel} — nur über Nachbarländer.',
+            {
+              'start': startCo?.name ?? start,
+              'ziel': zielCo?.name ?? ziel,
+            }),
+        // Der kürzeste Weg als Zeichenkette. Verglichen wird damit NICHT:
+        // die Prüfung ist strukturell (siehe _ketteFertig im Quiz-Screen).
+        // Das Feld trägt hier den Referenzwert, so wie es beim Preis-Schätzen
+        // den Zielwert und beim Länder-Ranking den Rangplatz trägt.
+        richtigeAntwort: weg.join('>'),
+        antwortOptionen: const [],
+        modus: LernModus.nachbarschaftsKette,
+        laenderCode: start,
+        meta: {
+          'startIso': start,
+          'zielIso': ziel,
+          'optimum': weg.length - 1,
+          'optimalerWeg': weg,
+        },
+      ));
+    }
+    // Kein einziges brauchbares Paar: In Ozeanien hat genau ein Land eine
+    // Landgrenze, in Südamerika liegen zwischen zwei beliebigen Ländern
+    // höchstens 3 Grenzübertritte. Statt einer leeren Fragenliste — die eine
+    // Station unspielbar machen würde — auf einen anderen Modus ausweichen,
+    // wie es auch das Grenzketten-Rätsel für Kontinente ohne Einträge tut.
+    if (fragen.isEmpty) return _extremFrage(station, pool);
+    return fragen;
+  }
+}
+
+/// Ein prüfbares Merkmal eines Landes für "Was gehört nicht dazu?".
+///
+/// [wert] liefert null, wenn für das Land keine Daten vorliegen — solche
+/// Merkmale werden für das betroffene Quartett übersprungen statt geraten.
+/// [aufloesung] formuliert aus dem geteilten Wert die Gemeinsamkeit der DREI;
+/// sie ist der eigentliche Lerneffekt des Modus.
+class _Merkmal {
+  final String id;
+
+  /// Deutsche Bezeichnung für den Hilfe-Dialog im Quiz. Steht hier und nicht
+  /// im Screen, damit die angezeigte Liste nicht von den tatsächlich
+  /// geprüften Merkmalen abweichen kann.
+  final String label;
+  final String? Function(String iso2) wert;
+  final String Function(String gemeinsamerWert) aufloesung;
+  const _Merkmal(this.id, this.label, this.wert, this.aufloesung);
 }

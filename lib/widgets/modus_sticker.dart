@@ -74,6 +74,14 @@ class ModusSticker extends StatelessWidget {
       case LernModus.extremFrageLeicht:
       case LernModus.zufallsFakt:
       case LernModus.bekanntesGebaeude:
+      // Die beiden Debug-Modi haben keinen eigenen Sticker: sie erscheinen in
+      // keiner Station und damit nie auf dem Lernpfad, wo Sticker gezeigt
+      // werden. Der Zweig existiert nur, damit der Switch vollstaendig bleibt.
+      case LernModus.flaechenVergleich:
+      case LernModus.zweiWahrheiten:
+      case LernModus.wasGehoertNichtDazu:
+      case LernModus.laenderRanking:
+      case LernModus.nachbarschaftsKette:
         return SizedBox(
           width: groesse,
           height: groesse,

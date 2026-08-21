@@ -79,6 +79,16 @@ String modusEmoji(LernModus modus) {
       return '🗿';
     case LernModus.grenzkettenRaetsel:
       return '🛂';
+    case LernModus.flaechenVergleich:
+      return '📐';
+    case LernModus.zweiWahrheiten:
+      return '🤔';
+    case LernModus.wasGehoertNichtDazu:
+      return '🧩';
+    case LernModus.laenderRanking:
+      return '🏅';
+    case LernModus.nachbarschaftsKette:
+      return '🧭';
   }
 }
 

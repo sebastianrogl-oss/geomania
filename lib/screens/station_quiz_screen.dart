@@ -294,6 +294,14 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   // eingehende vom abgehenden Kind (siehe _inhaltMitWisch).
   Key? _aktuellerInhaltKey;
 
+  // Länder-Ranking: Stand des Zahlenschlosses für die aktuelle Frage.
+  bool _rankingBestaetigt = false;
+  int _rankingEingabe = 0;
+
+  // Nachbarschafts-Kette: der fertig gebaute Weg der aktuellen Frage.
+  bool _ketteFertig = false;
+  List<String> _ketteWeg = const [];
+
   // Feedback-State
   bool _showFeedback = false;
   bool _feedbackRichtig = false;
@@ -372,7 +380,12 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     bool istUmrissModus(LernModus m) =>
         m == LernModus.umrissBild ||
         m == LernModus.umrissMultiple ||
-        m == LernModus.umrissEingabe;
+        m == LernModus.umrissEingabe ||
+        // Der Flächen-Vergleich zeichnet zwei Silhouetten und braucht die
+        // Geometrie damit genauso — nur stehen seine beiden Länder nicht in
+        // den Antwortoptionen (das sind Zahlen), sondern in laenderCode und
+        // meta['kleinesLand'].
+        m == LernModus.flaechenVergleich;
     final brauchtGeo = session.aktiveFragen.any((f) => istUmrissModus(f.modus));
     if (brauchtGeo) {
       try {
@@ -380,7 +393,12 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         // Hochauflösende Einzeldateien für Quiz-Länder nachladen
         final quizIsos = session.aktiveFragen
             .where((f) => istUmrissModus(f.modus))
-            .expand((f) => [f.laenderCode, ...f.antwortOptionen])
+            .expand((f) => [
+                  f.laenderCode,
+                  ...f.antwortOptionen,
+                  if (f.meta['kleinesLand'] is String)
+                    f.meta['kleinesLand'] as String,
+                ])
             .where((s) => s.isNotEmpty && s.length == 2)
             .toSet();
         await _upgradeRingsMitEinzelDateien(rings, quizIsos);
@@ -425,6 +443,16 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       setState(() {
         _sliderWert = start.clamp(mn, mx);
         _preisBestaetigt = false;
+      });
+    } else if (frage.modus == LernModus.laenderRanking) {
+      setState(() {
+        _rankingBestaetigt = false;
+        _rankingEingabe = 0;
+      });
+    } else if (frage.modus == LernModus.nachbarschaftsKette) {
+      setState(() {
+        _ketteFertig = false;
+        _ketteWeg = const [];
       });
     } else if (frage.modus == LernModus.hauptstaedteEingabe ||
         frage.modus == LernModus.flaggenQuizEingabe ||
@@ -597,6 +625,85 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // Lesen — der Nutzer bestätigt manuell mit "Weiter" (siehe _preisWeiter).
   }
 
+  // ── Nachbarschafts-Kette ──────────────────────────────────────────────────
+
+  /// Wird aufgerufen, sobald der Spieler das Zielland erreicht hat.
+  ///
+  /// Die Prüfung ist strukturell und passiert im Widget selbst: dort sind nur
+  /// echte Nachbarn des aktuellen Landes antippbar, ein ungültiger Schritt
+  /// kann also gar nicht entstehen. Hier bleibt zu bewerten, wie LANG der
+  /// Weg geworden ist — gemessen am kürzesten aus der Breitensuche.
+  void _ketteZielErreicht(List<String> weg) {
+    if (_ketteFertig || _session == null) return;
+    final frage = _session!.aktuelleFrage;
+    if (frage == null) return;
+    _stopCountdown();
+    final optimum = (frage.meta['optimum'] as num?)?.toInt() ?? 0;
+    final schritte = weg.length - 1;
+    final richtig = schritte - optimum <= kKetteToleranz;
+    _vibriereAntwort(richtig);
+    setState(() {
+      _ketteWeg = weg;
+      _ketteFertig = true;
+      _showFeedback = true;
+      _feedbackRichtig = richtig;
+    });
+  }
+
+  void _ketteWeiter() {
+    if (_session == null) return;
+    if (_feedbackRichtig) {
+      _faktErfassen();
+      _session!.richtigeAntwortVerarbeiten();
+    } else {
+      _session!.falscheAntwortVerarbeiten();
+    }
+    setState(() {
+      _ketteFertig = false;
+      _ketteWeg = const [];
+      _showFeedback = false;
+    });
+    _vorruecken();
+  }
+
+  // ── Länder-Ranking (Zahlenschloss) ────────────────────────────────────────
+
+  void _rankingBestaetigen(int eingabe) {
+    if (_rankingBestaetigt || _session == null) return;
+    final frage = _session!.aktuelleFrage;
+    if (frage == null) return;
+    _stopCountdown();
+    final rang = int.tryParse(frage.richtigeAntwort) ?? 0;
+    // Kein exakter Treffer verlangt: der genaue Rangplatz ist nicht erratbar.
+    // Als richtig zählt, wer im Band der guten Punktzahl landet — dieselbe
+    // Logik wie die 20-Prozent-Toleranz beim Preis-Schätzen.
+    final richtig = (eingabe - rang).abs() <= kRankingToleranz;
+    _vibriereAntwort(richtig);
+    setState(() {
+      _rankingEingabe = eingabe;
+      _rankingBestaetigt = true;
+      _showFeedback = true;
+      _feedbackRichtig = richtig;
+    });
+    // Kein Auto-Timer: der echte Rang, die Abweichung und der Wert brauchen
+    // Zeit zum Lesen — weiter geht es per Tipp (siehe _rankingWeiter).
+  }
+
+  void _rankingWeiter() {
+    if (_session == null) return;
+    if (_feedbackRichtig) {
+      _faktErfassen();
+      _session!.richtigeAntwortVerarbeiten();
+    } else {
+      _session!.falscheAntwortVerarbeiten();
+    }
+    setState(() {
+      _rankingBestaetigt = false;
+      _showFeedback = false;
+    });
+    _vorruecken();
+  }
+
   void _preisWeiter() {
     if (_session == null) return;
     if (_feedbackRichtig) {
@@ -637,7 +744,14 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   /// unten im build() wird für diese Modi unterdrückt, damit er nicht doppelt
   /// erscheint.
   bool _hatEigenenWeiterButton(LernModus m) =>
-      m == LernModus.sortierSpiel || m == LernModus.preisSchaetzen;
+      m == LernModus.sortierSpiel ||
+      m == LernModus.preisSchaetzen ||
+      // Das Zahlenschloss trägt seinen Bestätigen- bzw. Weiter-Button selbst,
+      // damit er direkt unter den Walzen sitzt statt am Bildschirmfuß.
+      m == LernModus.laenderRanking ||
+      // Die Nachbarschafts-Kette hat bis zum Erreichen des Ziels gar keinen
+      // Weiter-Button — sie endet, wenn der Weg steht.
+      m == LernModus.nachbarschaftsKette;
 
   // ── Level-Skip (Rewarded Ad) — überspringt die GANZE Station ──────────────
   //
@@ -1154,6 +1268,44 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
           onAntwort: _antwortGewaehlt,
         ),
       LernModus.umrissMultiple => _UmrissMultipleUI(
+          frage: f,
+          geoRings: _geoRings,
+          gewaehlt: _gewahlteAntwort,
+          showFeedback: _showFeedback,
+          feedbackRichtig: _feedbackRichtig,
+          onAntwort: _antwortGewaehlt,
+        ),
+      LernModus.zweiWahrheiten => _ZweiWahrheitenUI(
+          frage: f,
+          gewaehlt: _gewahlteAntwort,
+          showFeedback: _showFeedback,
+          feedbackRichtig: _feedbackRichtig,
+          onAntwort: _antwortGewaehlt,
+        ),
+      LernModus.wasGehoertNichtDazu => _WasGehoertNichtDazuUI(
+          frage: f,
+          gewaehlt: _gewahlteAntwort,
+          showFeedback: _showFeedback,
+          feedbackRichtig: _feedbackRichtig,
+          onAntwort: _antwortGewaehlt,
+        ),
+      LernModus.nachbarschaftsKette => _NachbarschaftsKetteUI(
+          frage: f,
+          bestaetigt: _ketteFertig,
+          feedbackRichtig: _feedbackRichtig,
+          weg: _ketteWeg,
+          onZielErreicht: _ketteZielErreicht,
+          onWeiter: _ketteWeiter,
+        ),
+      LernModus.laenderRanking => _LaenderRankingUI(
+          frage: f,
+          bestaetigt: _rankingBestaetigt,
+          feedbackRichtig: _feedbackRichtig,
+          eingabe: _rankingEingabe,
+          onBestaetigen: _rankingBestaetigen,
+          onWeiter: _rankingWeiter,
+        ),
+      LernModus.flaechenVergleich => _FlaechenVergleichUI(
           frage: f,
           geoRings: _geoRings,
           gewaehlt: _gewahlteAntwort,
@@ -2765,4 +2917,1987 @@ class _UmrissPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_UmrissPainter o) => o.rings != rings || o.color != color;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Flächen-Vergleich — zwei Umrisse im gemeinsamen Maßstab
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Leitgröße der Komposition ist die Kantenlänge der Vergleichsfläche; alle
+// übrigen Maße dieses Blocks sind Anteile davon. Wird die Fläche später
+// größer, wandern Innenabstand und Randstärke im Verhältnis mit.
+
+/// Leitgröße: Anteil der Bildschirmhöhe, den die Vergleichsfläche einnimmt.
+const _kVergleichHoeheAnteil = 0.30;
+const _kVergleichMin = 180.0;
+const _kVergleichMax = 300.0;
+
+/// Innenabstand der Zeichenfläche — verhindert, dass der Umriss die Kante
+/// berührt.
+const _kVergleichPadAnteil = 0.06;
+
+/// Randstärke der beiden Silhouetten.
+const _kVergleichRandAnteil = 0.009;
+
+/// Waagerechter Abstand zwischen den Umrissen, als Anteil ihrer
+/// zusammengenommenen Breite.
+const _kVergleichLuecke = 0.10;
+
+/// Schriftgröße der Ländernamen, als Anteil der kürzeren Kante.
+const _kVergleichNameAnteil = 0.055;
+
+/// Das größere Land im helleren Grün, das kleinere im vollen Akzentgrün: so
+/// bleibt der kleine Umriss trotz seiner Fläche gut sichtbar.
+const _cVergleichGross = Color(0xFF9ACD9A);
+const _cVergleichKlein = Color(0xFF4A9E4A);
+const _cVergleichRand = Color(0xFF1A1A1A);
+
+/// Lambert-azimutale FLÄCHENTREUE Projektion, zentriert auf den Schwerpunkt
+/// der übergebenen Ringe.
+///
+/// Bewusst nicht die Mercator-Projektion aus [_UmrissPainter]: Mercator
+/// streckt Flächen mit dem Quadrat des Breitengrad-Kosinus — Grönland
+/// erschiene dort etwa so groß wie Afrika, obwohl es vierzehnmal kleiner ist.
+/// Für einen Modus, dessen ganze Aussage im Größenverhältnis liegt, ist das
+/// die eine Sache, die nicht schiefgehen darf.
+///
+/// Die azimutale Variante hält zusätzlich die Form nahe am gewohnten
+/// Kartenbild. Eine zylindrische flächentreue Projektion wäre ebenso
+/// flächentreu, würde die Länder aber je nach Breitengrad unterschiedlich
+/// stark platt drücken — zwei Länder nebeneinander sähen dann verschieden
+/// verzerrt aus.
+List<List<Offset>> _laeaProjektion(List<List<Offset>> ringe) {
+  if (ringe.isEmpty) return const [];
+  double sx = 0, sy = 0;
+  var n = 0;
+  for (final r in ringe) {
+    for (final p in r) {
+      sx += p.dx;
+      sy += p.dy;
+      n++;
+    }
+  }
+  if (n == 0) return const [];
+  final lam0 = sx / n * pi / 180;
+  final phi0 = sy / n * pi / 180;
+  final sinPhi0 = sin(phi0), cosPhi0 = cos(phi0);
+
+  return ringe
+      .map((r) => r.map((p) {
+            final lam = p.dx * pi / 180, phi = p.dy * pi / 180;
+            final dLam = lam - lam0;
+            final cosC =
+                sinPhi0 * sin(phi) + cosPhi0 * cos(phi) * cos(dLam);
+            // Am Gegenpol ist die Projektion nicht definiert. Bei einem
+            // einzelnen Land, das um seinen eigenen Schwerpunkt projiziert
+            // wird, kann das nicht eintreten — der Schutz kostet nichts.
+            final k = sqrt(2 / max(1 + cosC, 1e-9));
+            return Offset(
+              k * cos(phi) * sin(dLam),
+              // Norden zeigt in Bildschirmkoordinaten nach unten.
+              -k * (cosPhi0 * sin(phi) - sinPhi0 * cos(phi) * cos(dLam)),
+            );
+          }).toList())
+      .toList();
+}
+
+Rect? _ringeBbox(List<List<Offset>> ringe) {
+  double minX = double.infinity, maxX = double.negativeInfinity;
+  double minY = double.infinity, maxY = double.negativeInfinity;
+  for (final r in ringe) {
+    for (final p in r) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+  }
+  if (minX > maxX || minY > maxY) return null;
+  return Rect.fromLTRB(minX, minY, maxX, maxY);
+}
+
+class _VergleichsPainter extends CustomPainter {
+  final List<List<Offset>> grossRinge;
+  final List<List<Offset>> kleinRinge;
+  final String grossName;
+  final String kleinName;
+
+  const _VergleichsPainter({
+    required this.grossRinge,
+    required this.kleinRinge,
+    required this.grossName,
+    required this.kleinName,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gross = _laeaProjektion(grossRinge);
+    final klein = _laeaProjektion(kleinRinge);
+    final bbGross = _ringeBbox(gross), bbKlein = _ringeBbox(klein);
+    if (bbGross == null || bbKlein == null) return;
+    if (bbGross.width <= 0 || bbGross.height <= 0) return;
+    if (bbKlein.width <= 0 || bbKlein.height <= 0) return;
+
+    final pad = size.shortestSide * _kVergleichPadAnteil;
+    // Streifen am unteren Rand für die beiden Ländernamen.
+    final schrift = size.shortestSide * _kVergleichNameAnteil;
+    final namenHoehe = schrift * 1.5;
+    final avW = size.width - 2 * pad;
+    final avH = size.height - 2 * pad - namenHoehe;
+    if (avW <= 0 || avH <= 0) return;
+
+    // Abstand zwischen den beiden Umrissen, in Projektionseinheiten, damit er
+    // beim Skalieren im Verhältnis bleibt.
+    final lueckeProj = (bbGross.width + bbKlein.width) * _kVergleichLuecke;
+    final gesamtBreite = bbGross.width + bbKlein.width + lueckeProj;
+    final maxHoehe = max(bbGross.height, bbKlein.height);
+
+    // DER GEMEINSAME MASSSTAB — der Kern dieses Modus. Beide Umrisse werden
+    // mit exakt demselben Faktor gezeichnet; ein eigener Maßstab je Land
+    // würde die Aussage der Darstellung zerstören. Der Faktor ist so groß,
+    // dass das PAAR den Bereich ausfüllt — nebeneinander kann das größere
+    // Land ihn nicht allein ausfüllen, ohne das kleinere hinauszudrängen.
+    final skala = min(avW / gesamtBreite, avH / maxHoehe);
+
+    // Gemeinsame Grundlinie: beide Umrisse stehen unten auf derselben Kante,
+    // dadurch ist der Größenunterschied direkt ablesbar.
+    final grundlinie = pad + avH;
+    final linkerRand = pad + (avW - gesamtBreite * skala) / 2;
+    final randStaerke = size.shortestSide * _kVergleichRandAnteil;
+
+    // Links das größere, rechts das kleinere — absteigend gelesen wirkt der
+    // Unterschied unmittelbarer als andersherum.
+    final grossX = linkerRand;
+    final kleinX = linkerRand + (bbGross.width + lueckeProj) * skala;
+
+    _zeichne(canvas, gross, bbGross, skala, grossX, grundlinie,
+        fuellung: _cVergleichGross, randStaerke: randStaerke);
+    _zeichne(canvas, klein, bbKlein, skala, kleinX, grundlinie,
+        fuellung: _cVergleichKlein, randStaerke: randStaerke);
+
+    _name(canvas, grossName, grossX + bbGross.width * skala / 2,
+        grundlinie + schrift * 0.35, schrift, size.width);
+    _name(canvas, kleinName, kleinX + bbKlein.width * skala / 2,
+        grundlinie + schrift * 0.35, schrift, size.width);
+  }
+
+  /// Zeichnet [ringe] so, dass die linke Kante auf [x] und die untere Kante
+  /// auf [grundlinie] liegt.
+  void _zeichne(
+    Canvas canvas,
+    List<List<Offset>> ringe,
+    Rect bbox,
+    double skala,
+    double x,
+    double grundlinie, {
+    required Color fuellung,
+    required double randStaerke,
+  }) {
+    final pfad = Path();
+    for (final r in ringe) {
+      if (r.length < 3) continue;
+      for (var i = 0; i < r.length; i++) {
+        final p = Offset(
+          (r[i].dx - bbox.left) * skala + x,
+          (r[i].dy - bbox.bottom) * skala + grundlinie,
+        );
+        if (i == 0) {
+          pfad.moveTo(p.dx, p.dy);
+        } else {
+          pfad.lineTo(p.dx, p.dy);
+        }
+      }
+      pfad.close();
+    }
+    canvas.drawPath(
+        pfad,
+        Paint()
+          ..color = fuellung
+          ..style = PaintingStyle.fill
+          ..isAntiAlias = true);
+    canvas.drawPath(
+        pfad,
+        Paint()
+          ..color = _cVergleichRand
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = randStaerke
+          ..isAntiAlias = true);
+  }
+
+  /// Ländername mittig unter dem jeweiligen Umriss.
+  ///
+  /// Im Painter statt als Flutter-Text, weil nur hier bekannt ist, wo die
+  /// beiden Umrisse nach der gemeinsamen Skalierung tatsächlich sitzen — eine
+  /// Row darunter könnte sich nur raten.
+  void _name(Canvas canvas, String text, double mitteX, double oben,
+      double schrift, double maxBreite) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: schrift,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF1A1A1A),
+        ),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: maxBreite / 2);
+    tp.paint(canvas, Offset(mitteX - tp.width / 2, oben));
+  }
+
+  @override
+  bool shouldRepaint(covariant _VergleichsPainter old) =>
+      old.grossRinge != grossRinge ||
+      old.kleinRinge != kleinRinge ||
+      old.grossName != grossName ||
+      old.kleinName != kleinName;
+}
+
+class _FlaechenVergleichUI extends StatelessWidget {
+  final Frage frage;
+  final Map<String, List<List<Offset>>> geoRings;
+  final String? gewaehlt;
+  final bool showFeedback, feedbackRichtig;
+  final void Function(String) onAntwort;
+
+  const _FlaechenVergleichUI({
+    required this.frage,
+    required this.geoRings,
+    required this.gewaehlt,
+    required this.showFeedback,
+    required this.feedbackRichtig,
+    required this.onAntwort,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final kleinIso = frage.meta['kleinesLand'] as String? ?? '';
+    final grossRinge = geoRings[frage.laenderCode] ?? const <List<Offset>>[];
+    final kleinRinge = geoRings[kleinIso] ?? const <List<Offset>>[];
+    final geladen = grossRinge.isNotEmpty && kleinRinge.isNotEmpty;
+
+    final kante = (MediaQuery.of(context).size.height * _kVergleichHoeheAnteil)
+        .clamp(_kVergleichMin, _kVergleichMax);
+
+    return Column(
+      children: [
+        Text(
+          frage.frage,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: kante,
+          child: geladen
+              ? CustomPaint(
+                  painter: _VergleichsPainter(
+                    grossRinge: grossRinge,
+                    kleinRinge: kleinRinge,
+                    grossName: _countryByIso2(frage.laenderCode)?.name ??
+                        frage.laenderCode,
+                    kleinName: _countryByIso2(kleinIso)?.name ?? kleinIso,
+                  ),
+                )
+              : const Center(child: CircularProgressIndicator()),
+        ),
+        const SizedBox(height: 20),
+        ...frage.antwortOptionen.map((opt) => _AntwortButton(
+              text: opt,
+              showFeedback: showFeedback,
+              istRichtig: opt == frage.richtigeAntwort,
+              istGewaehlt: opt == gewaehlt,
+              feedbackRichtig: feedbackRichtig,
+              onTap: showFeedback ? null : () => onAntwort(opt),
+            )),
+      ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Was gehört nicht dazu? — vier Länderkarten im 2×2-Raster
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Leitgröße der Kachel: Seitenverhältnis Breite zu Höhe. Flagge, Name und
+/// Innenabstand darunter sind Anteile der Kachelbreite, damit sie beim
+/// Skalieren zusammenbleiben.
+const _kQuartettSeitenverhaeltnis = 1.25;
+const _kQuartettFlaggeAnteil = 0.52;
+const _kQuartettNameAnteil = 0.105;
+const _kQuartettPadAnteil = 0.09;
+const _kQuartettAbstand = 12.0;
+
+class _QuartettKachel extends StatelessWidget {
+  final String iso2;
+  final bool showFeedback, istRichtig, istGewaehlt;
+  final VoidCallback? onTap;
+
+  /// Kachelbreite als Leitgröße — vom Aufrufer berechnet, NICHT über einen
+  /// LayoutBuilder gemessen. Der gesamte Fragen-Inhalt steckt in einem
+  /// IntrinsicHeight (siehe build()), und ein LayoutBuilder kann dort ebenso
+  /// wenig eine intrinsische Höhe melden wie ein GridView.
+  final double breite;
+
+  const _QuartettKachel({
+    required this.iso2,
+    required this.showFeedback,
+    required this.istRichtig,
+    required this.istGewaehlt,
+    required this.breite,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Farbgebung wie bei den Antwort-Buttons: nach dem Antworten wird die
+    // gesuchte Kachel grün, eine falsch gewählte rot — alles andere bleibt
+    // neutral, damit der Blick auf der Auflösung landet.
+    Color flaeche = Colors.white;
+    Color rand = const Color(0xFF1A1A1A);
+    if (showFeedback && istRichtig) {
+      flaeche = const Color(0xFFE8F5E9);
+      rand = const Color(0xFF2E7D32);
+    } else if (showFeedback && istGewaehlt) {
+      flaeche = const Color(0xFFFFEBEE);
+      rand = const Color(0xFFD94040);
+    }
+
+    final co = _countryByIso2(iso2);
+    return SizedBox(
+      width: breite,
+      height: breite / _kQuartettSeitenverhaeltnis,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: EdgeInsets.all(breite * _kQuartettPadAnteil),
+          decoration: BoxDecoration(
+            color: flaeche,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: rand, width: 2),
+            boxShadow: [
+              BoxShadow(color: rand, offset: const Offset(0, 4), blurRadius: 0),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FlaggenWidget(
+                countryCode: iso2,
+                width: breite * _kQuartettFlaggeAnteil,
+                height: breite * _kQuartettFlaggeAnteil * 0.66,
+                borderRadius: 5,
+              ),
+              SizedBox(height: breite * 0.07),
+              // Lange Ländernamen (Bosnien und Herzegowina) müssen in die
+              // Kachel passen, ohne dass die Kachelhöhe springt.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    co?.name ?? iso2,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: breite * _kQuartettNameAnteil,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A1A1A),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WasGehoertNichtDazuUI extends StatelessWidget {
+  final Frage frage;
+  final String? gewaehlt;
+  final bool showFeedback, feedbackRichtig;
+  final void Function(String) onAntwort;
+
+  const _WasGehoertNichtDazuUI({
+    required this.frage,
+    required this.gewaehlt,
+    required this.showFeedback,
+    required this.feedbackRichtig,
+    required this.onAntwort,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final optionen = frage.antwortOptionen;
+    // Leitgröße der Kacheln: die halbe nutzbare Breite. Der Screen legt 16px
+    // Innenabstand je Seite an (SingleChildScrollView in build()), dazwischen
+    // liegt der Kachelabstand.
+    final kachelBreite =
+        (MediaQuery.sizeOf(context).width - 32 - _kQuartettAbstand) / 2;
+    return Column(
+      children: [
+        // Der Knopf steht rechts ÜBER dem Fragetext, nicht daneben: mit
+        // Beschriftung ist er rund 100px breit, und ein entsprechend
+        // freigehaltener Rand würde den Fragetext auf schmalen Geräten auf
+        // wenige Zeichen pro Zeile zusammenquetschen.
+        Align(
+          alignment: Alignment.centerRight,
+          child: _KategorienKnopf(onTap: () => zeigeQuartettHilfe(context)),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          frage.frage,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 20),
+        // Zwei Reihen statt GridView: der gesamte Fragen-Inhalt steckt in
+        // einem IntrinsicHeight, und ein GridView ist ein Viewport, der dort
+        // keine intrinsische Höhe melden kann ("RenderShrinkWrappingViewport
+        // does not support returning intrinsic dimensions"). Reihen aus
+        // SizedBoxen haben das Problem nicht.
+        for (var reihe = 0; reihe < 2; reihe++) ...[
+          if (reihe > 0) const SizedBox(height: _kQuartettAbstand + 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var spalte = 0; spalte < 2; spalte++) ...[
+                if (spalte > 0) const SizedBox(width: _kQuartettAbstand),
+                if (reihe * 2 + spalte < optionen.length)
+                  _QuartettKachel(
+                    iso2: optionen[reihe * 2 + spalte],
+                    breite: kachelBreite,
+                    showFeedback: showFeedback,
+                    istRichtig:
+                        optionen[reihe * 2 + spalte] == frage.richtigeAntwort,
+                    istGewaehlt: optionen[reihe * 2 + spalte] == gewaehlt,
+                    onTap: showFeedback
+                        ? null
+                        : () => onAntwort(optionen[reihe * 2 + spalte]),
+                  ),
+              ],
+            ],
+          ),
+        ],
+        // Die Auflösung ist der Lerneffekt des Modus: sie sagt, WAS die
+        // anderen drei verbindet. Ohne sie bliebe nur ein Ratespiel.
+        if (showFeedback) ...[
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAEAE5),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 4),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('💡', style: TextStyle(fontSize: 18)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    frage.meta['aufloesung'] as String? ?? '',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Länder-Ranking — Zahlenschloss
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Leitgröße ist die Walzenhöhe; Ziffergröße, Rahmenstärke und Breite der
+// Walzen sind Anteile davon.
+
+/// Leitgröße: die Kantenlänge EINES Schlosses. Es ist quadratisch, alle
+/// weiteren Maße leiten sich daraus ab.
+const _kSchlossGroesse = 96.0;
+
+/// Randstärke des Schlossrahmens.
+const _kSchlossRand = 2.5;
+
+/// Höhe des Sichtfensters — die Innenfläche des Rahmens.
+///
+/// Die itemExtent der Walze ist GENAU so hoch. Nur dann steht immer exakt
+/// eine Ziffer im Fenster und keine Nachbarziffer ragt angeschnitten herein.
+const _kSchlossFenster = _kSchlossGroesse - 2 * _kSchlossRand;
+
+const _kZifferGroesseAnteil = 0.55; // ~52pt bei 96px Kantenlänge
+const _kSchlossRadiusAnteil = 0.17;
+
+/// Abstand zwischen den drei getrennten Schlössern.
+const _kSchlossAbstand = 14.0;
+
+/// Rang-Zeichen links vor den Schlössern. Bewusst klein gegenüber den 53pt
+/// großen Ziffern: es soll die Zahl einordnen, nicht mit ihr konkurrieren.
+const _kRangZeichenGroesse = 18.0;
+const _kRangZeichenAbstand = 8.0;
+
+/// Ziffern je Stelle. Die Hunderterstelle führt nur 0 und 1 — mehr als 199
+/// Rangplätze gibt es in keiner Kategorie (die größten Felder umfassen 197
+/// Länder), Ziffern ab 2 wären dort tote Wege.
+const _kZiffernProWalze = [2, 10, 10];
+
+/// Höchster überhaupt vergebener Rangplatz — Rückfallwert, wenn eine Frage
+/// die Feldgröße nicht mitliefert.
+const _kMaxRang = 197;
+
+const _cSchlossRahmen = Color(0xFF1A1A1A);
+const _cSchlossGrund = Color(0xFFF4F5EE);
+
+/// Toleranz in Rangplätzen, bis zu der die Antwort als richtig zählt.
+///
+/// Der exakte Rangplatz ist nicht erratbar — hier gilt dieselbe Logik wie bei
+/// der 20-Prozent-Toleranz des Preis-Schätzens: gefragt ist ein Gefühl für
+/// die Größenordnung, nicht auswendig gelernte Tabellen.
+const kRankingToleranz = 15;
+
+/// Punktekurve nach Abweichung in Rangplätzen.
+///
+/// Kontinuierlich statt in Stufen, wie beim Preis-Schätzen
+/// (100 * exp(-dev/17)). Die ersten fünf Plätze sind frei, danach fällt die
+/// Kurve so ab, dass die gewünschten Bänder herauskommen: 15 Plätze → 62,
+/// 35 → 24, 70 → 5, darüber praktisch null.
+int rankingPunkte(int abweichung) {
+  if (abweichung <= 5) return 100;
+  return (100 * exp(-(abweichung - 5) / 21)).round().clamp(0, 100);
+}
+
+/// Ein einzelnes Schloss: eine Walze in eigenem Rahmen.
+///
+/// Drei davon stehen nebeneinander statt einer durchgehenden Leiste — jedes
+/// mit eigenem Rand und eigener Grundfläche, damit man die drei Stellen als
+/// getrennte Räder liest.
+class _Walze extends StatelessWidget {
+  final FixedExtentScrollController controller;
+  final bool gesperrt;
+  final ValueChanged<int> onZiffer;
+
+  /// Anzahl der Ziffern dieser Walze. Die Hunderterstelle führt nur 0 und 1:
+  /// mehr als 199 Rangplätze gibt es in keiner Kategorie, Ziffern ab 2 wären
+  /// dort tote Wege.
+  final int ziffern;
+
+  const _Walze({
+    required this.controller,
+    required this.gesperrt,
+    required this.onZiffer,
+    this.ziffern = 10,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _kSchlossGroesse,
+      height: _kSchlossGroesse,
+      decoration: BoxDecoration(
+        color: _cSchlossGrund,
+        borderRadius:
+            BorderRadius.circular(_kSchlossGroesse * _kSchlossRadiusAnteil),
+        border: Border.all(color: _cSchlossRahmen, width: _kSchlossRand),
+        boxShadow: const [
+          BoxShadow(
+              color: _cSchlossRahmen, offset: Offset(0, 4), blurRadius: 0),
+        ],
+      ),
+      // Doppelt geklippt: der Container schneidet an der abgerundeten Ecke,
+      // die Walze selbst noch einmal an ihrem Fenster.
+      clipBehavior: Clip.antiAlias,
+      child: ListWheelScrollView.useDelegate(
+        controller: controller,
+        // Genau die Fensterhöhe: eine Ziffer füllt das Fenster aus, die
+        // benachbarten liegen vollständig außerhalb.
+        itemExtent: _kSchlossFenster,
+        clipBehavior: Clip.hardEdge,
+        // squeeze 1.0 statt 1.15: gestauchte Elemente rücken näher zusammen
+        // und würden die Nachbarziffern wieder ins Fenster schieben.
+        squeeze: 1.0,
+        // Flach statt zylindrisch — bei nur einer sichtbaren Ziffer bringt
+        // die Wölbung nichts und würde die große Ziffer verzerren.
+        perspective: 0.001,
+        diameterRatio: 100,
+        physics: gesperrt
+            ? const NeverScrollableScrollPhysics()
+            : const FixedExtentScrollPhysics(),
+        onSelectedItemChanged: (i) => onZiffer(i % ziffern),
+        // Endlos-Delegate: eine echte Schlosswalze hat keinen Anfang und kein
+        // Ende, die letzte Ziffer geht direkt in die erste über.
+        childDelegate: ListWheelChildLoopingListDelegate(
+          children: [
+            for (var z = 0; z < ziffern; z++)
+              Center(
+                child: Text(
+                  '$z',
+                  style: const TextStyle(
+                    fontSize: _kSchlossGroesse * _kZifferGroesseAnteil,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1A1A1A),
+                    height: 1.0,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LaenderRankingUI extends StatefulWidget {
+  final Frage frage;
+  final bool bestaetigt, feedbackRichtig;
+  final int eingabe;
+  final void Function(int) onBestaetigen;
+  final VoidCallback onWeiter;
+
+  const _LaenderRankingUI({
+    required this.frage,
+    required this.bestaetigt,
+    required this.feedbackRichtig,
+    required this.eingabe,
+    required this.onBestaetigen,
+    required this.onWeiter,
+  });
+
+  @override
+  State<_LaenderRankingUI> createState() => _LaenderRankingUIState();
+}
+
+class _LaenderRankingUIState extends State<_LaenderRankingUI> {
+  late final List<FixedExtentScrollController> _ctrl = [
+    for (var i = 0; i < 3; i++) FixedExtentScrollController(initialItem: 0),
+  ];
+  final _ziffern = [0, 0, 0];
+
+  // Vibrations-Einstellungen VORAB laden: zwischen dem Einrasten der Walze
+  // und dem Impuls darf kein await liegen, sonst kommt er zu spät.
+  bool _vibrationAn = false;
+  bool _hatAmplitude = false;
+
+  @override
+  void initState() {
+    super.initState();
+    EinstellungenService.vibrationAktiv.then((aktiv) async {
+      if (!aktiv) return;
+      final amp = await Vibration.hasAmplitudeControl();
+      if (mounted) {
+        setState(() {
+          _vibrationAn = true;
+          _hatAmplitude = amp;
+        });
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _LaenderRankingUI old) {
+    super.didUpdateWidget(old);
+    // Der Belohnungsmoment: nach dem Bestätigen drehen die Walzen sichtbar auf
+    // den echten Rangplatz weiter.
+    if (!old.bestaetigt && widget.bestaetigt) _dreheAufAntwort();
+  }
+
+  @override
+  void dispose() {
+    for (final c in _ctrl) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Kurzer, sehr dezenter Impuls beim Einrasten einer Ziffer.
+  void _rasten() {
+    if (!_vibrationAn) return;
+    if (_hatAmplitude) {
+      Vibration.vibrate(duration: 20, amplitude: 40);
+    } else {
+      Vibration.vibrate(duration: 20);
+    }
+  }
+
+  /// Der eingestellte Rangplatz, auf das gültige Feld begrenzt.
+  ///
+  /// Die dynamische Beschränkung der Einerwalze (bei 1_9 nur noch bis 5) habe
+  /// ich bewusst weggelassen: die Walzen sind Endlos-Räder, deren Kinderzahl
+  /// sich mitten im Drehen ändern müsste — das ruckelt und fühlt sich kaputt
+  /// an. Stattdessen wird hier gekappt. 000 gibt es als Rangplatz nicht und
+  /// zählt als 001.
+  int get _eingabe {
+    final roh = _ziffern[0] * 100 + _ziffern[1] * 10 + _ziffern[2];
+    final feld =
+        (widget.frage.meta['gesamt'] as num?)?.toInt() ?? _kMaxRang;
+    return roh.clamp(1, feld);
+  }
+
+  void _dreheAufAntwort() {
+    final rang = int.tryParse(widget.frage.richtigeAntwort) ?? 0;
+    final ziel = [rang ~/ 100 % 10, rang ~/ 10 % 10, rang % 10];
+    for (var i = 0; i < 3; i++) {
+      // Immer VORWÄRTS drehen und mindestens eine volle Umdrehung: das sieht
+      // nach einem Schloss aus, das aufspringt, statt nach einem Sprung.
+      // Modulo je Walze, weil die Hunderterstelle nur zwei Ziffern hat.
+      final n = _kZiffernProWalze[i];
+      final jetzt = _ctrl[i].selectedItem;
+      final schritte = ((ziel[i] - _ziffern[i]) % n + n) % n + n;
+      _ctrl[i].animateToItem(
+        jetzt + schritte,
+        duration: Duration(milliseconds: 700 + i * 160),
+        curve: Curves.easeOutBack,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = widget.frage;
+    final rang = int.tryParse(f.richtigeAntwort) ?? 0;
+    final gesamt = (f.meta['gesamt'] as num?)?.toInt() ?? 0;
+    final abweichung = (widget.eingabe - rang).abs();
+
+    return Column(
+      children: [
+        if (f.laenderCode.isNotEmpty) ...[
+          _LandHeader(iso2: f.laenderCode),
+          const SizedBox(height: 14),
+        ],
+        Text(
+          f.frage,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          t('Platz 1 = höchster Wert · {n} Länder gewertet',
+              {'n': '$gesamt'}),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF888888)),
+        ),
+        const SizedBox(height: 20),
+
+        // ── Die drei Schlösser ───────────────────────────────────────────
+        //
+        // FittedBox: die Reihe ist mit Rang-Zeichen rund 340px breit, auf
+        // einem 360px-Gerät stehen nach den Seitenrändern aber nur 328px zur
+        // Verfügung. Statt umzubrechen oder überzulaufen skaliert die
+        // Komposition dort als Ganzes herunter — die Verhältnisse zwischen
+        // Zeichen, Schlössern und Abständen bleiben erhalten.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Das Rang-Zeichen steht LINKS: "#143" liest sich in der
+              // richtigen Reihenfolge, und im Deutschen steht "Platz" ohnehin
+              // vor der Zahl, nicht dahinter.
+              Padding(
+                padding: const EdgeInsets.only(right: _kRangZeichenAbstand),
+                child: Text(
+                  '#',
+                  style: TextStyle(
+                    fontSize: _kRangZeichenGroesse,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF888888),
+                  ),
+                ),
+              ),
+              for (var i = 0; i < 3; i++) ...[
+                if (i > 0) const SizedBox(width: _kSchlossAbstand),
+                _Walze(
+                  controller: _ctrl[i],
+                  gesperrt: widget.bestaetigt,
+                  ziffern: _kZiffernProWalze[i],
+                  onZiffer: (z) {
+                    if (_ziffern[i] == z) return;
+                    setState(() => _ziffern[i] = z);
+                    if (!widget.bestaetigt) _rasten();
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+
+        if (!widget.bestaetigt)
+          GestureDetector(
+            onTap: () => widget.onBestaetigen(_eingabe),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4A9E4A),
+                borderRadius: BorderRadius.circular(50),
+                border:
+                    Border.all(color: const Color(0xFF1A1A1A), width: 2.5),
+                boxShadow: const [
+                  BoxShadow(
+                      color: Color(0xFF1A1A1A),
+                      offset: Offset(0, 4),
+                      blurRadius: 0),
+                ],
+              ),
+              child: Text(
+                t('Bestätigen'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          )
+        else ...[
+          _RankingAufloesung(
+            frage: f,
+            rang: rang,
+            abweichung: abweichung,
+            richtig: widget.feedbackRichtig,
+          ),
+          const SizedBox(height: 18),
+          GestureDetector(
+            onTap: widget.onWeiter,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4A9E4A),
+                borderRadius: BorderRadius.circular(50),
+                border:
+                    Border.all(color: const Color(0xFF1A1A1A), width: 2.5),
+                boxShadow: const [
+                  BoxShadow(
+                      color: Color(0xFF1A1A1A),
+                      offset: Offset(0, 4),
+                      blurRadius: 0),
+                ],
+              ),
+              child: Text(
+                t('Weiter'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Auflösung nach dem Bestätigen: echter Rang, Abweichung, echter Wert.
+class _RankingAufloesung extends StatelessWidget {
+  final Frage frage;
+  final int rang, abweichung;
+  final bool richtig;
+
+  const _RankingAufloesung({
+    required this.frage,
+    required this.rang,
+    required this.abweichung,
+    required this.richtig,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final wert = (frage.meta['wert'] as num?)?.toDouble();
+    final einheit = frage.meta['einheit'] as String? ?? '';
+    final emoji = frage.meta['emoji'] as String? ?? '';
+    final punkte = rankingPunkte(abweichung);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: richtig ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: richtig
+                ? const Color(0xFF2E7D32)
+                : const Color(0xFFD94040),
+            width: 2),
+      ),
+      child: Column(
+        children: [
+          Text(
+            t('Platz {n}', {'n': '$rang'}),
+            style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1A1A1A)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            abweichung == 0
+                ? t('Genau richtig!')
+                : t('{n} Plätze daneben · {p} Punkte',
+                    {'n': '$abweichung', 'p': '$punkte'}),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF888888)),
+          ),
+          if (wert != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              // _formatGrosswert statt eigener Formatierung: es übersetzt die
+              // Einheit und kürzt große Zahlen sprachrichtig ("1.4B" statt
+              // "1,4 Mrd."). Meine erste Fassung hatte beides hartcodiert
+              // deutsch.
+              '$emoji  ${_formatGrosswert(wert, einheit)}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A1A)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Zwei Wahrheiten, eine Lüge — drei Karten mit Auflösungs-Effekt
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Die Karten stehen UNTEREINANDER, nicht nebeneinander. Gemessen an 450
+// erzeugten Aussagen: Median 31 Zeichen, 90. Perzentil 40, längste 114 (die
+// kuratierten Fun-Facts sind ganze Sätze). Drei Spalten auf einem 360dp
+// breiten Gerät ließen je Karte rund 11 Zeichen pro Zeile — der längste Text
+// bräuchte elf Zeilen, und alle drei Karten würden auf diese Höhe gezogen.
+// Volle Breite untereinander ergibt dagegen rund 38 Zeichen pro Zeile: der
+// Median passt in eine Zeile, der längste Text in vier.
+
+/// Leitgröße des Effekts: der Schattenversatz der ruhenden Karte. Hebung und
+/// Rücktritt sind Vielfache davon, damit die drei Zustände zusammenbleiben.
+const _kAussageSchattenRuhe = 4.0;
+const _kAussageSchattenVorn = 6.0;
+const _kAussageSchattenZurueck = 2.0;
+
+const _kAussageDauer = Duration(milliseconds: 600);
+
+/// Kurzes Wackeln der falsch getippten Karte, bevor sie zurücktritt.
+const _kAussageWackeln = Duration(milliseconds: 300);
+
+// ── Reihenfolge der Auflösung ───────────────────────────────────────────────
+//
+// Der Ablauf hängt vom Ergebnis ab, nicht von der Position der Karten. Bei
+// richtiger Antwort steht zuerst der Fund im Vordergrund, bei falscher zuerst
+// der Irrtum — danach jeweils der Rest.
+
+/// Richtig geraten: die gesuchte Karte hebt sich sofort, die beiden anderen
+/// treten danach nacheinander zurück (von oben nach unten).
+const _kFolgeRichtig = [
+  Duration(milliseconds: 400),
+  Duration(milliseconds: 600),
+];
+
+/// Falsch geraten: die getippte Karte wackelt ab 0ms und tritt ab 300ms
+/// zurück, danach hebt sich die gesuchte, zuletzt geht die dritte zurück.
+const _kFalschLuegeAb = Duration(milliseconds: 600);
+const _kFalschRestAb = Duration(milliseconds: 900);
+
+const _kAussageScaleVorn = 1.03;
+const _kAussageScaleZurueck = 0.94;
+const _kAussageHubVorn = -4.0;
+const _kAussageHubZurueck = 4.0;
+const _kAussageDeckkraftZurueck = 0.5;
+
+/// Seitlicher Rand um jede Karte, damit die vergrößerte Karte nie über den
+/// verfügbaren Bereich hinausragt.
+///
+/// Bei Scale 1.03 wächst eine Karte um 1,5 % ihrer Breite je Seite — auf
+/// einem Tablet mit rund 700px nutzbarer Breite sind das gut 5px. 8px lassen
+/// auch dort Luft und wirken zugleich als Abstand nach außen.
+const _kAussageSeitenrand = 8.0;
+
+/// Die Erklärung erscheint erst, wenn ALLE Karten stehen — sonst konkurriert
+/// sie mit der Bewegung um die Aufmerksamkeit.
+const _kErklaerungDauer = Duration(milliseconds: 250);
+
+const _cAussageRuhe = Color(0xFFFFFDF7);
+const _cAussageZurueck = Color(0xFFDDDAD2);
+const _cAussageVorn = Color(0xFF4A9E4A);
+
+class _AussageKarte extends StatefulWidget {
+  /// Die gesuchte falsche Aussage — sie wird bei der Auflösung hervorgehoben,
+  /// unabhängig davon, was der Spieler getippt hat.
+  final bool istLuege;
+  final bool istGewaehlt, showFeedback, feedbackRichtig;
+  final String text;
+  final VoidCallback? onTap;
+
+  /// Wann die Bewegung dieser Karte beginnt. Kommt vom Aufrufer, weil nur
+  /// der die Rollen aller drei Karten kennt.
+  final Duration startVerzoegerung;
+
+  /// Ob die Karte vor dem Zurücktreten wackelt (die falsch getippte).
+  final bool wackelt;
+
+  const _AussageKarte({
+    required this.text,
+    required this.istLuege,
+    required this.istGewaehlt,
+    required this.showFeedback,
+    required this.feedbackRichtig,
+    required this.startVerzoegerung,
+    required this.wackelt,
+    this.onTap,
+  });
+
+  @override
+  State<_AussageKarte> createState() => _AussageKarteState();
+}
+
+class _AussageKarteState extends State<_AussageKarte>
+    with TickerProviderStateMixin {
+  late final AnimationController _wackelCtrl =
+      AnimationController(vsync: this, duration: _kAussageWackeln);
+  late final AnimationController _aufloesungCtrl =
+      AnimationController(vsync: this, duration: _kAussageDauer);
+
+  @override
+  void initState() {
+    super.initState();
+    // Beim Wechsel zur nächsten Frage wird der Screen neu gebaut; steht das
+    // Feedback schon, muss die Karte ohne Animation im Endzustand starten.
+    if (widget.showFeedback) _aufloesungCtrl.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(covariant _AussageKarte old) {
+    super.didUpdateWidget(old);
+    if (!old.showFeedback && widget.showFeedback) _starteAufloesung();
+    if (old.showFeedback && !widget.showFeedback) {
+      _aufloesungCtrl.value = 0;
+      _wackelCtrl.value = 0;
+    }
+  }
+
+  Future<void> _starteAufloesung() async {
+    // Erst der Platz in der Folge — welcher das ist, bestimmt der Aufrufer
+    // anhand der Rollen aller drei Karten.
+    if (widget.startVerzoegerung > Duration.zero) {
+      await Future<void>.delayed(widget.startVerzoegerung);
+      if (!mounted || !widget.showFeedback) return;
+    }
+    // Die falsch getippte Karte wackelt als Signal, bevor sie zurücktritt.
+    if (widget.wackelt) {
+      await _wackelCtrl.forward(from: 0);
+      if (!mounted) return;
+    }
+    _aufloesungCtrl.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _wackelCtrl.dispose();
+    _aufloesungCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_wackelCtrl, _aufloesungCtrl]),
+      builder: (context, _) {
+        final roh = _aufloesungCtrl.value;
+        // easeOutBack schwingt über 1.0 hinaus — das trägt die Hebung, darf
+        // aber nicht in Farben und Deckkraft laufen, sonst kippen die Werte
+        // aus ihrem gültigen Bereich.
+        final hebung = Curves.easeOutBack.transform(roh);
+        final ruecktritt = Curves.easeOut.transform(roh);
+        final farbT = roh.clamp(0.0, 1.0);
+
+        final double scale, hub, schatten, deckkraft;
+        final Color flaeche, rand, schrift;
+        if (widget.istLuege) {
+          scale = 1 + (_kAussageScaleVorn - 1) * hebung;
+          hub = _kAussageHubVorn * hebung;
+          schatten = _kAussageSchattenRuhe +
+              (_kAussageSchattenVorn - _kAussageSchattenRuhe) * farbT;
+          deckkraft = 1.0;
+          flaeche = Color.lerp(_cAussageRuhe, _cAussageVorn, farbT)!;
+          rand = const Color(0xFF1A1A1A);
+          schrift = Color.lerp(const Color(0xFF1A1A1A), Colors.white, farbT)!;
+        } else {
+          scale = 1 + (_kAussageScaleZurueck - 1) * ruecktritt;
+          hub = _kAussageHubZurueck * ruecktritt;
+          schatten = _kAussageSchattenRuhe +
+              (_kAussageSchattenZurueck - _kAussageSchattenRuhe) * farbT;
+          deckkraft = 1 - (1 - _kAussageDeckkraftZurueck) * farbT;
+          flaeche = Color.lerp(_cAussageRuhe, _cAussageZurueck, farbT)!;
+          rand = Color.lerp(
+              const Color(0xFF1A1A1A), const Color(0xFF888888), farbT)!;
+          schrift = Color.lerp(
+              const Color(0xFF1A1A1A), const Color(0xFF888888), farbT)!;
+        }
+
+        final dx = widget.wackelt ? wackelOffset(_wackelCtrl.value) : 0.0;
+        // Häkchen nur, wenn der Spieler die Lüge selbst gefunden hat.
+        final zeigeHaken =
+            widget.istLuege && widget.showFeedback && widget.feedbackRichtig;
+
+        return Transform.translate(
+          offset: Offset(dx, hub),
+          child: Transform.scale(
+            scale: scale,
+            child: Opacity(
+              opacity: deckkraft,
+              child: GestureDetector(
+                onTap: widget.onTap,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 15),
+                  decoration: BoxDecoration(
+                    color: flaeche,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: rand, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: rand,
+                        offset: Offset(0, schatten),
+                        blurRadius: 0,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.text,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            height: 1.35,
+                            color: schrift,
+                          ),
+                        ),
+                      ),
+                      if (zeigeHaken) ...[
+                        const SizedBox(width: 8),
+                        Opacity(
+                          opacity: farbT,
+                          child: const Icon(Icons.check_rounded,
+                              color: Colors.white, size: 22),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Blendet die Begründung verzögert ein.
+class _ErklaerungEinblendung extends StatefulWidget {
+  final String text;
+  final Duration verzoegerung;
+  const _ErklaerungEinblendung(
+      {required this.text, required this.verzoegerung});
+
+  @override
+  State<_ErklaerungEinblendung> createState() => _ErklaerungEinblendungState();
+}
+
+class _ErklaerungEinblendungState extends State<_ErklaerungEinblendung> {
+  bool _sichtbar = false;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(widget.verzoegerung, () {
+      if (mounted) setState(() => _sichtbar = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: _sichtbar ? 1 : 0,
+      duration: _kErklaerungDauer,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAEAE5),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 4),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('💡', style: TextStyle(fontSize: 18)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                widget.text,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  height: 1.35,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ZweiWahrheitenUI extends StatelessWidget {
+  final Frage frage;
+  final String? gewaehlt;
+  final bool showFeedback, feedbackRichtig;
+  final void Function(String) onAntwort;
+
+  const _ZweiWahrheitenUI({
+    required this.frage,
+    required this.gewaehlt,
+    required this.showFeedback,
+    required this.feedbackRichtig,
+    required this.onAntwort,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final erklaerung = frage.meta['erklaerung'] as String? ?? '';
+    final optionen = frage.antwortOptionen;
+
+    // ── Wer wann dran ist ────────────────────────────────────────────────
+    //
+    // Die Reihenfolge richtet sich nach der Rolle der Karte, nicht nach ihrer
+    // Position: richtig geraten heißt zuerst den Fund zeigen, falsch geraten
+    // zuerst den Irrtum.
+    final luegeIndex = optionen.indexOf(frage.richtigeAntwort);
+    final gewaehltIndex = gewaehlt == null ? -1 : optionen.indexOf(gewaehlt!);
+    final starts = List<Duration>.filled(optionen.length, Duration.zero);
+    final wackelt = List<bool>.filled(optionen.length, false);
+
+    if (showFeedback) {
+      if (feedbackRichtig) {
+        // Gesuchte Karte sofort, die beiden anderen danach von oben nach
+        // unten.
+        var rang = 0;
+        for (var i = 0; i < optionen.length; i++) {
+          if (i == luegeIndex) continue;
+          starts[i] = _kFolgeRichtig[rang.clamp(0, _kFolgeRichtig.length - 1)];
+          rang++;
+        }
+      } else {
+        for (var i = 0; i < optionen.length; i++) {
+          if (i == gewaehltIndex) {
+            wackelt[i] = true; // startet bei 0, tritt nach dem Wackeln zurück
+          } else if (i == luegeIndex) {
+            starts[i] = _kFalschLuegeAb;
+          } else {
+            starts[i] = _kFalschRestAb;
+          }
+        }
+      }
+    }
+
+    // Die Erklärung wartet, bis die letzte Karte fertig ist.
+    var ende = Duration.zero;
+    for (var i = 0; i < optionen.length; i++) {
+      final fertig = starts[i] +
+          (wackelt[i] ? _kAussageWackeln : Duration.zero) +
+          _kAussageDauer;
+      if (fertig > ende) ende = fertig;
+    }
+
+    return Column(
+      children: [
+        if (frage.laenderCode.isNotEmpty) ...[
+          _LandHeader(iso2: frage.laenderCode),
+          const SizedBox(height: 16),
+        ],
+        Text(
+          frage.frage,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 22),
+        for (var i = 0; i < optionen.length; i++) ...[
+          // Seitlicher Rand außerhalb der Skalierung: dadurch wächst die
+          // hervorgehobene Karte in diesen Rand hinein statt über ihn hinaus.
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: _kAussageSeitenrand),
+            child: _AussageKarte(
+              text: optionen[i],
+              startVerzoegerung: starts[i],
+              wackelt: wackelt[i],
+              istLuege: optionen[i] == frage.richtigeAntwort,
+              istGewaehlt: optionen[i] == gewaehlt,
+              showFeedback: showFeedback,
+              feedbackRichtig: feedbackRichtig,
+              onTap: showFeedback ? null : () => onAntwort(optionen[i]),
+            ),
+          ),
+          // Zwischenraum großzügig: die hervorgehobene Karte wächst um 3 %
+          // und hebt sich um 4px — ohne Luft würde sie die Nachbarn berühren.
+          const SizedBox(height: 18),
+        ],
+        if (showFeedback && erklaerung.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          _ErklaerungEinblendung(text: erklaerung, verzoegerung: ende),
+        ],
+      ],
+    );
+  }
+}
+
+/// Beschrifteter Hilfe-Button in der Spielfläche.
+///
+/// Bewusst nicht in der AppBar: dort sitzen Fortschritt und Skip, und die
+/// Hilfe gehört inhaltlich zur Frage, nicht zur Station.
+class _KategorienKnopf extends StatelessWidget {
+  final VoidCallback onTap;
+  const _KategorienKnopf({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFDF7),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.list_alt_rounded,
+                size: 15, color: Color(0xFF1A1A1A)),
+            const SizedBox(width: 6),
+            Text(
+              t('Kategorien'),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A1A),
+                height: 1.0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Overlay mit den Merkmalen, auf die der Modus prüfen kann.
+///
+/// Die Liste kommt aus [FragenGenerator.quartettKategorien] und damit aus
+/// derselben Quelle, die der Generator auswertet — sie kann nicht veralten.
+void zeigeQuartettHilfe(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (ctx) => GestureDetector(
+      // Antippen irgendwo schließt — zusätzlich zum Schließen-Button und zum
+      // Tippen auf den abgedunkelten Hintergrund.
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(ctx).pop(),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFDF7),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0xFF1A1A1A),
+                  offset: Offset(0, 4),
+                  blurRadius: 0),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                t('Mögliche Gemeinsamkeiten'),
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                t('Drei der vier Länder teilen genau eines dieser Merkmale.'),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF888888),
+                ),
+              ),
+              const SizedBox(height: 14),
+              for (final kategorie in FragenGenerator.quartettKategorien)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('•',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF4A9E4A))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          kategorie,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.of(ctx).pop(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4A9E4A),
+                      borderRadius: BorderRadius.circular(50),
+                      border: Border.all(
+                          color: const Color(0xFF1A1A1A), width: 2),
+                      boxShadow: const [
+                        BoxShadow(
+                            color: Color(0xFF1A1A1A),
+                            offset: Offset(0, 3),
+                            blurRadius: 0),
+                      ],
+                    ),
+                    child: Text(
+                      t('Schließen'),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Nachbarschafts-Kette — den Weg selbst bauen
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Punkte nach Abweichung vom kürzesten Weg.
+///
+/// Anders als beim Länder-Ranking keine stetige Kurve: hier gibt es nur
+/// ganze Schritte, und bereits zwei Umwege sind ein deutlich anderer Weg.
+int kettePunkte(int schritte, int optimum) => switch (schritte - optimum) {
+      <= 0 => 100,
+      1 => 70,
+      2 => 35,
+      _ => 0,
+    };
+
+/// Bis zu wie vielen Schritten über dem Optimum die Antwort noch als richtig
+/// zählt. Ein einzelner Umweg ist Geografie-Wissen, kein Fehler.
+const kKetteToleranz = 1;
+
+const _kKetteFlaggeBreite = 34.0;
+const _kKetteChipRadius = 10.0;
+
+/// Ein antippbares Nachbarland.
+class _NachbarChip extends StatelessWidget {
+  final String iso2;
+  final bool istZiel;
+  final VoidCallback? onTap;
+  const _NachbarChip({required this.iso2, required this.istZiel, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final co = _countryByIso2(iso2);
+    // Das Zielland wird hervorgehoben — ohne diesen Hinweis übersieht man
+    // leicht, dass der nächste Schritt schon der letzte sein kann.
+    final rand = istZiel ? const Color(0xFF4A9E4A) : const Color(0xFF1A1A1A);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        decoration: BoxDecoration(
+          color: istZiel ? const Color(0xFFE8F5E9) : const Color(0xFFFFFDF7),
+          borderRadius: BorderRadius.circular(_kKetteChipRadius),
+          border: Border.all(color: rand, width: 2),
+          boxShadow: [
+            BoxShadow(color: rand, offset: const Offset(0, 3), blurRadius: 0),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FlaggenWidget(
+                countryCode: iso2,
+                width: _kKetteFlaggeBreite,
+                height: _kKetteFlaggeBreite * 0.66,
+                borderRadius: 4),
+            const SizedBox(width: 7),
+            ConstrainedBox(
+              // Lange Namen dürfen den Chip nicht über die Zeile treiben.
+              constraints: const BoxConstraints(maxWidth: 130),
+              child: Text(
+                co?.name ?? iso2,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1A1A1A)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Eine Länderkette als Flaggenfolge mit Pfeilen.
+class _KettenBand extends StatelessWidget {
+  final List<String> kette;
+  final double flaggenBreite;
+  const _KettenBand({required this.kette, this.flaggenBreite = 30});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 4,
+      runSpacing: 6,
+      children: [
+        for (var i = 0; i < kette.length; i++) ...[
+          if (i > 0)
+            const Icon(Icons.arrow_forward_rounded,
+                size: 15, color: Color(0xFF888888)),
+          FlaggenWidget(
+              countryCode: kette[i],
+              width: flaggenBreite,
+              height: flaggenBreite * 0.66,
+              borderRadius: 3),
+        ],
+      ],
+    );
+  }
+}
+
+class _NachbarschaftsKetteUI extends StatefulWidget {
+  final Frage frage;
+  final bool bestaetigt, feedbackRichtig;
+
+  /// Der vom Spieler gebaute Weg — steht erst nach dem Erreichen des Ziels
+  /// fest und wird dann vom Screen zurückgereicht.
+  final List<String> weg;
+  final void Function(List<String> weg) onZielErreicht;
+  final VoidCallback onWeiter;
+
+  const _NachbarschaftsKetteUI({
+    required this.frage,
+    required this.bestaetigt,
+    required this.feedbackRichtig,
+    required this.weg,
+    required this.onZielErreicht,
+    required this.onWeiter,
+  });
+
+  @override
+  State<_NachbarschaftsKetteUI> createState() => _NachbarschaftsKetteUIState();
+}
+
+class _NachbarschaftsKetteUIState extends State<_NachbarschaftsKetteUI> {
+  late List<String> _pfad;
+
+  String get _startIso => widget.frage.meta['startIso'] as String? ?? '';
+  String get _zielIso => widget.frage.meta['zielIso'] as String? ?? '';
+  int get _optimum => (widget.frage.meta['optimum'] as num?)?.toInt() ?? 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pfad = [_startIso];
+  }
+
+  @override
+  void didUpdateWidget(covariant _NachbarschaftsKetteUI old) {
+    super.didUpdateWidget(old);
+    // Neue Frage im selben Widget: von vorn beginnen.
+    if (old.frage.id != widget.frage.id) {
+      _pfad = [_startIso];
+    }
+  }
+
+  void _waehle(String iso2) {
+    if (widget.bestaetigt) return;
+    setState(() => _pfad = [..._pfad, iso2]);
+    // Ziel erreicht: die Frage ist vorbei, der Screen wertet aus.
+    if (iso2 == _zielIso) widget.onZielErreicht(_pfad);
+  }
+
+  void _zurueck() {
+    if (widget.bestaetigt || _pfad.length <= 1) return;
+    setState(() => _pfad = _pfad.sublist(0, _pfad.length - 1));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Nach der Auswertung den zurückgereichten Weg zeigen, davor den eigenen
+    // Zwischenstand.
+    final pfad = widget.bestaetigt && widget.weg.isNotEmpty ? widget.weg : _pfad;
+    final aktuell = pfad.last;
+    final nachbarnDesAktuellen =
+        (FragenGenerator.grenzGraph()[aktuell] ?? const <String>{}).toList()
+          // Schon besuchte Länder ausblenden: ein Weg, der sich selbst
+          // kreuzt, ist nie kürzer und würde die Auswahl nur zustellen.
+          .where((n) => !pfad.contains(n))
+          .toList()
+      ..sort((a, b) {
+        // Das Zielland immer zuerst, sonst alphabetisch — bei vierzehn
+        // Nachbarn wäre eine zufällige Reihenfolge mühsam zu überblicken.
+        if (a == _zielIso) return -1;
+        if (b == _zielIso) return 1;
+        final an = _countryByIso2(a)?.name ?? a;
+        final bn = _countryByIso2(b)?.name ?? b;
+        return an.compareTo(bn);
+      });
+
+    final startCo = _countryByIso2(_startIso);
+    final zielCo = _countryByIso2(_zielIso);
+
+    return Column(
+      children: [
+        // ── Start und Ziel ───────────────────────────────────────────────
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                children: [
+                  FlaggenWidget(
+                      countryCode: _startIso,
+                      width: 56,
+                      height: 36,
+                      borderRadius: 6),
+                  const SizedBox(height: 6),
+                  Text(startCo?.name ?? _startIso,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child:
+                  Icon(Icons.arrow_forward_rounded, color: Color(0xFF888888)),
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  FlaggenWidget(
+                      countryCode: _zielIso,
+                      width: 56,
+                      height: 36,
+                      borderRadius: 6),
+                  const SizedBox(height: 6),
+                  Text(zielCo?.name ?? _zielIso,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          widget.frage.frage,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 18),
+
+        // ── Die bisher gebaute Kette ─────────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAEAE5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Text(
+                t('Dein Weg · {n} Schritte', {'n': '${pfad.length - 1}'}),
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF888888)),
+              ),
+              const SizedBox(height: 8),
+              _KettenBand(kette: pfad),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        if (!widget.bestaetigt) ...[
+          // ── Zurück ──────────────────────────────────────────────────────
+          if (pfad.length > 1)
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: _zurueck,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFDF7),
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: const Color(0xFF888888), width: 2),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.undo_rounded,
+                          size: 15, color: Color(0xFF888888)),
+                      const SizedBox(width: 6),
+                      Text(t('Schritt zurück'),
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF888888))),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // ── Auswahl der Nachbarn ────────────────────────────────────────
+          Text(
+            t('Nachbarn von {land}', {
+              'land': _countryByIso2(aktuell)?.name ?? aktuell,
+            }),
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF888888)),
+          ),
+          const SizedBox(height: 10),
+          if (nachbarnDesAktuellen.isEmpty)
+            // Sackgasse: alle Nachbarn liegen schon im Weg.
+            Text(
+              t('Von hier geht es nicht weiter — nimm einen Schritt zurück.'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFD94040)),
+            )
+          else
+            // Wrap statt Raster mit eigenem Scrollbereich: der Fragen-Inhalt
+            // steckt im IntrinsicHeight des Screens, und jeder Viewport
+            // (GridView/ListView) kann dort keine Höhe melden. Die Chips
+            // fließen deshalb in Zeilen um, und bei vierzehn Nachbarn
+            // scrollt einfach die Seite.
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 10,
+              children: [
+                for (final n in nachbarnDesAktuellen)
+                  _NachbarChip(
+                    iso2: n,
+                    istZiel: n == _zielIso,
+                    onTap: () => _waehle(n),
+                  ),
+              ],
+            ),
+        ] else ...[
+          _KettenAufloesung(
+            frage: widget.frage,
+            weg: pfad,
+            optimum: _optimum,
+          ),
+          const SizedBox(height: 18),
+          GestureDetector(
+            onTap: widget.onWeiter,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4A9E4A),
+                borderRadius: BorderRadius.circular(50),
+                border:
+                    Border.all(color: const Color(0xFF1A1A1A), width: 2.5),
+                boxShadow: const [
+                  BoxShadow(
+                      color: Color(0xFF1A1A1A),
+                      offset: Offset(0, 4),
+                      blurRadius: 0),
+                ],
+              ),
+              child: Text(
+                t('Weiter'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Auflösung: eigener Weg, Bewertung und — falls nicht optimal — der
+/// kürzeste Weg zum Vergleich.
+class _KettenAufloesung extends StatelessWidget {
+  final Frage frage;
+  final List<String> weg;
+  final int optimum;
+
+  const _KettenAufloesung({
+    required this.frage,
+    required this.weg,
+    required this.optimum,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final schritte = weg.length - 1;
+    final optimal = schritte <= optimum;
+    final punkte = kettePunkte(schritte, optimum);
+    final besterWeg =
+        (frage.meta['optimalerWeg'] as List<dynamic>?)?.cast<String>() ??
+            const <String>[];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: optimal ? const Color(0xFFE8F5E9) : const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color:
+                optimal ? const Color(0xFF2E7D32) : const Color(0xFFF9A825),
+            width: 2),
+      ),
+      child: Column(
+        children: [
+          Text(
+            optimal
+                ? t('Kürzester Weg!')
+                : t('Ziel erreicht · {p} Punkte', {'p': '$punkte'}),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1A1A1A)),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            t('Der kürzeste Weg braucht {n} Schritte — du hast {m} gebraucht.',
+                {'n': '$optimum', 'm': '$schritte'}),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF888888)),
+          ),
+          if (!optimal && besterWeg.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(t('Der kürzeste Weg:'),
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF888888))),
+            const SizedBox(height: 6),
+            _KettenBand(kette: besterWeg, flaggenBreite: 26),
+          ],
+        ],
+      ),
+    );
+  }
 }

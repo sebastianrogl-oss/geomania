@@ -47,6 +47,11 @@ IconData _modusIcon(LernModus m) => switch (m) {
   LernModus.zufallsFakt => Icons.lightbulb_rounded,
   LernModus.bekanntesGebaeude => Icons.temple_buddhist_rounded,
   LernModus.grenzkettenRaetsel => Icons.route_rounded,
+  LernModus.flaechenVergleich => Icons.crop_square_rounded,
+  LernModus.zweiWahrheiten => Icons.psychology_alt_rounded,
+  LernModus.wasGehoertNichtDazu => Icons.filter_alt_off_rounded,
+  LernModus.laenderRanking => Icons.leaderboard_rounded,
+  LernModus.nachbarschaftsKette => Icons.alt_route_rounded,
 };
 
 class _Anims {

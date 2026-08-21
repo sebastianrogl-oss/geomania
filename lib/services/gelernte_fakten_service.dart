@@ -139,6 +139,11 @@ class GelernteFaktenService {
         LernModus.zufallsFakt => 'fakt',
         LernModus.bekanntesGebaeude => 'bauwerk',
         LernModus.sortierSpiel => 'sortieren',
+        LernModus.flaechenVergleich => 'flaeche',
+        LernModus.zweiWahrheiten => 'fakt',
+        LernModus.wasGehoertNichtDazu => 'geografie',
+        LernModus.laenderRanking => 'ranking',
+        LernModus.nachbarschaftsKette => 'nachbarn',
       };
 
   /// Nur für den Debug-Bereich der Einstellungen.

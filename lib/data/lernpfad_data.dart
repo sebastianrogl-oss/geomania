@@ -25,6 +25,16 @@ enum LernModus {
   zufallsFakt,          // Rätsel-artiger Fun-Fact → gesuchtes Land erraten
   bekanntesGebaeude,    // "In welchem Land steht [Bauwerk]?"
   grenzkettenRaetsel,   // "Durch welches Land MUSST du NICHT fahren?"
+  // ── Noch nicht im Lernpfad ────────────────────────────────────────────────
+  // Die folgenden Modi sind fertig gebaut, stehen aber bewusst in KEINER der
+  // Modi-Listen der Level (_modiEinsteiger … _modiMeister). Sie werden
+  // ausschliesslich ueber den Debug-Bereich der Einstellungen geoeffnet und
+  // koennen dadurch keine echte Station belegen.
+  flaechenVergleich,    // "Wie oft passt X in Y?" — zwei Umrisse massstabsgetreu
+  zweiWahrheiten,       // "Welche Aussage stimmt NICHT?" — 2 wahre, 1 erfundene
+  wasGehoertNichtDazu,  // Vier Laender, drei teilen ein Merkmal — welches nicht?
+  laenderRanking,       // "Welchen Platz belegt X?" — Eingabe per Zahlenschloss
+  nachbarschaftsKette,  // Weg von A nach B ueber Nachbarlaender selbst bauen
 }
 
 // ── Klassen ───────────────────────────────────────────────────────────────────
@@ -176,6 +186,11 @@ String lernModusThema(LernModus m) => switch (m) {
       LernModus.zufallsFakt => 'fakt',
       LernModus.bekanntesGebaeude => 'gebaeude',
       LernModus.grenzkettenRaetsel => 'grenzketten',
+      LernModus.flaechenVergleich => 'flaeche',
+      LernModus.zweiWahrheiten => 'fakt',
+      LernModus.wasGehoertNichtDazu => 'geografie',
+      LernModus.laenderRanking => 'ranking',
+      LernModus.nachbarschaftsKette => 'nachbarland',
     };
 
 /// Bevorzugt bei Gleichstand die noch selten genutzte Variante eines Themas.
@@ -610,6 +625,11 @@ String lernModusLabel(LernModus m) => t(switch (m) {
   LernModus.zufallsFakt          => 'Wissens-Quiz (Fun-Fact)',
   LernModus.bekanntesGebaeude    => 'Wahrzeichen-Quiz',
   LernModus.grenzkettenRaetsel   => 'Grenzketten-Rätsel',
+  LernModus.flaechenVergleich    => 'Flächen-Vergleich',
+  LernModus.zweiWahrheiten       => 'Zwei Wahrheiten, eine Lüge',
+  LernModus.wasGehoertNichtDazu  => 'Was gehört nicht dazu?',
+  LernModus.laenderRanking       => 'Länder-Ranking',
+  LernModus.nachbarschaftsKette  => 'Nachbarschafts-Kette',
 });
 
 /// Zeitlimit in Sekunden für [modus] in Abschnitt 4 (Meister) — 0 bedeutet

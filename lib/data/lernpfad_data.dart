@@ -596,13 +596,13 @@ final _ozeanienA3St =
 // ── WELT 7 — DIE WELT ────────────────────────────────────────────────────────
 
 final _weltA1St = _baueAbschnitt('welt', 1, _weltA1, 25,
-    fragenProStation: 12, modusPoolLevel: 4);
+    fragenProStation: 8, modusPoolLevel: 4);
 final _weltA2St = _baueAbschnitt('welt', 2, _weltA2, 30,
-    fragenProStation: 12, modusPoolLevel: 4);
+    fragenProStation: 8, modusPoolLevel: 4);
 final _weltA3St = _baueAbschnitt('welt', 3, _weltAlle, 35,
-    fragenProStation: 12, modusPoolLevel: 4);
+    fragenProStation: 8, modusPoolLevel: 4);
 final _weltA4St = _baueAbschnitt('welt', 4, _weltAlle, 40,
-    fragenProStation: 12, modusPoolLevel: 4);
+    fragenProStation: 8, modusPoolLevel: 4);
 
 // ── Hauptliste ────────────────────────────────────────────────────────────────
 

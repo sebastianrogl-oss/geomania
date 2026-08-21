@@ -1,5 +1,26 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.VIBRATE"/>
+
+    <!-- Erinnerungen (flutter_local_notifications).
+
+         POST_NOTIFICATIONS ist ab Android 13 zwingend und wird zur Laufzeit
+         erfragt (BenachrichtigungsService.systemErlaubnisAnfragen). Das Plugin
+         bringt die Zeile in seinem eigenen Manifest zwar mit, sie steht hier
+         trotzdem: welche Berechtigungen die App verlangt, soll aus DIESER Datei
+         hervorgehen und nicht erst aus dem zusammengeführten Ergebnis.
+
+         RECEIVE_BOOT_COMPLETED braucht der ScheduledNotificationBootReceiver
+         weiter unten, um geplante Benachrichtigungen nach einem Neustart
+         wiederherzustellen.
+
+         Bewusst NICHT dabei: SCHEDULE_EXACT_ALARM / USE_EXACT_ALARM. Die
+         Erinnerungen werden inexakt geplant (AndroidScheduleMode
+         .inexactAllowWhileIdle) — ob sie um 19:00 oder 19:04 erscheinen, ist
+         einerlei, und exakte Alarme gibt Google Play nur für Wecker und
+         Kalender frei. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <application
         android:label="geomania"
         android:name="${applicationName}"
@@ -35,6 +56,29 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4580295867570231~1622789574"/>
+
+        <!-- Zeigt die geplante Benachrichtigung, wenn ihr Alarm ausgelöst hat.
+             Ohne diesen Empfänger wird zwar geplant, aber nie etwas
+             angezeigt. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+
+        <!-- Ein Neustart löscht alle Alarme des Systems. Dieser Empfänger holt
+             die geplanten Benachrichtigungen aus dem Speicher des Plugins
+             zurück und meldet sie erneut an — deshalb überleben sie einen
+             Neustart. MY_PACKAGE_REPLACED deckt denselben Fall nach einem
+             App-Update ab. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

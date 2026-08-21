@@ -7,6 +7,15 @@ import 'package:geomania/screens/station_quiz_screen.dart';
 import 'package:geomania/services/station_session_service.dart';
 
 void main() {
+  // Beides MUSS hier oben stehen, nicht erst im einzelnen Test: die Prüfungen
+  // rufen den Fragen-Generator auf, der über
+  // FortschrittService.istStationAbgeschlossen SharedPreferences liest. Ohne
+  // initialisiertes Binding gibt es keinen Kanal für den Mock, und der Aufruf
+  // scheitert mit MissingPluginException — nicht am Prüfgegenstand, sondern
+  // am fehlenden Gerüst.
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
+
   test('Preisschätzen-Länder kommen immer aus dem Kontinent des Abschnitts', () async {
     int stationenGeprueft = 0;
     for (final welt in lernwelten) {

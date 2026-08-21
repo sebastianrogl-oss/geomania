@@ -7,6 +7,11 @@ import 'package:geomania/screens/station_quiz_screen.dart';
 import 'package:geomania/services/station_session_service.dart';
 
 void main() {
+  // Siehe preisschaetzen_test.dart: der Fragen-Generator liest
+  // SharedPreferences, das braucht ein initialisiertes Binding.
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
+
   test('Sortierspiel-Länder kommen immer aus dem Kontinent des Abschnitts', () async {
     // Über den gesamten Lernpfad: für jede sortierSpiel-Station müssen alle
     // in den Fragen verwendeten Länder zum Kontinent der Welt gehören

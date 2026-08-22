@@ -43,4 +43,19 @@ class OnboardingService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('$_kModusPrefix${modus.name}', true);
   }
+
+  // ── Debug ──────────────────────────────────────────────────────────────────
+
+  /// Setzt ALLE Onboarding-Merker zurück, damit sich der Ablauf mehrfach
+  /// durchspielen lässt.
+  ///
+  /// Rührt den Spielfortschritt nicht an: hier fallen nur die Merker, welche
+  /// Erklärung schon einmal auf dem Schirm stand.
+  static Future<void> debugZuruecksetzen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kWillkommen);
+    for (final modus in LernModus.values) {
+      await prefs.remove('$_kModusPrefix${modus.name}');
+    }
+  }
 }

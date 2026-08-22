@@ -171,4 +171,7 @@ const Map<String, String> uebersetzungenOnboarding = {
       'Play one station a day and your streak grows. Tap the flame or the '
           'star at the top if you want to know more.',
   'Los geht\'s': 'Let\'s go',
+
+  // ── Debug ──────────────────────────────────────────────────────────────────
+  'Onboarding zurücksetzen (Debug)': 'Reset onboarding (debug)',
 };

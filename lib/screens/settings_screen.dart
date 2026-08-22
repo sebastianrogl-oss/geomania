@@ -11,6 +11,7 @@ import '../services/benachrichtigungs_service.dart';
 import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/locale_service.dart';
+import '../services/onboarding_service.dart';
 import '../services/profilbild_service.dart';
 import '../services/spielzeit_service.dart';
 import '../l10n/uebersetzungen.dart';
@@ -189,6 +190,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
       content: Text('🔔 Benachrichtigung gesendet'),
+      backgroundColor: Color(0xFFB8570A),
+    ));
+  }
+
+  /// Setzt alle Onboarding-Merker zurück: Willkommens-Screen und die
+  /// Anleitungen der vier Modi mit eigener Bedienung.
+  ///
+  /// Der Willkommens-Screen erscheint erst beim nächsten App-Start wieder —
+  /// StartWrapper liest den Merker in seinem initState, und der läuft nicht
+  /// noch einmal, solange die App offen ist. Das steht in der Meldung, damit
+  /// beim Testen niemand vergeblich darauf wartet.
+  Future<void> _debugOnboardingZuruecksetzen() async {
+    await OnboardingService.debugZuruecksetzen();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🎓 Onboarding zurückgesetzt — Modus-Anleitungen sofort, '
+          'Willkommens-Screen beim nächsten App-Start'),
       backgroundColor: Color(0xFFB8570A),
     ));
   }
@@ -865,6 +883,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('Geplante Benachrichtigungen (Debug)'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: _debugGeplanteAnzeigen,
+                ),
+                _Zeile(
+                  icon: Icons.school_outlined,
+                  title: t('Onboarding zurücksetzen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugOnboardingZuruecksetzen,
                 ),
               ]),
               const SizedBox(height: 24),

@@ -910,6 +910,20 @@ String lernModusLabel(LernModus m) => t(switch (m) {
   LernModus.nachbarschaftsKette  => 'Nachbarschafts-Kette',
 });
 
+/// Alle im Lernpfad erreichbaren Sterne — ein Stern je erstmalig richtig
+/// beantworteter Frage.
+///
+/// Wird ausgezählt statt festgeschrieben: die Zahl hängt an fragenProStation
+/// je Welt, an kFragenObergrenze je Modus UND an der Modus-Verteilung selbst.
+/// Jede dieser Stellschrauben wurde schon verändert, und eine hartcodierte
+/// Zahl wäre spätestens beim nächsten Mal falsch, ohne dass es auffällt.
+///
+/// Lazy: läuft einmal beim ersten Zugriff über alle 594 Stationen.
+final int kErreichbareSterne = lernwelten
+    .expand((w) => w.abschnitte)
+    .expand((a) => a.stationen)
+    .fold(0, (summe, s) => summe + s.fragenAnzahl);
+
 /// Ein Satz, der sagt, WAS ZU TUN IST — für das Start-Sheet einer Station.
 ///
 /// Der Modus-Name allein trägt nicht: "Nachbarschafts-Kette" oder

@@ -15,6 +15,7 @@ import '../widgets/kontinent_hintergrund.dart';
 import '../widgets/level_skip_button.dart';
 import '../widgets/pfad_deko_layer.dart';
 import '../widgets/pfad_maskottchen.dart';
+import '../widgets/kennzahl_erklaerung.dart';
 import '../widgets/streak_flamme.dart';
 import 'challenge_start_screen.dart';
 import 'higher_lower_screen.dart';
@@ -680,40 +681,64 @@ class _GreenHeaderState extends State<_GreenHeader> {
           // Der Versatz korrigiert die optische Lage: Transform.translate
           // wirkt rein visuell, der Platzbedarf in der Row bleibt unverändert
           // und der Zahlentext daneben rutscht dadurch nicht mit.
-          Transform.translate(
-            offset: const Offset(5, -5),
-            // Die Zahl steht hier daneben statt in der Flamme, deshalb muss
-            // der erloschene Zustand ausdrücklich mitgegeben werden.
-            child: StreakFlamme(
-              groesse: 45,
-              erloschen: widget.streak == 0,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '${widget.streak}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
+          // Flamme UND Zahl liegen in einem gemeinsamen GestureDetector: eine
+          // einzelne Ziffer ist ein zu kleines Ziel für einen Finger, und
+          // beide gehören ohnehin zusammen. HitTestBehavior.opaque nimmt auch
+          // die Lücke dazwischen mit.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => zeigeStreakErklaerung(context),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Transform.translate(
+                  offset: const Offset(5, -5),
+                  // Die Zahl steht hier daneben statt in der Flamme, deshalb
+                  // muss der erloschene Zustand ausdrücklich mitgegeben
+                  // werden.
+                  child: StreakFlamme(
+                    groesse: 45,
+                    erloschen: widget.streak == 0,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${widget.streak}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 16),
-          const Text('⭐', style: TextStyle(fontSize: 18)),
-          const SizedBox(width: 4),
-          // Zählt die im letzten Quiz verdienten Sterne hoch (vom alten auf
-          // den neuen Gesamtstand, siehe _punkteVon).
-          TweenAnimationBuilder<int>(
-            tween: IntTween(begin: _punkteVon, end: widget.punkte),
-            duration: const Duration(milliseconds: 800),
-            curve: Curves.easeOut,
-            builder: (context, wert, child) => Text(
-              '$wert',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-              ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () =>
+                zeigeSterneErklaerung(context, kErreichbareSterne),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('⭐', style: TextStyle(fontSize: 18)),
+                const SizedBox(width: 4),
+                // Zählt die im letzten Quiz verdienten Sterne hoch (vom alten
+                // auf den neuen Gesamtstand, siehe _punkteVon).
+                TweenAnimationBuilder<int>(
+                  tween: IntTween(begin: _punkteVon, end: widget.punkte),
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.easeOut,
+                  builder: (context, wert, child) => Text(
+                    '$wert',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const Spacer(),

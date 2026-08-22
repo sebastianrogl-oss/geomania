@@ -1,4 +1,5 @@
-/// Englische Fassungen für die Modus-Anleitungen im Lernpfad.
+/// Englische Fassungen für die Modus-Anleitungen und die Erklärungen zu
+/// Sternen und Serie.
 ///
 /// Die Anleitungen sind sinngemäß übersetzt, nicht wörtlich — sie sollen sich
 /// wie Anweisungen lesen, nicht wie eine Übersetzung. "Zieh die Länder mit dem
@@ -124,4 +125,28 @@ const Map<String, String> uebersetzungenOnboarding = {
   // ── Anleitungs-Knopf und Titel ─────────────────────────────────────────────
   'Anleitung': 'How to play',
   '{modus} — so geht es': '{modus} — how it works',
+
+  // ── Sterne und Serie ───────────────────────────────────────────────────────
+  'Alles klar': 'Got it',
+  'Deine Sterne': 'Your stars',
+  'Jede Frage, die du zum ersten Mal richtig beantwortest, gibt einen Stern. Dieselbe Frage noch einmal richtig zu beantworten gibt keinen weiteren — Sterne zeigen also, wie viel du schon kannst.':
+      'Every question you answer correctly for the first time earns a star. '
+          'Answering the same question correctly again earns nothing further, '
+          'so your stars show how much you already know.',
+  'Mit Sternen schaltest du im Profil neue Profilbilder frei. Sie werden dabei abgezogen, dein Gesamtstand oben bleibt aber stehen.':
+      'You spend stars on new profile pictures in your profile. They are '
+          'deducted when you do, but the total shown at the top stays as it '
+          'is.',
+  'Im ganzen Lernpfad sind {n} Sterne zu holen.':
+      'There are {n} stars to collect across the whole learning path.',
+  'Deine Serie': 'Your streak',
+  'Die Flamme zählt die Tage, an denen du hintereinander gespielt hast. Eine einzige abgeschlossene Station am Tag genügt, um sie am Leben zu halten.':
+      'The flame counts the days you have played in a row. A single completed '
+          'station a day is enough to keep it alive.',
+  'Setzt du einen Tag aus, fängt die Serie wieder bei 1 an. Verloren ist dabei nichts: Sterne, Abzeichen und dein Fortschritt im Lernpfad bleiben unberührt.':
+      'Skip a day and the streak starts again at 1. Nothing is lost: your '
+          'stars, badges and progress through the learning path are '
+          'untouched.',
+  'Für lange Serien gibt es ausserdem Abzeichen.':
+      'Long streaks also earn you badges.',
 };

@@ -774,10 +774,10 @@ class _WeltBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  t('Welt {n} — {name}', {
-                    'n': '${welt.reihenfolge}',
-                    'name': t(welt.name),
-                  }),
+                  // Nur noch der Name. Die Nummer der Welt stand vorher davor
+                  // ("Welt 1 — Europa"), sagt aber nichts, was der Name nicht
+                  // schon sagt — und der Kopf ist schmal.
+                  t(welt.name),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -786,10 +786,10 @@ class _WeltBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  t('Abschnitt {n} — {titel}', {
-                    'n': '${abschnitt.stufe}',
-                    'titel': t(abschnitt.titel),
-                  }),
+                  // Ohne den Titel dahinter ("Abschnitt 1 — Einsteiger"):
+                  // die Stufe ordnet bereits ein, der Titel wiederholt sie
+                  // nur mit anderen Worten.
+                  t('Abschnitt {n}', {'n': '${abschnitt.stufe}'}),
                   style: const TextStyle(
                     color: Color(0xFFA8D5A2),
                     fontSize: 12,
@@ -1508,10 +1508,10 @@ class _AbschnittTrenner extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  t('Abschnitt {n} — {titel}', {
-                    'n': '${abschnitt.stufe}',
-                    'titel': t(abschnitt.titel),
-                  }),
+                  // Ohne den Titel dahinter ("Abschnitt 1 — Einsteiger"):
+                  // die Stufe ordnet bereits ein, der Titel wiederholt sie
+                  // nur mit anderen Worten.
+                  t('Abschnitt {n}', {'n': '${abschnitt.stufe}'}),
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,

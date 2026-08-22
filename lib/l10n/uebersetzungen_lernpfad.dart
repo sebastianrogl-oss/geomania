@@ -3,8 +3,10 @@
 // + lernpfad_data.dart (Modus-Labels).
 const Map<String, String> uebersetzungenLernpfad = {
   'Lernpfad': 'Learning path',
-  'Welt {n} — {name}': 'World {n} — {name}',
-  'Abschnitt {n} — {titel}': 'Section {n} — {titel}',
+  // Die Überschriften im Lernpfad-Kopf tragen nur noch den Weltnamen bzw.
+  // die Abschnittsnummer — "Welt 1 — Europa" und "Abschnitt 1 — Einsteiger"
+  // sind entfallen.
+  'Abschnitt {n}': 'Section {n}',
   '15-Sekunden-Timer pro Frage': '15-second timer per question',
   'Fortsetzen ({a}/{b})': 'Resume ({a}/{b})',
   'Welten': 'Worlds',

@@ -227,10 +227,7 @@ class _AbschnittKarte extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              t('Abschnitt {n} — {titel}', {
-                                'n': '${abschnitt.stufe}',
-                                'titel': t(abschnitt.titel),
-                              }),
+                              t('Abschnitt {n}', {'n': '${abschnitt.stufe}'}),
                               style: TextStyle(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 14,

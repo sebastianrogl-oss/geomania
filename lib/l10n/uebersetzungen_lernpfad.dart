@@ -16,8 +16,8 @@ const Map<String, String> uebersetzungenLernpfad = {
 
   // ── Neue Modi, vorerst nur ueber den Debug-Bereich erreichbar ───────────
   // Modusnamen (data/lernpfad_data.dart)
-  'Flächen-Vergleich': 'Area Comparison',
-  'Zwei Wahrheiten, eine Lüge': 'Two Truths, One Lie',
+  'Flächen-Vergleich': 'Area comparison',
+  'Zwei Wahrheiten, eine Lüge': 'Two truths, one lie',
 
   // Flächen-Vergleich (services/station_session_service.dart)
   'Wie oft passt {klein} in {gross}?':
@@ -47,7 +47,7 @@ const Map<String, String> uebersetzungenLernpfad = {
       'The population is around {richtig}, not {falsch}',
 
   // Was gehört nicht dazu? (services/station_session_service.dart)
-  'Was gehört nicht dazu?': 'Odd One Out',
+  'Was gehört nicht dazu?': 'Odd one out',
   'Welches Land passt nicht zu den anderen?':
       'Which country doesn\'t belong?',
   'Die anderen drei liegen alle in {wert}.':
@@ -86,7 +86,7 @@ const Map<String, String> uebersetzungenLernpfad = {
   'Schließen': 'Close',
 
   // Länder-Ranking mit Zahlenschloss
-  'Länder-Ranking': 'Country Ranking',
+  'Länder-Ranking': 'Country ranking',
   'Welchen Platz belegt {land} in der Kategorie {kategorie}?':
       'What rank does {land} hold for {kategorie}?',
   'Platz 1 = höchster Wert · {n} Länder gewertet':
@@ -97,7 +97,7 @@ const Map<String, String> uebersetzungenLernpfad = {
   'Bestätigen': 'Confirm',
 
   // Nachbarschafts-Kette
-  'Nachbarschafts-Kette': 'Border Chain',
+  'Nachbarschafts-Kette': 'Border chain',
   'Finde einen Weg von {start} nach {ziel} — nur über Nachbarländer.':
       'Find a route from {start} to {ziel} — through neighbouring countries only.',
   'Dein Weg · {n} Schritte': 'Your route · {n} steps',

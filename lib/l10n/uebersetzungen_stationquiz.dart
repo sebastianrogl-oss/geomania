@@ -28,9 +28,10 @@ const Map<String, String> uebersetzungenStationQuiz = {
   'Reihenfolge prüfen': 'Check order',
   'Weiter': 'Next',
   'Überspringen': 'Skip',
-  // Fester Begriff: bleibt in beiden Sprachen "Skip Level" (siehe
-  // widgets/level_skip_button.dart).
-  'Skip Level': 'Skip Level',
+  // Fester Begriff, im Deutschen wie im Englischen. Das große L bleibt nur
+  // auf der deutschen Seite — dort ist "Level" ein Substantiv. Im Englischen
+  // gilt wie überall sonst in der App Satz-Schreibung.
+  'Skip Level': 'Skip level',
 
   '↑ Größtes oben  |  Kleinstes unten ↓': '↑ Largest on top  |  Smallest at bottom ↓',
   'Richtig (nach {kategorie}, größte zuerst):': 'Correct (by {kategorie}, largest first):',

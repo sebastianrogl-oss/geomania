@@ -37,9 +37,9 @@ class LevelSkipButton extends StatelessWidget {
           else
             FilmklappeIcon(size: 16, color: color),
           const SizedBox(width: 6),
-          // "Skip Level" ist ein fester Begriff und steht bewusst in BEIDEN
-          // Sprachen gleich — der deutsche Eintrag in der Übersetzungs-Map
-          // lautet deshalb ebenfalls "Skip Level".
+          // "Skip Level" ist auch im Deutschen der Begriff — das große L ist
+          // dort die Substantiv-Schreibung. Englisch heißt es "Skip level",
+          // wie alle anderen Beschriftungen der App klein weiter.
           Text(t('Skip Level'),
               style: TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w600, color: color)),

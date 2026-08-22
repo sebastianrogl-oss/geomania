@@ -881,26 +881,48 @@ final List<LernWelt> lernwelten = [
 
 // ── Hilfsfunktionen für UI ────────────────────────────────────────────────────
 
+/// Anzeigename eines Modus — für Spielerinnen und Spieler, nicht zur
+/// Unterscheidung im Code.
+///
+/// Die Namen trugen früher einen Zusatz in Klammern, der die Spielart benannte
+/// ("Flaggen-Quiz (Bild)" gegen "(Multiple)" gegen "(Eingabe)"). Der ist raus:
+/// im Spiel sieht man immer nur EINEN Modus auf einmal, und dort erklärt die
+/// Klammer nichts, was die Aufgabe nicht ohnehin sofort zeigt — sie machte den
+/// Titel nur länger und technischer.
+///
+/// Deshalb heißen mehrere Modi jetzt ABSICHTLICH gleich; die Gruppierung unten
+/// hält das sichtbar. Wer sie auseinanderhalten muss, nimmt den Enum-Wert:
+/// gespeichert wird ohnehin überall `modus.name`, nie dieser Text. Einzige
+/// Stelle, die den Unterschied anzeigen muss, ist die Modus-Auswahl im
+/// Debug-Bereich der Einstellungen — die hängt den Enum-Namen selbst an.
 String lernModusLabel(LernModus m) => t(switch (m) {
-  LernModus.flaggenQuizBild      => 'Flaggen-Quiz (Bild)',
-  LernModus.flaggenQuizMultiple  => 'Flaggen-Quiz (Multiple)',
-  LernModus.hauptstaedteMultiple => 'Hauptstädte (Multiple Choice)',
-  LernModus.hauptstaedteEingabe  => 'Hauptstädte (Eingabe)',
-  LernModus.umrissBild           => 'Umriss-Quiz (Bild)',
-  LernModus.umrissMultiple       => 'Umriss-Quiz (Multiple)',
-  LernModus.flaggenQuizEingabe   => 'Flaggen-Quiz (Eingabe)',
-  LernModus.umrissEingabe        => 'Umriss-Quiz (Eingabe)',
-  LernModus.waehrungsQuiz        => 'Währungs-Quiz',
+  // Flagge → Land, Land → Flagge, Flagge → eintippen.
+  LernModus.flaggenQuizBild ||
+  LernModus.flaggenQuizMultiple ||
+  LernModus.flaggenQuizEingabe   => 'Flaggen-Quiz',
+  // Auswahl und Eingabe.
+  LernModus.hauptstaedteMultiple ||
+  LernModus.hauptstaedteEingabe  => 'Hauptstädte',
+  // Umriss → Land, Land → Umriss, Umriss → eintippen.
+  LernModus.umrissBild ||
+  LernModus.umrissMultiple ||
+  LernModus.umrissEingabe        => 'Umriss-Quiz',
+  // Land → Währung und die umgekehrte Richtung.
+  LernModus.waehrungsQuiz ||
+  LernModus.waehrungZuLand       => 'Währungs-Quiz',
+  // Superlative über alle Länder und die leichte Variante.
+  LernModus.extremFrage ||
+  LernModus.extremFrageLeicht    => 'Superlativ-Quiz',
   LernModus.sortierSpiel         => 'Sortier-Spiel',
   LernModus.preisSchaetzen       => 'Das große Schätzen',
   LernModus.wirtschaftssektoren  => 'Wirtschaftssektoren',
-  LernModus.nachbarland          => 'Länder-Quiz (Nachbarn)',
-  LernModus.bipGesamt            => 'BIP-Quiz (Gesamt)',
-  LernModus.flaeche              => 'Flächen-Quiz (Größe)',
-  LernModus.extremFrage          => 'Superlativ-Quiz (Extrem)',
-  LernModus.waehrungZuLand       => 'Währungs-Quiz (Land)',
-  LernModus.extremFrageLeicht    => 'Superlativ-Quiz (Leicht)',
-  LernModus.zufallsFakt          => 'Wissens-Quiz (Fun-Fact)',
+  // Kein Klammerzusatz, sondern ein eigener Name: "Länder-Quiz" sagte nach
+  // dem Streichen der Klammer nichts mehr und stand dicht neben
+  // "Länder-Ranking".
+  LernModus.nachbarland          => 'Nachbarländer',
+  LernModus.bipGesamt            => 'BIP-Quiz',
+  LernModus.flaeche              => 'Flächen-Quiz',
+  LernModus.zufallsFakt          => 'Wissens-Quiz',
   LernModus.bekanntesGebaeude    => 'Wahrzeichen-Quiz',
   LernModus.grenzkettenRaetsel   => 'Grenzketten-Rätsel',
   LernModus.flaechenVergleich    => 'Flächen-Vergleich',

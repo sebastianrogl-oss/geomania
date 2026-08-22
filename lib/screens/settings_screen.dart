@@ -1211,8 +1211,19 @@ class _DebugTestmodusDialogState extends State<_DebugTestmodusDialog> {
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Quiz-Modus'),
               items: [
+                // Der Enum-Name hinter dem Anzeigenamen — NUR hier.
+                //
+                // Die Anzeigenamen kommen ohne Klammerzusatz aus, dadurch
+                // heißen mehrere Modi gleich: dreimal "Flaggen-Quiz", dreimal
+                // "Umriss-Quiz", je zweimal "Hauptstädte", "Währungs-Quiz"
+                // und "Superlativ-Quiz". Im Spiel stört das nicht, hier schon
+                // — in dieser Liste wählt man ja genau den einen Modus aus,
+                // den man testen will.
                 for (final m in LernModus.values)
-                  DropdownMenuItem(value: m, child: Text(lernModusLabel(m))),
+                  DropdownMenuItem(
+                    value: m,
+                    child: Text('${lernModusLabel(m)} (${m.name})'),
+                  ),
               ],
               onChanged: (v) => setState(() => _modus = v!),
             ),

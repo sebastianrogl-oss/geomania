@@ -191,25 +191,25 @@ const Map<String, String> uebersetzungenLernpfad = {
   '{n} Runden': '{n} rounds',
   '{n} Fragen': '{n} questions',
 
-  'Flaggen-Quiz (Bild)': 'Flag quiz (picture)',
-  'Flaggen-Quiz (Multiple)': 'Flag quiz (multiple choice)',
-  'Hauptstädte (Multiple Choice)': 'Capitals (multiple choice)',
-  'Hauptstädte (Eingabe)': 'Capitals (type-in)',
-  'Umriss-Quiz (Bild)': 'Outline quiz (picture)',
-  'Umriss-Quiz (Multiple)': 'Outline quiz (multiple choice)',
-  'Flaggen-Quiz (Eingabe)': 'Flag quiz (type-in)',
-  'Umriss-Quiz (Eingabe)': 'Outline quiz (type-in)',
+  // ── Modus-Anzeigenamen (lernModusLabel) ───────────────────────────────────
+  //
+  // Ohne Klammerzusatz, wie im Deutschen: mehrere Modi teilen sich denselben
+  // Namen, weil im Spiel immer nur einer davon zu sehen ist.
+  //
+  // Vier dieser Namen stehen bereits in anderen Teiltabellen und fehlen hier
+  // absichtlich, damit jeder deutsche Schlüssel genau eine Fassung hat:
+  // 'Flaggen-Quiz' (uebersetzungen_flagquiz), 'Umriss-Quiz'
+  // (uebersetzungen_outlinequiz), 'BIP-Quiz' (uebersetzungen_gdpquiz),
+  // 'Hauptstädte' (uebersetzungen_profil).
   'Währungs-Quiz': 'Currency quiz',
   'Sortier-Spiel': 'Sorting game',
-  'Das große Schätzen': 'The Big Guess',
+  // 'Das große Schätzen' steht in uebersetzungen_schaetzen.dart, bei den
+  // übrigen Texten dieses Spiels.
   'Wirtschaftssektoren': 'Economic sectors',
-  'Länder-Quiz (Nachbarn)': 'Country quiz (neighbors)',
-  'BIP-Quiz (Gesamt)': 'GDP quiz (total)',
-  'Flächen-Quiz (Größe)': 'Area quiz (size)',
-  'Superlativ-Quiz (Extrem)': 'Superlative quiz (extremes)',
-  'Währungs-Quiz (Land)': 'Currency quiz (country)',
-  'Superlativ-Quiz (Leicht)': 'Superlative quiz (easy)',
-  'Wissens-Quiz (Fun-Fact)': 'Knowledge quiz (fun fact)',
+  'Nachbarländer': 'Neighbours',
+  'Flächen-Quiz': 'Area quiz',
+  'Superlativ-Quiz': 'Superlative quiz',
+  'Wissens-Quiz': 'Knowledge quiz',
   'Wahrzeichen-Quiz': 'Landmark quiz',
   'Grenzketten-Rätsel': 'Border chain puzzle',
 };

@@ -1,5 +1,5 @@
-/// Englische Fassungen für die Modus-Anleitungen und die Erklärungen zu
-/// Sternen und Serie.
+/// Englische Fassungen für Onboarding, Modus-Anleitungen und die Erklärungen
+/// zu Sternen und Serie.
 ///
 /// Die Anleitungen sind sinngemäß übersetzt, nicht wörtlich — sie sollen sich
 /// wie Anweisungen lesen, nicht wie eine Übersetzung. "Zieh die Länder mit dem
@@ -149,4 +149,26 @@ const Map<String, String> uebersetzungenOnboarding = {
           'untouched.',
   'Für lange Serien gibt es ausserdem Abzeichen.':
       'Long streaks also earn you badges.',
+
+  // ── Willkommens-Screen ─────────────────────────────────────────────────────
+  'Schön, dass du da bist!': 'Good to have you here!',
+  'Kurz, worum es geht:': 'Briefly, what this is about:',
+  'Die Welt kennenlernen': 'Get to know the world',
+  'Flaggen, Hauptstädte, Umrisse, Währungen und noch einiges mehr — immer spielerisch, nie als Vokabelliste.':
+      'Flags, capitals, outlines, currencies and a good deal more — always as '
+          'a game, never as a vocabulary list.',
+  'Station für Station': 'One station at a time',
+  'Der Lernpfad führt dich durch die Kontinente. Jede Station ist eine kurze Runde in einer anderen Spielart — die nächste wartet, sobald du fertig bist.':
+      'The learning path takes you through the continents. Each station is a '
+          'short round in a different kind of game — the next one is waiting '
+          'as soon as you are done.',
+  'Sterne sammeln': 'Collect stars',
+  'Jede Frage, die du zum ersten Mal richtig hast, gibt einen Stern. Damit schaltest du später neue Profilbilder frei.':
+      'Every question you get right for the first time earns a star. Later on '
+          'you can spend them on new profile pictures.',
+  'Serie halten': 'Keep your streak',
+  'Spiel jeden Tag eine Station, dann wächst deine Serie. Tippe oben auf die Flamme oder den Stern, wenn du mehr wissen willst.':
+      'Play one station a day and your streak grows. Tap the flame or the '
+          'star at the top if you want to know more.',
+  'Los geht\'s': 'Let\'s go',
 };

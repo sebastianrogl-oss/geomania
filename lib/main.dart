@@ -11,10 +11,12 @@ import 'services/auth_service.dart';
 import 'services/benachrichtigungs_service.dart';
 import 'services/fortschritt_service.dart';
 import 'services/locale_service.dart';
+import 'services/onboarding_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/rangliste_screen.dart';
 import 'screens/profil_screen.dart';
 import 'screens/anzeigename_screen.dart';
+import 'screens/willkommen_screen.dart';
 import 'theme/app_theme.dart';
 import 'l10n/uebersetzungen.dart';
 
@@ -113,12 +115,40 @@ class StartWrapper extends StatefulWidget {
 }
 
 class _StartWrapperState extends State<StartWrapper> {
+  /// null = noch nicht gelesen. Solange bleibt der Bildschirm leer statt für
+  /// einen Sekundenbruchteil den Willkommens-Screen zu zeigen, den ein alter
+  /// Spieler gar nicht sehen soll.
+  bool? _willkommenGezeigt;
+
+  @override
+  void initState() {
+    super.initState();
+    _ladeOnboardingStand();
+  }
+
+  Future<void> _ladeOnboardingStand() async {
+    final gezeigt = await OnboardingService.willkommenGezeigt();
+    if (mounted) setState(() => _willkommenGezeigt = gezeigt);
+  }
+
+  Future<void> _willkommenFertig() async {
+    await OnboardingService.merkeWillkommen();
+    if (mounted) setState(() => _willkommenGezeigt = true);
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Reihenfolge beim allerersten Start: Name -> Willkommen -> Lernpfad.
     if (!AuthService.hatAnzeigename) {
       return AnzeigenameScreen(
         onFertig: () => setState(() {}),
       );
+    }
+    if (_willkommenGezeigt == null) {
+      return const Scaffold(backgroundColor: kHintergrund);
+    }
+    if (_willkommenGezeigt == false) {
+      return WillkommenScreen(onFertig: _willkommenFertig);
     }
     return const MainScreen();
   }

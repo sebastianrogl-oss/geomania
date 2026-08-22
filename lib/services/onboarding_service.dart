@@ -13,9 +13,24 @@ import '../data/lernpfad_data.dart';
 /// der Debug-Bereich soll sie in einem Rutsch zurücksetzen können, ohne
 /// Ton- oder Vibrationseinstellungen mitzunehmen.
 class OnboardingService {
+  /// Willkommens-Screen nach der Namensabfrage.
+  static const _kWillkommen = 'onboarding_willkommen';
+
   /// Ein Schlüssel je Modus, dessen Anleitung sich beim ersten Vorkommen
   /// selbst öffnet — angehängt wird der Enum-Name.
   static const _kModusPrefix = 'onboarding_modus_';
+
+  // ── Willkommen ─────────────────────────────────────────────────────────────
+
+  static Future<bool> willkommenGezeigt() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kWillkommen) ?? false;
+  }
+
+  static Future<void> merkeWillkommen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kWillkommen, true);
+  }
 
   // ── Modus-Anleitungen ──────────────────────────────────────────────────────
 

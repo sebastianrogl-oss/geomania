@@ -41,13 +41,16 @@ class ErklaerungButton extends StatelessWidget {
 /// Zeigt die schriftliche Spielerklärung als Bottom-Sheet mit X-Schließen-
 /// Button oben — [abschnitte] sind einzelne Absätze/Regeln, nacheinander
 /// dargestellt.
-void zeigeSpielErklaerung(
+///
+/// Gibt das Future des Sheets zurück, damit ein Aufrufer warten kann, bis es
+/// geschlossen wurde — der Lernpfad startet den Countdown erst danach.
+Future<void> zeigeSpielErklaerung(
   BuildContext context, {
   required String titel,
   required List<String> abschnitte,
   required Color farbe,
 }) {
-  showModalBottomSheet(
+  return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

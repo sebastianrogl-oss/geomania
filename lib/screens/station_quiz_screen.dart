@@ -3373,7 +3373,11 @@ class _WasGehoertNichtDazuUI extends StatelessWidget {
         // wenige Zeichen pro Zeile zusammenquetschen.
         Align(
           alignment: Alignment.centerRight,
-          child: _KategorienKnopf(onTap: () => zeigeQuartettHilfe(context)),
+          child: _SpielflaechenKnopf(
+            icon: Icons.list_alt_rounded,
+            beschriftung: t('Kategorien'),
+            onTap: () => zeigeQuartettHilfe(context),
+          ),
         ),
         const SizedBox(height: 12),
         Text(
@@ -4326,9 +4330,22 @@ class _ZweiWahrheitenUI extends StatelessWidget {
 ///
 /// Bewusst nicht in der AppBar: dort sitzen Fortschritt und Skip, und die
 /// Hilfe gehört inhaltlich zur Frage, nicht zur Station.
-class _KategorienKnopf extends StatelessWidget {
+///
+/// War ursprünglich fest auf "Was gehört nicht dazu?" verdrahtet (hiess
+/// _KategorienKnopf und trug Beschriftung und Symbol fest im Rumpf). Er nimmt
+/// beides jetzt als Parameter — die Optik bleibt für alle Aufrufer dieselbe,
+/// und das ist der Punkt: ein Spieler soll den Knopf wiedererkennen, egal in
+/// welchem Modus er ihn zuerst gesehen hat.
+class _SpielflaechenKnopf extends StatelessWidget {
+  final IconData icon;
+  final String beschriftung;
   final VoidCallback onTap;
-  const _KategorienKnopf({required this.onTap});
+
+  const _SpielflaechenKnopf({
+    required this.icon,
+    required this.beschriftung,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -4344,11 +4361,10 @@ class _KategorienKnopf extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.list_alt_rounded,
-                size: 15, color: Color(0xFF1A1A1A)),
+            Icon(icon, size: 15, color: const Color(0xFF1A1A1A)),
             const SizedBox(width: 6),
             Text(
-              t('Kategorien'),
+              beschriftung,
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -4363,11 +4379,34 @@ class _KategorienKnopf extends StatelessWidget {
   }
 }
 
-/// Overlay mit den Merkmalen, auf die der Modus prüfen kann.
+/// Overlay mit den Merkmalen, auf die "Was gehört nicht dazu?" prüfen kann.
 ///
 /// Die Liste kommt aus [FragenGenerator.quartettKategorien] und damit aus
 /// derselben Quelle, die der Generator auswertet — sie kann nicht veralten.
-void zeigeQuartettHilfe(BuildContext context) {
+void zeigeQuartettHilfe(BuildContext context) => zeigeListenHilfe(
+      context,
+      titel: t('Mögliche Gemeinsamkeiten'),
+      untertitel: t('Drei der vier Länder teilen genau eines dieser Merkmale.'),
+      eintraege: FragenGenerator.quartettKategorien,
+    );
+
+/// Overlay mit Titel, erklärender Zeile und einer Aufzählung.
+///
+/// Vorher steckten Titel, Zeile und die Kategorien-Liste fest im Rumpf, die
+/// Funktion hiess zeigeQuartettHilfe und war nur für einen Modus zu
+/// gebrauchen. Jetzt trägt sie nur noch die Darstellung; WAS aufgezählt wird,
+/// gibt der Aufrufer mit.
+///
+/// Für Fliesstext ist zeigeSpielErklaerung() aus
+/// widgets/spiel_erklaerung.dart zuständig — eine Aufzählung braucht die
+/// kompaktere Form, ein Bottom-Sheet über den halben Bildschirm wäre für
+/// sieben Stichworte zu viel Aufhebens.
+void zeigeListenHilfe(
+  BuildContext context, {
+  required String titel,
+  required String untertitel,
+  required List<String> eintraege,
+}) {
   showDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -4397,7 +4436,7 @@ void zeigeQuartettHilfe(BuildContext context) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                t('Mögliche Gemeinsamkeiten'),
+                titel,
                 style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
@@ -4406,7 +4445,7 @@ void zeigeQuartettHilfe(BuildContext context) {
               ),
               const SizedBox(height: 6),
               Text(
-                t('Drei der vier Länder teilen genau eines dieser Merkmale.'),
+                untertitel,
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -4414,7 +4453,7 @@ void zeigeQuartettHilfe(BuildContext context) {
                 ),
               ),
               const SizedBox(height: 14),
-              for (final kategorie in FragenGenerator.quartettKategorien)
+              for (final kategorie in eintraege)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(

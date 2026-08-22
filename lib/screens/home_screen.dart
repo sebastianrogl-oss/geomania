@@ -570,6 +570,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
 // ── Grüner Header ─────────────────────────────────────────────────────────────
 
+/// Abstand zwischen der Welt-Flagge und dem Block aus Flamme und Stern.
+const double _kKopfFlaggeAbstand = 16;
+
+/// Um wie viel dieser Block gemeinsam nach links rückt.
+const double _kKopfBlockVersatz = 15;
+
 class _GreenHeader extends StatefulWidget {
   final String weltEmoji;
   final int streak;
@@ -647,7 +653,13 @@ class _GreenHeaderState extends State<_GreenHeader> {
       child: Row(
         children: [
           Text(widget.weltEmoji, style: const TextStyle(fontSize: 22)),
-          const SizedBox(width: 16),
+          // Flamme+Zahl und Stern+Zahl rücken als Block näher an die Flagge.
+          // Der Versatz steckt bewusst in DIESEM Abstand und nicht in einem
+          // Transform an den beiden Blöcken: so wandern beide zwangsläufig
+          // gleich weit, ihr Abstand zueinander bleibt unberührt, die
+          // Tippflächen wandern mit — und das Profilbild rechts bleibt durch
+          // den Spacer, wo es ist.
+          const SizedBox(width: _kKopfFlaggeAbstand - _kKopfBlockVersatz),
           // Deutlich größer als das frühere Emoji (18): die Flamme trägt die
           // Streak-Anzeige optisch. Die Kopfzeile ist 56px hoch, 45px passen
           // dort hinein, und die Row zentriert ihre Kinder vertikal — der
@@ -1656,25 +1668,11 @@ class _StationSheetState extends State<_StationSheet> {
               fontWeight: FontWeight.w600,
             ),
           ),
-          // Der Modus-Name allein sagt nichts über die Bedienung — "Länder-
-          // Ranking" oder "Nachbarschafts-Kette" musste man bisher raten.
-          // Ein Satz, der mit der Tätigkeit beginnt, steht hier vor dem
-          // START-Knopf und damit an der einzigen Stelle, an der man ihn in
-          // Ruhe liest.
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              lernModusKurzanleitung(widget.modus),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: Color(0xFF1A1A1A),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
+          // Hier stand ein Einzeiler zur Bedienung. Er ist wieder raus: die
+          // ausführliche Anleitung erscheint beim ersten Vorkommen des Modus
+          // und bleibt über den Hilfe-Knopf in der Spielfläche erreichbar —
+          // das Sheet davor braucht sie nicht zu wiederholen.
+          // (lernModusKurzanleitung() in lernpfad_data.dart bleibt bestehen.)
           if (widget.abgeschlossen) ...[
             const SizedBox(height: 12),
             Container(

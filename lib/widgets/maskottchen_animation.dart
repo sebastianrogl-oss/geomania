@@ -4,14 +4,20 @@ import 'package:lottie/lottie.dart';
 /// Dekorative, endlos loopende Maskottchen-Animation (Lottie, kein Video) —
 /// läuft automatisch, lautlos, ohne jede Steuerelemente, wirkt wie ein
 /// animiertes GIF. Runder Rahmen mit Schatten, Bildinhalt füllt den Kreis
-/// per BoxFit.cover komplett aus (kein Letterboxing/Farbrand mehr, da der
-/// Kreis überschüssigen Bildrand statt Hintergrundfläche zeigt). Fällt bei
-/// Ladefehler auf das statische coin_winken.png zurück, im selben Rahmen.
+/// komplett aus (kein Letterboxing/Farbrand, da der Kreis überschüssigen
+/// Bildrand statt Hintergrundfläche zeigt). Fällt bei Ladefehler auf das
+/// statische coin_winken.png zurück, im selben Rahmen.
 class MaskottchenAnimation extends StatelessWidget {
   final double groesse;
   const MaskottchenAnimation({super.key, this.groesse = 100});
 
   static const _rahmenFarbe = Color(0xFF1a1a1a);
+
+  /// Seitenverhältnis der Lottie-Leinwand (720 × 405). Muss zur Datei passen —
+  /// bei einem Austausch der Animation hier mitziehen. Ein Vertippen fällt
+  /// nicht schlimm aus: durch BoxFit.contain unten entsteht dann ein kleiner
+  /// Rand, aber keine verzerrte Münze.
+  static const _leinwandVerhaeltnis = 720 / 405;
 
   BoxDecoration get _rahmenDekoration => BoxDecoration(
         shape: BoxShape.circle,
@@ -27,45 +33,48 @@ class MaskottchenAnimation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Die Leinwand ist breiter als hoch, der Kreis ist quadratisch — es muss
+    // also links und rechts etwas abgeschnitten werden. Das erledigt hier
+    // BEWUSST NICHT Lottie, sondern Flutter:
+    //
+    // Lottie beherrscht BoxFit.cover nicht richtig. In lottie_drawable.dart
+    // wird der Ausschnitt zwar berechnet (sourceRect, bei uns ab x=157,5),
+    // beim Zeichnen aber nie angewendet — die Leinwand landet immer ab x=0 auf
+    // dem Canvas, also linksbündig statt mittig. Bei uns hiess das: die Münze
+    // rutschte nach rechts aus dem Kreis heraus und wurde angeschnitten.
+    // (Genau dagegen stand hier frueher ein Transform.translate um feste
+    // -75 Pixel — die Kompensation stimmte nur bei einer einzigen Groesse.)
+    //
+    // Statt den Versatz erneut selbst nachzurechnen, bekommt Lottie eine Box
+    // im Seitenverhaeltnis der Leinwand, in der nichts zu beschneiden ist.
+    // Diese zu breite Box zentriert die OverflowBox über dem Kreis, und das
+    // ClipOval schneidet links und rechts gleich viel ab — bei jeder Groesse.
+    final breite = groesse * _leinwandVerhaeltnis;
+
     return Container(
       width: groesse,
       height: groesse,
       decoration: _rahmenDekoration,
       child: ClipOval(
-        // BoxFit.cover mit der voreingestellten mittigen Ausrichtung — mehr
-        // braucht es nicht, um die Münze im Kreis zu zentrieren.
-        //
-        // Hier stand vorher alignment: Alignment(-1.0, 0.0) (also linksbündig)
-        // plus ein Transform.translate um FESTE -75 Pixel zurück nach rechts.
-        // Zusammen ergab das ungefähr die Mitte — aber nur bei einer einzigen
-        // Größe: die Lottie-Leinwand ist 720x405, unter BoxFit.cover in einem
-        // Quadrat der Kantenlänge G also 1,778*G breit. Mittig wäre eine
-        // Verschiebung von 0,389*G, und das sind bei G=200 (Anzeigename-
-        // Screen) 77,8 Pixel — nahe genug an den 75, dass es dort nie
-        // auffiel.
-        //
-        // Bei jeder anderen Größe stimmt der feste Wert nicht: beim
-        // Willkommens-Screen (96 bis 170) schob er die Münze 9 bis 38 Pixel
-        // zu weit nach links. Der Versatz gehörte also nie an eine absolute
-        // Zahl, und statt ihn auf 0,389*G umzurechnen, entfällt er ganz —
-        // denn genau das tut die mittige Ausrichtung von sich aus, bei jeder
-        // Größe.
-        //
-        // Nebenbei behoben: das Ersatzbild im errorBuilder lag mit im
-        // Transform und wurde dadurch ebenfalls verschoben.
-        child: Lottie.asset(
-          'assets/icons/deko/coin_dance.json',
-          width: groesse,
-          height: groesse,
-          fit: BoxFit.cover,
-          repeat: true,
-          errorBuilder: (context, error, stackTrace) => Image.asset(
-            'assets/icons/deko/coin_winken.png',
-            width: groesse,
+        child: OverflowBox(
+          maxWidth: breite,
+          maxHeight: groesse,
+          child: Lottie.asset(
+            'assets/icons/deko/coin_dance.json',
+            width: breite,
             height: groesse,
-            fit: BoxFit.cover,
-            errorBuilder: (c, e, s) =>
-                SizedBox(width: groesse, height: groesse),
+            fit: BoxFit.contain,
+            repeat: true,
+            // Das Ersatzbild bleibt quadratisch und wird von derselben
+            // OverflowBox mittig gesetzt — es erbt den Versatz also nicht.
+            errorBuilder: (context, error, stackTrace) => Image.asset(
+              'assets/icons/deko/coin_winken.png',
+              width: groesse,
+              height: groesse,
+              fit: BoxFit.cover,
+              errorBuilder: (c, e, s) =>
+                  SizedBox(width: groesse, height: groesse),
+            ),
           ),
         ),
       ),

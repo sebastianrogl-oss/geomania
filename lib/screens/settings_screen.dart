@@ -13,6 +13,7 @@ import '../services/fortschritt_service.dart';
 import '../services/locale_service.dart';
 import '../services/onboarding_service.dart';
 import '../services/profilbild_service.dart';
+import '../services/sound_service.dart';
 import '../services/spielzeit_service.dart';
 import '../l10n/uebersetzungen.dart';
 import '../widgets/abzeichen_popup.dart';
@@ -402,6 +403,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleSound(bool v) async {
     setState(() => _sound = v);
     await EinstellungenService.setzeSoundAktiv(v);
+    // Der Dienst hält den Stand zwischengespeichert, damit zwischen Tipp und
+    // Ton kein await auf SharedPreferences liegt — deshalb muss er hier
+    // ausdrücklich nachgezogen werden.
+    SoundService.setzeTonAktiv(v);
+    // Sofort hörbar machen, was der Schalter bewirkt: beim EINschalten ein
+    // kurzer Knopfton. Beim Ausschalten bleibt es naturgemäß still.
+    if (v) SoundService.spiele(Klang.knopf);
   }
 
   Future<void> _toggleVibration(bool v) async {

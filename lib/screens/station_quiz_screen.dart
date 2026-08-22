@@ -20,6 +20,7 @@ import '../services/fortschritt_service.dart';
 import '../services/gelernte_fakten_service.dart';
 import '../services/onboarding_service.dart';
 import '../services/skala_service.dart';
+import '../services/sound_service.dart';
 import '../services/station_session_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/erinnerung_dialog.dart';
@@ -548,7 +549,17 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   // ist — das vibration-Paket spricht den Vibrationsmotor direkt an und
   // umgeht dieses Problem. Bewusst fire-and-forget (kein await): die Haptik
   // soll den UI-Fluss nicht verzögern.
-  void _vibriereAntwort(bool richtig) {
+  /// Haptik UND Klang zur Antwort.
+  ///
+  /// Beides an EINER Stelle, weil beides denselben Auslöser hat: die sieben
+  /// Auswertungswege der Modi (Antippen, Eingabe, Sortieren, Schätzen,
+  /// Ranking, Kette, Zeitablauf) rufen alle hierher. Zwei getrennte Methoden
+  /// wären sieben Gelegenheiten, eine davon zu vergessen.
+  ///
+  /// Hiess vorher _vibriereAntwort — der Name stimmt nicht mehr, seit auch
+  /// ein Ton dranhängt.
+  void _antwortRueckmeldung(bool richtig) {
+    SoundService.spiele(richtig ? Klang.richtig : Klang.falsch);
     EinstellungenService.vibrationAktiv.then((aktiv) async {
       if (!aktiv) return;
       if (!await Vibration.hasVibrator()) return;
@@ -565,7 +576,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   // Weiter-Button antippt (siehe _weiterTippen).
   void _timerAbgelaufen() {
     if (_showFeedback || _session == null) return;
-    _vibriereAntwort(false);
+    _antwortRueckmeldung(false);
     setState(() {
       _showFeedback = true;
       _feedbackRichtig = false;
@@ -581,7 +592,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     final frage = _session!.aktuelleFrage;
     if (frage == null) return;
     final richtig = antwort == frage.richtigeAntwort;
-    _vibriereAntwort(richtig);
+    _antwortRueckmeldung(richtig);
     setState(() {
       _gewahlteAntwort = antwort;
       _showFeedback = true;
@@ -608,7 +619,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     if (text.isEmpty) return;
     _stopCountdown();
     final richtig = _eingabeIstRichtig(text, frage.richtigeAntwort, frage.laenderCode);
-    _vibriereAntwort(richtig);
+    _antwortRueckmeldung(richtig);
     setState(() {
       _eingabeBestaetigt = true;
       _showFeedback = true;
@@ -624,7 +635,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     if (frage == null) return;
     _stopCountdown();
     final richtig = _sortierReihenfolge.join(',') == frage.richtigeAntwort;
-    _vibriereAntwort(richtig);
+    _antwortRueckmeldung(richtig);
     setState(() {
       _sortierGeprueft = true;
       _showFeedback = true;
@@ -655,7 +666,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     final richtig = zielwert == 0
         ? _sliderWert.abs() < 1
         : (_sliderWert - zielwert).abs() / zielwert <= 0.2;
-    _vibriereAntwort(richtig);
+    _antwortRueckmeldung(richtig);
     setState(() {
       _preisBestaetigt = true;
       _showFeedback = true;
@@ -681,7 +692,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     final optimum = (frage.meta['optimum'] as num?)?.toInt() ?? 0;
     final schritte = weg.length - 1;
     final richtig = schritte - optimum <= kKetteToleranz;
-    _vibriereAntwort(richtig);
+    _antwortRueckmeldung(richtig);
     setState(() {
       _ketteWeg = weg;
       _ketteFertig = true;
@@ -718,7 +729,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // Als richtig zählt, wer im Band der guten Punktzahl landet — dieselbe
     // Logik wie die 20-Prozent-Toleranz beim Preis-Schätzen.
     final richtig = (eingabe - rang).abs() <= kRankingToleranz;
-    _vibriereAntwort(richtig);
+    _antwortRueckmeldung(richtig);
     setState(() {
       _rankingEingabe = eingabe;
       _rankingBestaetigt = true;
@@ -766,6 +777,10 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   // wird).
   void _weiterTippen() {
     if (_session == null) return;
+    // Der Weiter-Knopf ist der einzige Knopf, den der Spieler in einer
+    // Station immer wieder drückt — deshalb sitzt der Knopfton hier und
+    // nicht in den einzelnen Modus-Oberflächen.
+    SoundService.spiele(Klang.knopf);
     if (_feedbackRichtig) {
       _faktErfassen();
       _session!.richtigeAntwortVerarbeiten();

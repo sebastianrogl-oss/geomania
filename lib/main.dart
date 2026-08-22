@@ -12,6 +12,7 @@ import 'services/benachrichtigungs_service.dart';
 import 'services/fortschritt_service.dart';
 import 'services/locale_service.dart';
 import 'services/onboarding_service.dart';
+import 'services/sound_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/rangliste_screen.dart';
 import 'screens/profil_screen.dart';
@@ -45,6 +46,10 @@ void main() async {
   // Station, siehe BenachrichtigungsService.sollDialogZeigen. Auf Web ein
   // No-op, dort gibt es keine planbaren Benachrichtigungen.
   await BenachrichtigungsService.initialisieren();
+
+  // Lädt die Klangeffekte vor, damit der erste Ton nicht verzögert kommt.
+  // Auf Web ein No-op, siehe SoundService.verfuegbar.
+  await SoundService.initialisieren();
 
   runApp(const GeoManiaApp());
 

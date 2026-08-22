@@ -52,6 +52,7 @@ dependencies:
   flutter_local_notifications: ^22.3.0
   timezone: ^0.11.1
   flutter_timezone: ^5.1.0
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -78,6 +79,7 @@ flutter:
     - assets/icons/deko/
     - assets/animations/
     - assets/videos/
+    - assets/sounds/
   fonts:
     - family: Poppins
       fonts:

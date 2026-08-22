@@ -9,6 +9,7 @@ import '../services/daily_challenge.dart';
 import '../services/fortschritt_service.dart';
 import '../services/portfolio_service.dart';
 import '../services/profilbild_service.dart';
+import '../services/sound_service.dart';
 import '../services/station_session_service.dart';
 import '../utils/responsive.dart';
 import '../widgets/kontinent_hintergrund.dart';
@@ -414,6 +415,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         modus: tatsaechlicherModus,
         abgeschlossen: details.istAbgeschlossen,
         onStart: () async {
+          SoundService.spiele(Klang.knopf);
           Navigator.pop(context);
           await Navigator.push(
             context,

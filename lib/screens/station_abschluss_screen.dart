@@ -6,6 +6,7 @@ import '../data/lernpfad_data.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/einstellungen_service.dart';
 import '../services/gelernte_fakten_service.dart';
+import '../services/sound_service.dart';
 import '../widgets/ergebnis_video.dart';
 import '../widgets/kontinent_karte.dart';
 import '../theme/app_theme.dart';
@@ -178,14 +179,36 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
     _hatAmplitude = amplitude;
   }
 
-  /// Aufbauende Sequenz über den gesamten Animationszeitraum: gleichmäßige
-  /// Impulse mit steigender Stärke, abgeschlossen von einem deutlichen Schlag.
+  /// Klang und Haptik zum Start der Animationen.
+  ///
+  /// Aufbauende Vibrations-Sequenz über den gesamten Animationszeitraum:
+  /// gleichmäßige Impulse mit steigender Stärke, abgeschlossen von einem
+  /// deutlichen Schlag. Dazu der Sieg-Klang, siehe unten.
+  ///
+  /// Hiess vorher _vibrationsketteStarten — seit dem Klang stimmt der Name
+  /// nicht mehr. Der Klang haengt bewusst NICHT an der Vibrations-Erlaubnis:
+  /// die wird erst in _vibriere() geprueft, der Ton hat mit dem Ton-Schalter
+  /// seinen eigenen.
   ///
   /// Wird erst gestartet, wenn feststeht, ob neue Länder dazukamen — ohne sie
   /// fällt die Sequenz bewusst ruhiger aus.
-  void _vibrationsketteStarten() {
+  void _rueckmeldungsketteStarten() {
     final mitNeuen = _neuGelernt.isNotEmpty;
     final start = _kAuftritte['animationen']!;
+
+    // Der Sieg-Klang beginnt GENAU mit den hochzählenden Kennzahlen, also zum
+    // selben Zeitpunkt wie der erste Vibrationsimpuls — beide hängen an
+    // _kAuftritte['animationen'], damit sie zusammen verschieben, wenn dort
+    // jemand etwas ändert.
+    //
+    // Die Datei ist 3,91 s lang, die Zähler laufen 2,93 s ab dieser Marke.
+    // Der Klang trägt also noch etwa eine Sekunde über das Ende der Zahlen
+    // hinaus, ungefähr bis der Weiter-Knopf erscheint — er läuft aus, statt
+    // abgeschnitten zu werden.
+    _timer.add(Timer(
+      Duration(milliseconds: start),
+      () => SoundService.spiele(Klang.sieg),
+    ));
     final anzahl = mitNeuen
         ? ((_kAbschlussAbMs - start) / _kImpulsAbstandMs).floor()
         : _kRuhigeImpulse;
@@ -253,7 +276,7 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
     });
     // Erst jetzt steht fest, ob neue Länder dazukamen — davon hängt ab, wie
     // kräftig die Sequenz ausfällt.
-    _vibrationsketteStarten();
+    _rueckmeldungsketteStarten();
   }
 
   /// Trefferquote in Prozent. Die Kennzahl-Karte zeigt sie statt der

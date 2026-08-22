@@ -5,6 +5,7 @@ import 'package:vibration/vibration.dart';
 import '../data/abzeichen_data.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/einstellungen_service.dart';
+import '../services/sound_service.dart';
 import 'muenze_widget.dart';
 
 /// Erfolgs-Overlay direkt nach Abschluss einer Challenge/Station, BEVOR der
@@ -204,6 +205,10 @@ class _AbzeichenDialogInhaltState extends State<_AbzeichenDialogInhalt>
     _bodenkontaktAusgeloest = true;
     _funkelpunkte = _erzeugeFunkelpunkte();
     _wellenCtrl.forward(from: 0);
+    // Der Klang gehört zum AUFPRALL, nicht zum Fall davor: diese Methode
+    // feuert genau einmal, im Moment des ersten Bodenkontakts (siehe
+    // _kAufprall). Während des Schatten-Vorlaufs bleibt es still.
+    SoundService.spiele(Klang.muenze);
     _vibrieren();
   }
 

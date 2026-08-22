@@ -1120,6 +1120,8 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
         actions: [
+          // Der Anleitungs-Knopf stand hier und ist unter die Kopfzeile
+          // gewandert, in die helle Spielfläche (siehe unten im body).
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: Center(
@@ -1154,6 +1156,34 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
               children: [
                 if (_timerGesamt > 0)
                   _TimerBar(countdown: _countdown, gesamt: _timerGesamt),
+
+                // Anleitungs-Knopf: rechtsbündig ganz oben in der hellen
+                // Fläche, unter dem Skip-Knopf der Kopfzeile.
+                //
+                // Er steht BEWUSST im Layout und nicht als Overlay über der
+                // Frage: so kann er mit keinem Modus überlappen, egal wie
+                // dessen Spielfläche aussieht. Und er steht ausserhalb des
+                // Scrollbereichs darunter, damit er beim Scrollen nicht
+                // weglaüft und in jedem Modus an derselben Stelle sitzt.
+                //
+                // Einzige Ausnahme: hat die Station einen Timer, schiebt
+                // dessen Balken ihn um seine Höhe nach unten — der Balken
+                // trägt rechts seinen eigenen Sekundenzähler, unter den der
+                // Knopf gehört, nicht daneben.
+                //
+                // Nur für Modi mit hinterlegter Anleitung — sonst öffnete der
+                // Knopf nichts (zeigeModusAnleitung steigt bei leerer
+                // Anleitung aus).
+                if (kModiMitAnleitung.contains(frage.modus))
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16, top: 8),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _FragezeichenKnopf(
+                        onTap: () => zeigeModusAnleitung(context, frage.modus),
+                      ),
+                    ),
+                  ),
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -1245,7 +1275,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       );
     } else {
       key = ValueKey('frage_${session.aktuellerIndex}');
-      inhalt = _frageWidget(frage!);
+      inhalt = _frageMitAnleitung(frage!);
     }
     _aktuellerInhaltKey = key;
 
@@ -1285,6 +1315,37 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
         );
       },
       child: KeyedSubtree(key: key, child: inhalt),
+    );
+  }
+
+  /// Die Spielfläche eines Modus, darüber die modus-eigenen Knöpfe.
+  ///
+  /// Der Anleitungs-Knopf stand früher hier, beschriftet. Er ist als rundes
+  /// Fragezeichen in die Kopfzeile gewandert (siehe [_FragezeichenKnopf]) —
+  /// die Anleitung ist überall dieselbe Geste, und über der Spielfläche
+  /// nahm sie in jeder Frage eine Zeile weg.
+  ///
+  /// Übrig bleibt hier, was WIRKLICH zur einzelnen Frage gehört: bei "Was
+  /// gehört nicht dazu?" die Liste der möglichen Gemeinsamkeiten. Sie ist
+  /// keine Anleitung, sondern Teil der Aufgabe, und bleibt deshalb bewusst
+  /// an ihrem Platz.
+  Widget _frageMitAnleitung(Frage f) {
+    if (f.modus != LernModus.wasGehoertNichtDazu) return _frageWidget(f);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: _SpielflaechenKnopf(
+            icon: Icons.list_alt_rounded,
+            beschriftung: t('Kategorien'),
+            onTap: () => zeigeQuartettHilfe(context),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _frageWidget(f),
+      ],
     );
   }
 
@@ -2320,11 +2381,6 @@ class _SortierListe extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: anleitungsKnopf(context, LernModus.sortierSpiel),
-        ),
-        const SizedBox(height: 10),
         Text(
           frage.frage,
           textAlign: TextAlign.center,
@@ -2608,23 +2664,7 @@ class _PreisUI extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Der Anleitungs-Knopf sitzt hier statt in den beiden Unter-Ansichten:
-    // _buildEingabe und _buildErgebnis bekommen keinen BuildContext, und ihn
-    // nur durchzureichen, um denselben Knopf zweimal zu bauen, waere doppelt
-    // umstaendlich.
-    //
-    // Die Tages-Challenge-Fassung dieses Spiels (preis_schaetzen_screen.dart)
-    // hat ihren Erklaerungs-Knopf laengst — im Lernpfad fehlte er bisher.
-    return Column(
-      children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: anleitungsKnopf(context, LernModus.preisSchaetzen),
-        ),
-        const SizedBox(height: 10),
-        bestaetigt ? _buildErgebnis() : _buildEingabe(),
-      ],
-    );
+    return bestaetigt ? _buildErgebnis() : _buildEingabe();
   }
 
   Widget _buildEingabe() {
@@ -3441,19 +3481,11 @@ class _WasGehoertNichtDazuUI extends StatelessWidget {
         (MediaQuery.sizeOf(context).width - 32 - _kQuartettAbstand) / 2;
     return Column(
       children: [
-        // Der Knopf steht rechts ÜBER dem Fragetext, nicht daneben: mit
-        // Beschriftung ist er rund 100px breit, und ein entsprechend
-        // freigehaltener Rand würde den Fragetext auf schmalen Geräten auf
-        // wenige Zeichen pro Zeile zusammenquetschen.
-        Align(
-          alignment: Alignment.centerRight,
-          child: _SpielflaechenKnopf(
-            icon: Icons.list_alt_rounded,
-            beschriftung: t('Kategorien'),
-            onTap: () => zeigeQuartettHilfe(context),
-          ),
-        ),
-        const SizedBox(height: 12),
+        // Der Kategorien-Knopf stand hier, sitzt jetzt eine Ebene höher
+        // (siehe _frageMitAnleitung) — dort war er zeitweise mit dem
+        // Anleitungs-Knopf in einer Zeile; der ist inzwischen als rundes
+        // Fragezeichen in die Kopfzeile gewandert, der Kategorien-Knopf
+        // bleibt als einziger über der Spielfläche.
         Text(
           frage.frage,
           textAlign: TextAlign.center,
@@ -3780,11 +3812,6 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI> {
 
     return Column(
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: anleitungsKnopf(context, LernModus.laenderRanking),
-        ),
-        const SizedBox(height: 10),
         if (f.laenderCode.isNotEmpty) ...[
           _LandHeader(iso2: f.laenderCode),
           const SizedBox(height: 14),
@@ -4458,18 +4485,58 @@ class _SpielflaechenKnopf extends StatelessWidget {
   }
 }
 
-/// Der Anleitungs-Knopf für die Modi aus [kModiMitAnleitung].
+/// Runder Fragezeichen-Knopf oben rechts in der hellen Spielfläche — öffnet
+/// die Anleitung des laufenden Modus.
 ///
-/// Eigene Funktion statt eines weiteren Widgets, damit Symbol und
-/// Beschriftung an genau EINER Stelle stehen: der Knopf taucht in vier
-/// Modus-Oberflächen auf, und vier Kopien wären vier Gelegenheiten, sie
-/// auseinanderlaufen zu lassen.
-Widget anleitungsKnopf(BuildContext context, LernModus modus) =>
-    _SpielflaechenKnopf(
-      icon: Icons.help_outline_rounded,
-      beschriftung: t('Anleitung'),
-      onTap: () => zeigeModusAnleitung(context, modus),
+/// Er ersetzt den beschrifteten Knopf, der früher über der Frage stand, und
+/// sass zwischenzeitlich in der dunkelgrünen Kopfzeile. Auf dem hellen Grund
+/// braucht er andere Farben: weisse Fläche mit dunkler Outline statt heller
+/// Linien auf Grün — dieselbe Sprache wie die Karten der App.
+///
+/// Der Kreis ist bewusst kleiner als die Tippfläche: 27 px wirken neben dem
+/// Skip-Knopf zurückhaltend, 44 px sind das Mindestmaß für einen Finger. Der
+/// Kreis sitzt am RECHTEN Rand seiner Tippfläche, damit er mit dem Inhalt
+/// darunter auf einer Kante steht; die überzählige Fläche liegt links, wo
+/// nichts ist.
+class _FragezeichenKnopf extends StatelessWidget {
+  final VoidCallback onTap;
+  const _FragezeichenKnopf({required this.onTap});
+
+  /// 0.8 der früheren 34 px.
+  static const _kreis = 27.0;
+  static const _tippflaeche = 44.0;
+  static const _symbol = _kreis * 0.5;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: t('Anleitung'),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: _tippflaeche,
+          height: _tippflaeche,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              width: _kreis,
+              height: _kreis,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                border: Border.all(color: const Color(0xFF1A1A1A), width: 1.5),
+              ),
+              child: const Icon(Icons.question_mark_rounded,
+                  size: _symbol, color: Color(0xFF1A1A1A)),
+            ),
+          ),
+        ),
+      ),
     );
+  }
+}
 
 /// Öffnet die ausführliche Anleitung eines Modus.
 ///
@@ -4814,11 +4881,6 @@ class _NachbarschaftsKetteUIState extends State<_NachbarschaftsKetteUI> {
 
     return Column(
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: anleitungsKnopf(context, LernModus.nachbarschaftsKette),
-        ),
-        const SizedBox(height: 10),
         // ── Start und Ziel ───────────────────────────────────────────────
         Row(
           mainAxisAlignment: MainAxisAlignment.center,

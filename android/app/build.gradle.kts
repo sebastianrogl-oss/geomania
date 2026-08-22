@@ -33,6 +33,16 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Von flutter_local_notifications ab Version 10 verlangt — ohne
+        // diesen Schalter bricht schon der Debug-Build ab:
+        // "Dependency ':flutter_local_notifications' requires core library
+        // desugaring to be enabled for :app".
+        //
+        // Desugaring bildet neuere Java-APIs (hier vor allem java.time, das
+        // das Plugin für die Zeitzonen-Behandlung geplanter Benachrichtigungen
+        // braucht) auf älteren Android-Versionen nach. Nötig unabhängig davon,
+        // ob die App geplante Benachrichtigungen nutzt.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -78,6 +88,14 @@ flutter {
 }
 
 dependencies {
+    // Die Bibliothek zum Desugaring, siehe isCoreLibraryDesugaringEnabled
+    // oben. Version wie in der Anleitung des Plugins angegeben.
+    //
+    // Die Anleitung nennt zusätzlich multiDexEnabled = true. Das ist hier
+    // nicht nötig: minSdk steht auf 24, und ab minSdk 21 schaltet das
+    // Android-Gradle-Plugin Multidex von sich aus ein.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
     // play-services-ads-api (AdMob) zieht transitiv eine veraltete
     // androidx.work:work-runtime:2.7.0 herein, die mit den übrigen
     // (neueren) AndroidX-Bibliotheken im Projekt kollidiert und im

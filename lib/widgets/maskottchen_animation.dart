@@ -32,29 +32,40 @@ class MaskottchenAnimation extends StatelessWidget {
       height: groesse,
       decoration: _rahmenDekoration,
       child: ClipOval(
-        // Lottie's alignment steht bereits auf dem Maximum (-1.0) -> für
-        // noch mehr Verschiebung ohne Zoom bleibt nur ein zusätzlicher
-        // Transform.translate auf das fertig zugeschnittene Ergebnis. Ohne
-        // zusätzlichen Zoom kann dabei ab einem gewissen Versatz am rechten
-        // Rand ein leerer/durchsichtiger Bereich sichtbar werden, da kein
-        // weiterer Bildinhalt mehr vorhanden ist.
-        child: Transform.translate(
-          offset: const Offset(-75, 0),
-          child: Lottie.asset(
-            'assets/icons/deko/coin_dance.json',
+        // BoxFit.cover mit der voreingestellten mittigen Ausrichtung — mehr
+        // braucht es nicht, um die Münze im Kreis zu zentrieren.
+        //
+        // Hier stand vorher alignment: Alignment(-1.0, 0.0) (also linksbündig)
+        // plus ein Transform.translate um FESTE -75 Pixel zurück nach rechts.
+        // Zusammen ergab das ungefähr die Mitte — aber nur bei einer einzigen
+        // Größe: die Lottie-Leinwand ist 720x405, unter BoxFit.cover in einem
+        // Quadrat der Kantenlänge G also 1,778*G breit. Mittig wäre eine
+        // Verschiebung von 0,389*G, und das sind bei G=200 (Anzeigename-
+        // Screen) 77,8 Pixel — nahe genug an den 75, dass es dort nie
+        // auffiel.
+        //
+        // Bei jeder anderen Größe stimmt der feste Wert nicht: beim
+        // Willkommens-Screen (96 bis 170) schob er die Münze 9 bis 38 Pixel
+        // zu weit nach links. Der Versatz gehörte also nie an eine absolute
+        // Zahl, und statt ihn auf 0,389*G umzurechnen, entfällt er ganz —
+        // denn genau das tut die mittige Ausrichtung von sich aus, bei jeder
+        // Größe.
+        //
+        // Nebenbei behoben: das Ersatzbild im errorBuilder lag mit im
+        // Transform und wurde dadurch ebenfalls verschoben.
+        child: Lottie.asset(
+          'assets/icons/deko/coin_dance.json',
+          width: groesse,
+          height: groesse,
+          fit: BoxFit.cover,
+          repeat: true,
+          errorBuilder: (context, error, stackTrace) => Image.asset(
+            'assets/icons/deko/coin_winken.png',
             width: groesse,
             height: groesse,
             fit: BoxFit.cover,
-            alignment: const Alignment(-1.0, 0.0),
-            repeat: true,
-            errorBuilder: (context, error, stackTrace) => Image.asset(
-              'assets/icons/deko/coin_winken.png',
-              width: groesse,
-              height: groesse,
-              fit: BoxFit.cover,
-              errorBuilder: (c, e, s) =>
-                  SizedBox(width: groesse, height: groesse),
-            ),
+            errorBuilder: (c, e, s) =>
+                SizedBox(width: groesse, height: groesse),
           ),
         ),
       ),

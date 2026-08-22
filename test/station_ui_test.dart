@@ -14,7 +14,14 @@ LernStation _station(LernModus modus, List<String> laender) => LernStation(
     );
 
 Future<void> _pumpStation(WidgetTester tester, LernStation station) async {
-  SharedPreferences.setMockInitialValues({});
+  // Alle Onboarding-Merker vorab setzen: sonst öffnet der Quiz-Screen beim
+  // ersten Vorkommen eines Modus dessen Anleitung, und das Bottom-Sheet läge
+  // über der Spielfläche — jeder Tap dieser Tests ginge an den
+  // Sheet-Hintergrund statt an das geprüfte Widget. Hier geht es um die
+  // Spielflächen, nicht um das Onboarding.
+  SharedPreferences.setMockInitialValues({
+    for (final m in LernModus.values) 'onboarding_modus_${m.name}': true,
+  });
   await tester.pumpWidget(MaterialApp(
     home: StationQuizScreen(station: station),
   ));

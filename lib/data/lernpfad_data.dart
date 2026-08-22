@@ -989,30 +989,35 @@ String lernModusKurzanleitung(LernModus m) => t(switch (m) {
       'Bau einen Weg vom Start zum Ziel — Nachbarland für Nachbarland.',
 });
 
-/// Modi mit eigener Bedienung, die eine ausführliche Anleitung bekommen.
+/// Modi, deren Anleitung sich beim ERSTEN Vorkommen von selbst öffnet.
 ///
-/// Dieselben vier wie in [kNichtAlsWelteinstieg], und aus demselben Grund:
-/// bei ihnen genügt Antippen nicht. Wer die Geste nicht kennt, sitzt vor
-/// einem Bildschirm, auf dem nichts zu passieren scheint.
+/// Jeder Modus, für den [lernModusAnleitung] Absätze liefert — also alle. Die
+/// Menge ist abgeleitet und nicht von Hand gepflegt: eine zweite Liste wäre
+/// eine zweite Gelegenheit, sie auseinanderlaufen zu lassen.
 ///
-/// Die Anleitung öffnet sich beim ERSTEN Vorkommen von selbst und ist danach
-/// über den Knopf in der Spielfläche erreichbar.
-const Set<LernModus> kModiMitAnleitung = {
-  LernModus.sortierSpiel,
-  LernModus.preisSchaetzen,
-  LernModus.laenderRanking,
-  LernModus.nachbarschaftsKette,
+/// Danach bleibt die Anleitung über den Knopf in der Spielfläche erreichbar.
+final Set<LernModus> kModiMitAnleitung = {
+  for (final m in LernModus.values)
+    if (lernModusAnleitung(m).isNotEmpty) m,
 };
 
-/// Die ausführliche Anleitung für [kModiMitAnleitung] — Absatz für Absatz.
+/// Die ausführliche Anleitung eines Modus — Absatz für Absatz.
 ///
 /// Aufbau wie bei den Tages-Challenges (siehe higher_lower_screen.dart): erst
-/// was man sieht, dann die Bedienung, dann die Wertung. Der zweite Absatz
-/// beschreibt immer die GESTE, denn genau die fehlt sonst überall: beim
-/// Sortier-Spiel stand bisher nur "↑ Größtes oben" auf dem Schirm, aber
-/// nirgends, dass man ziehen muss.
+/// was man sieht, dann die Bedienung, dann — falls es eine gibt — die
+/// Besonderheit. Der Bedienungs-Absatz benennt immer die GESTE, denn genau
+/// die fehlte sonst überall: beim Sortier-Spiel stand bisher nur "↑ Größtes
+/// oben" auf dem Schirm, aber nirgends, dass man ziehen muss.
 ///
-/// Für alle übrigen Modi leer — sie kommen mit [lernModusKurzanleitung] aus.
+/// Die Länge richtet sich nach dem Bedarf, nicht nach einem Schema: die vier
+/// Modi mit eigener Bedienung brauchen vier Absätze, ein Antipp-Quiz kommt
+/// mit zwei aus. Eine erzwungene Mindestlänge hätte nur Füllsätze erzeugt,
+/// und die liest niemand zweimal.
+///
+/// Der switch ist VOLLSTÄNDIG, ohne Auffang-Fall. Das ist Absicht: ein neuer
+/// Modus lässt diese Datei nicht mehr übersetzen, bis jemand seine Anleitung
+/// geschrieben hat. Mit `_ => const []` wäre er stillschweigend ohne Hilfe
+/// im Spiel gelandet — genau der Zustand, den dieser Umbau beseitigt.
 List<String> lernModusAnleitung(LernModus m) => switch (m) {
   LernModus.sortierSpiel => [
       t('Du siehst fünf Länder in zufälliger Reihenfolge und darüber die '
@@ -1061,8 +1066,171 @@ List<String> lernModusAnleitung(LernModus m) => switch (m) {
       t('Sobald du am Ziel bist, ist die Frage vorbei. Je kürzer dein Weg, '
           'desto mehr Punkte — der kürzestmögliche gibt die volle Zahl.'),
     ],
-  _ => const [],
+  // ── Flaggen ────────────────────────────────────────────────────────────
+  LernModus.flaggenQuizBild => [
+      t('Du siehst eine Flagge. Darunter stehen vier Länder.'),
+      t('Tippe das Land an, zu dem die Flagge gehört. Deine Wahl färbt sich '
+          'grün oder rot, und die richtige Antwort wird immer mit '
+          'hervorgehoben.'),
+    ],
+  LernModus.flaggenQuizMultiple => [
+      t('Diesmal andersherum: du siehst einen Ländernamen und vier Flaggen.'),
+      t('Tippe die Flagge an, die zu diesem Land gehört.'),
+    ],
+  LernModus.flaggenQuizEingabe => [
+      t('Du siehst nur eine Flagge — ohne Auswahl. Der Ländername ist frei '
+          'einzutippen.'),
+      t('Schreib das Land ins Feld und tippe auf "Prüfen".'),
+      _kEingabeHinweis,
+    ],
+
+  // ── Umrisse ────────────────────────────────────────────────────────────
+  LernModus.umrissBild => [
+      t('Du siehst den Umriss eines Landes, ohne Beschriftung und ohne '
+          'Nachbarländer. Darunter stehen vier Namen zur Auswahl.'),
+      t('Tippe den Namen an, der zu diesem Umriss gehört.'),
+      t('Der Umriss ist immer gleich ausgerichtet, aber nicht immer gleich '
+          'groß — auf die Form kommt es an, nicht auf die Größe.'),
+    ],
+  LernModus.umrissMultiple => [
+      t('Diesmal andersherum: du siehst einen Ländernamen und vier Umrisse.'),
+      t('Tippe den Umriss an, der zu diesem Land gehört.'),
+    ],
+  LernModus.umrissEingabe => [
+      t('Du siehst nur einen Umriss — ohne Auswahl. Der Ländername ist frei '
+          'einzutippen.'),
+      t('Schreib das Land ins Feld und tippe auf "Prüfen".'),
+      _kEingabeHinweis,
+    ],
+
+  // ── Hauptstädte ────────────────────────────────────────────────────────
+  LernModus.hauptstaedteMultiple => [
+      t('Du siehst ein Land und vier Städte.'),
+      t('Tippe die Stadt an, die seine Hauptstadt ist.'),
+      t('Die drei falschen Antworten sind echte Städte aus derselben Gegend '
+          '— geraten hilft hier selten weiter.'),
+    ],
+  LernModus.hauptstaedteEingabe => [
+      t('Du siehst ein Land, aber keine Auswahl. Die Hauptstadt ist frei '
+          'einzutippen.'),
+      t('Schreib die Stadt ins Feld und tippe auf "Prüfen".'),
+      _kEingabeHinweis,
+    ],
+
+  // ── Währungen ──────────────────────────────────────────────────────────
+  LernModus.waehrungsQuiz => [
+      t('Du siehst ein Land und vier Währungen.'),
+      t('Tippe die Währung an, mit der dort bezahlt wird.'),
+      t('Manche Währungen gelten in mehreren Ländern — der Euro etwa in '
+          'zwanzig. Gesucht ist die des gezeigten Landes.'),
+    ],
+  LernModus.waehrungZuLand => [
+      t('Diesmal andersherum: du siehst eine Währung und vier Länder.'),
+      t('Tippe das Land an, in dem mit dieser Währung bezahlt wird.'),
+    ],
+
+  // ── Länder und Nachbarn ────────────────────────────────────────────────
+  LernModus.nachbarland => [
+      t('Du siehst ein Land und vier weitere Länder zur Auswahl.'),
+      t('Tippe das Land an, das eine gemeinsame Grenze mit dem gezeigten '
+          'hat.'),
+      t('Gemeint ist immer eine LANDgrenze. Länder, die nur durch ein Meer '
+          'getrennt sind, zählen nicht als Nachbarn.'),
+    ],
+  LernModus.grenzkettenRaetsel => [
+      t('Du bekommst eine Reise von einem Land zu einem anderen, die '
+          'ausschließlich über Land führt — und vier Länder zur Auswahl.'),
+      t('Tippe das Land an, durch das du dabei NICHT fahren musst. Die drei '
+          'anderen liegen zwangsläufig auf dem Weg.'),
+      t('Achte auf das NICHT in der Frage: gesucht ist der Ausreißer, nicht '
+          'eine Station der Reise.'),
+    ],
+
+  // ── Zahlen und Vergleiche ──────────────────────────────────────────────
+  LernModus.flaechenVergleich => [
+      t('Du siehst zwei Länder als Umrisse nebeneinander, maßstabsgetreu '
+          'zueinander gezeichnet. Darunter stehen vier Zahlen.'),
+      t('Tippe die Zahl an, die angibt, wie oft das kleinere Land in das '
+          'größere passt.'),
+      t('Es geht um die Fläche, nicht um die Form. Ein lang gezogenes Land '
+          'kann kleiner sein, als es aussieht.'),
+    ],
+  LernModus.bipGesamt => [
+      t('Du siehst ein Land und vier Zahlen — gesucht ist seine jährliche '
+          'Wirtschaftsleistung, das Bruttoinlandsprodukt.'),
+      t('Tippe die Zahl an, die zum Land passt.'),
+      t('Gemeint ist die Leistung des GANZEN Landes, nicht die pro Kopf. '
+          'Ein großes Land mit vielen Einwohnern liegt deshalb meist vorn.'),
+    ],
+  LernModus.flaeche => [
+      t('Du siehst ein Land und vier Flächenangaben in Quadratkilometern.'),
+      t('Tippe die Angabe an, die zum Land passt.'),
+    ],
+  LernModus.extremFrage => [
+      t('Gesucht ist ein Rekordhalter: das größte, kleinste, höchste oder '
+          'bevölkerungsreichste Land einer Gruppe.'),
+      t('Tippe das Land an, auf das die Beschreibung zutrifft.'),
+      t('Lies genau, in welche Richtung gefragt ist — zwischen "am meisten" '
+          'und "am wenigsten" liegt die ganze Liste.'),
+    ],
+  LernModus.extremFrageLeicht => [
+      t('Gesucht ist ein Rekordhalter: das größte, kleinste, höchste oder '
+          'bevölkerungsreichste Land einer Gruppe.'),
+      t('Tippe das Land an, auf das die Beschreibung zutrifft. Zur Auswahl '
+          'stehen hier nur sehr bekannte Länder.'),
+    ],
+
+  // ── Wissen ─────────────────────────────────────────────────────────────
+  LernModus.wirtschaftssektoren => [
+      t('Du siehst ein Land und vier Wirtschaftszweige — etwa Landwirtschaft, '
+          'Industrie oder Tourismus.'),
+      t('Tippe den Zweig an, der in diesem Land am stärksten ist.'),
+    ],
+  LernModus.zufallsFakt => [
+      t('Du liest einen Fakt über ein Land, ohne dass sein Name fällt. '
+          'Darunter stehen vier Länder.'),
+      t('Tippe das Land an, über das der Fakt spricht.'),
+      t('Der Fakt nennt oft eine Besonderheit, die es nur einmal gibt — wer '
+          'sie kennt, braucht nicht zu raten.'),
+    ],
+  LernModus.bekanntesGebaeude => [
+      t('Du siehst ein bekanntes Bauwerk und vier Länder.'),
+      t('Tippe das Land an, in dem es steht.'),
+    ],
+  LernModus.zweiWahrheiten => [
+      t('Du siehst drei Aussagen über ein Land. Zwei davon stimmen, eine ist '
+          'erfunden.'),
+      t('Tippe die Karte mit der erfundenen Aussage an. Danach decken sich '
+          'alle drei auf und zeigen, welche gelogen war.'),
+      t('Die Lüge ist meist nah an der Wahrheit — eine leicht verschobene '
+          'Zahl oder ein vertauschter Nachbar.'),
+    ],
+  LernModus.wasGehoertNichtDazu => [
+      t('Du siehst vier Länder. Drei teilen genau ein Merkmal, das vierte '
+          'nicht.'),
+      t('Tippe das Land an, das nicht dazugehört.'),
+      t('Welche Merkmale überhaupt in Frage kommen, zeigt der Knopf '
+          '"Kategorien" neben dieser Anleitung.'),
+    ],
 };
+
+/// Steht bei allen drei Eingabe-Modi als letzter Absatz.
+///
+/// Bewusst EINE Konstante statt dreier gleichlautender Absätze: die Regeln
+/// gelten für alle drei identisch, und drei Kopien wären drei Gelegenheiten,
+/// sie auseinanderlaufen zu lassen.
+///
+/// Der Text verspricht ausdrücklich KEINE Tippfehler-Toleranz — die gibt es
+/// nicht. normalisiereEingabe() in station_quiz_screen.dart vereinheitlicht
+/// Groß-/Kleinschreibung, bildet Umlaute und Akzente auf ASCII ab und
+/// behandelt Bindestriche, Apostrophe und Mehrfach-Leerzeichen gleich; dazu
+/// kommen die gepflegten Zweitnamen aus laender_aliase.dart. Ein echter
+/// Vertipper wie "Deutschlnad" gilt aber als falsch. Etwas anderes zu
+/// behaupten wäre ein Versprechen, das die App nicht einlöst.
+final String _kEingabeHinweis =
+    t('Groß- und Kleinschreibung ist egal, und Umlaute darfst du umschreiben '
+        '— "Suedafrika" gilt genauso wie "Südafrika". Gängige Zweitnamen wie '
+        '"USA" oder "Holland" zählen ebenfalls.');
 
 /// Zeitlimit in Sekunden für [modus] in Abschnitt 4 (Meister) — 0 bedeutet
 /// kein Timer. Nach Modus-Kategorie gestaffelt: schnelle Bild-/Multiple-

@@ -122,6 +122,154 @@ const Map<String, String> uebersetzungenOnboarding = {
           'your route, the more points — the shortest possible one scores '
           'full marks.',
 
+
+  // ── Anleitung: Flaggen ─────────────────────────────────────────────────────
+  'Du siehst eine Flagge. Darunter stehen vier Länder.':
+      'You see a flag, with four countries below it.',
+  'Tippe das Land an, zu dem die Flagge gehört. Deine Wahl färbt sich grün oder rot, und die richtige Antwort wird immer mit hervorgehoben.':
+      'Tap the country the flag belongs to. Your choice turns green or red, '
+          'and the correct answer is always highlighted as well.',
+  'Diesmal andersherum: du siehst einen Ländernamen und vier Flaggen.':
+      'The other way round this time: you see a country name and four flags.',
+  'Tippe die Flagge an, die zu diesem Land gehört.':
+      'Tap the flag that belongs to that country.',
+  'Du siehst nur eine Flagge — ohne Auswahl. Der Ländername ist frei einzutippen.':
+      'You see nothing but a flag — no options. The country name is yours to '
+          'type.',
+  'Schreib das Land ins Feld und tippe auf "Prüfen".':
+      'Type the country into the field and tap "Check".',
+
+  // ── Anleitung: Umrisse ─────────────────────────────────────────────────────
+  'Du siehst den Umriss eines Landes, ohne Beschriftung und ohne Nachbarländer. Darunter stehen vier Namen zur Auswahl.':
+      'You see the outline of a country, unlabelled and without its '
+          'neighbours, with four names to choose from below it.',
+  'Tippe den Namen an, der zu diesem Umriss gehört.':
+      'Tap the name that belongs to that outline.',
+  'Der Umriss ist immer gleich ausgerichtet, aber nicht immer gleich groß — auf die Form kommt es an, nicht auf die Größe.':
+      'The outline always faces the same way, but is not always the same size '
+          '— what matters is the shape, not how big it is.',
+  'Diesmal andersherum: du siehst einen Ländernamen und vier Umrisse.':
+      'The other way round this time: you see a country name and four '
+          'outlines.',
+  'Tippe den Umriss an, der zu diesem Land gehört.':
+      'Tap the outline that belongs to that country.',
+  'Du siehst nur einen Umriss — ohne Auswahl. Der Ländername ist frei einzutippen.':
+      'You see nothing but an outline — no options. The country name is yours '
+          'to type.',
+
+  // ── Anleitung: Hauptstädte ─────────────────────────────────────────────────
+  'Du siehst ein Land und vier Städte.': 'You see a country and four cities.',
+  'Tippe die Stadt an, die seine Hauptstadt ist.':
+      'Tap the city that is its capital.',
+  'Die drei falschen Antworten sind echte Städte aus derselben Gegend — geraten hilft hier selten weiter.':
+      'The three wrong answers are real cities from the same part of the '
+          'world — guessing rarely gets you far here.',
+  'Du siehst ein Land, aber keine Auswahl. Die Hauptstadt ist frei einzutippen.':
+      'You see a country but no options. The capital is yours to type.',
+  'Schreib die Stadt ins Feld und tippe auf "Prüfen".':
+      'Type the city into the field and tap "Check".',
+
+  // ── Anleitung: Eingabe-Hinweis (alle drei Eingabe-Modi) ────────────────────
+  'Groß- und Kleinschreibung ist egal, und Umlaute darfst du umschreiben — "Suedafrika" gilt genauso wie "Südafrika". Gängige Zweitnamen wie "USA" oder "Holland" zählen ebenfalls.':
+      'Capitals do not matter, and you may spell out accented letters — '
+          '"Suedafrika" counts just as much as "Südafrika". Common alternative '
+          'names such as "USA" or "Holland" are accepted too.',
+
+  // ── Anleitung: Währungen ───────────────────────────────────────────────────
+  'Du siehst ein Land und vier Währungen.':
+      'You see a country and four currencies.',
+  'Tippe die Währung an, mit der dort bezahlt wird.':
+      'Tap the currency used there.',
+  'Manche Währungen gelten in mehreren Ländern — der Euro etwa in zwanzig. Gesucht ist die des gezeigten Landes.':
+      'Some currencies are used in several countries — the euro in twenty of '
+          'them. The one you want is the currency of the country shown.',
+  'Diesmal andersherum: du siehst eine Währung und vier Länder.':
+      'The other way round this time: you see a currency and four countries.',
+
+  // ── Anleitung: Länder und Nachbarn ─────────────────────────────────────────
+  'Du siehst ein Land und vier weitere Länder zur Auswahl.':
+      'You see a country, with four more to choose from.',
+  'Tippe das Land an, das eine gemeinsame Grenze mit dem gezeigten hat.':
+      'Tap the country that shares a border with the one shown.',
+  'Gemeint ist immer eine LANDgrenze. Länder, die nur durch ein Meer getrennt sind, zählen nicht als Nachbarn.':
+      'A LAND border is always what is meant. Countries separated only by sea '
+          'do not count as neighbours.',
+  'Du bekommst eine Reise von einem Land zu einem anderen, die ausschließlich über Land führt — und vier Länder zur Auswahl.':
+      'You are given a journey from one country to another that goes entirely '
+          'overland — and four countries to choose from.',
+  'Tippe das Land an, durch das du dabei NICHT fahren musst. Die drei anderen liegen zwangsläufig auf dem Weg.':
+      'Tap the country you do NOT have to travel through. The other three lie '
+          'on the route by necessity.',
+  'Achte auf das NICHT in der Frage: gesucht ist der Ausreißer, nicht eine Station der Reise.':
+      'Watch for the NOT in the question: you are looking for the odd one '
+          'out, not a stop along the way.',
+
+  // ── Anleitung: Zahlen und Vergleiche ───────────────────────────────────────
+  'Du siehst zwei Länder als Umrisse nebeneinander, maßstabsgetreu zueinander gezeichnet. Darunter stehen vier Zahlen.':
+      'You see two countries side by side as outlines, drawn to scale with '
+          'each other, with four numbers below them.',
+  'Tippe die Zahl an, die angibt, wie oft das kleinere Land in das größere passt.':
+      'Tap the number that says how many times the smaller country fits into '
+          'the larger one.',
+  'Es geht um die Fläche, nicht um die Form. Ein lang gezogenes Land kann kleiner sein, als es aussieht.':
+      'This is about area, not shape. A long, drawn-out country can be '
+          'smaller than it looks.',
+  'Du siehst ein Land und vier Zahlen — gesucht ist seine jährliche Wirtschaftsleistung, das Bruttoinlandsprodukt.':
+      'You see a country and four numbers — you are looking for its annual '
+          'economic output, its gross domestic product.',
+  'Tippe die Zahl an, die zum Land passt.':
+      'Tap the number that matches the country.',
+  'Gemeint ist die Leistung des GANZEN Landes, nicht die pro Kopf. Ein großes Land mit vielen Einwohnern liegt deshalb meist vorn.':
+      'This is the output of the WHOLE country, not per person. A large '
+          'country with many inhabitants therefore usually comes out ahead.',
+  'Du siehst ein Land und vier Flächenangaben in Quadratkilometern.':
+      'You see a country and four areas in square kilometres.',
+  'Tippe die Angabe an, die zum Land passt.':
+      'Tap the one that matches the country.',
+  'Gesucht ist ein Rekordhalter: das größte, kleinste, höchste oder bevölkerungsreichste Land einer Gruppe.':
+      'You are looking for a record holder: the largest, smallest, highest or '
+          'most populous country of a group.',
+  'Tippe das Land an, auf das die Beschreibung zutrifft.':
+      'Tap the country the description applies to.',
+  'Lies genau, in welche Richtung gefragt ist — zwischen "am meisten" und "am wenigsten" liegt die ganze Liste.':
+      'Read carefully which way the question runs — the whole list lies '
+          'between "most" and "least".',
+  'Tippe das Land an, auf das die Beschreibung zutrifft. Zur Auswahl stehen hier nur sehr bekannte Länder.':
+      'Tap the country the description applies to. Only very well-known '
+          'countries appear here.',
+
+  // ── Anleitung: Wissen ──────────────────────────────────────────────────────
+  'Du siehst ein Land und vier Wirtschaftszweige — etwa Landwirtschaft, Industrie oder Tourismus.':
+      'You see a country and four branches of industry — farming, '
+          'manufacturing or tourism, for example.',
+  'Tippe den Zweig an, der in diesem Land am stärksten ist.':
+      'Tap the one that is strongest in that country.',
+  'Du liest einen Fakt über ein Land, ohne dass sein Name fällt. Darunter stehen vier Länder.':
+      'You read a fact about a country without its name being mentioned, with '
+          'four countries below.',
+  'Der Fakt nennt oft eine Besonderheit, die es nur einmal gibt — wer sie kennt, braucht nicht zu raten.':
+      'The fact often names something that exists only once — if you know it, '
+          'there is no need to guess.',
+  'Du siehst ein bekanntes Bauwerk und vier Länder.':
+      'You see a well-known landmark and four countries.',
+  'Tippe das Land an, in dem es steht.': 'Tap the country it stands in.',
+  'Du siehst drei Aussagen über ein Land. Zwei davon stimmen, eine ist erfunden.':
+      'You see three statements about a country. Two of them are true, one is '
+          'made up.',
+  'Tippe die Karte mit der erfundenen Aussage an. Danach decken sich alle drei auf und zeigen, welche gelogen war.':
+      'Tap the card with the made-up statement. All three then turn over and '
+          'show which one was the lie.',
+  'Die Lüge ist meist nah an der Wahrheit — eine leicht verschobene Zahl oder ein vertauschter Nachbar.':
+      'The lie usually sits close to the truth — a number nudged slightly, or '
+          'a neighbour swapped out.',
+  'Du siehst vier Länder. Drei teilen genau ein Merkmal, das vierte nicht.':
+      'You see four countries. Three share exactly one feature, the fourth '
+          'does not.',
+  'Tippe das Land an, das nicht dazugehört.':
+      'Tap the country that does not belong.',
+  'Welche Merkmale überhaupt in Frage kommen, zeigt der Knopf "Kategorien" neben dieser Anleitung.':
+      'The "Categories" button next to these instructions shows which '
+          'features are possible at all.',
   // ── Anleitungs-Knopf und Titel ─────────────────────────────────────────────
   'Anleitung': 'How to play',
   '{modus} — so geht es': '{modus} — how it works',

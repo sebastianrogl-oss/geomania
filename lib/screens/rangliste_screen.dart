@@ -554,19 +554,32 @@ class _RangZeile extends StatelessWidget {
 
 // ── Profilbild-Icon ────────────────────────────────────────────────────────────
 
+/// Durchmesser des Profilbilds in einer Ranglisten-Zeile.
+///
+/// Die Zeile hat keine feste Höhe — sie richtet sich nach ihrem höchsten
+/// Kind, und das ist genau dieses Bild. Ein größerer Wert macht die Zeile
+/// also von selbst höher; Name und Wert daneben rücken entsprechend zusammen.
+const double _kProfilbildGroesse = 42;
+
+/// Ersatz-Symbol und Innenabstand als Anteil des Durchmessers, damit beides
+/// bei einer Größenänderung nicht einzeln nachgezogen werden muss.
+const double _kPlatzhalterAnteil = 0.64;
+const double _kBildInnenrand = 0.107;
+
 class _ProfilbildIcon extends StatelessWidget {
   final String? pfad;
   const _ProfilbildIcon({required this.pfad});
 
-  static const _platzhalter =
-      Icon(Icons.person, size: 18, color: Color(0xFF888888));
+  static const _platzhalter = Icon(Icons.person,
+      size: _kProfilbildGroesse * _kPlatzhalterAnteil,
+      color: Color(0xFF888888));
 
   @override
   Widget build(BuildContext context) {
     final pfad = this.pfad;
     return Container(
-      width: 28,
-      height: 28,
+      width: _kProfilbildGroesse,
+      height: _kProfilbildGroesse,
       decoration: const BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.white,
@@ -585,7 +598,8 @@ class _ProfilbildIcon extends StatelessWidget {
                           errorBuilder: (c, e, s) => _platzhalter),
                     )
                   : Padding(
-                      padding: const EdgeInsets.all(3),
+                      padding: const EdgeInsets.all(
+                          _kProfilbildGroesse * _kBildInnenrand),
                       child: Image.asset(pfad,
                           fit: BoxFit.contain,
                           errorBuilder: (c, e, s) => _platzhalter),

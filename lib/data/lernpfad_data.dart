@@ -910,6 +910,146 @@ String lernModusLabel(LernModus m) => t(switch (m) {
   LernModus.nachbarschaftsKette  => 'Nachbarschafts-Kette',
 });
 
+/// Ein Satz, der sagt, WAS ZU TUN IST — für das Start-Sheet einer Station.
+///
+/// Der Modus-Name allein trägt nicht: "Nachbarschafts-Kette" oder
+/// "Länder-Ranking" sagen einem neuen Spieler nichts über die Bedienung.
+///
+/// Deshalb beginnt jede Zeile mit der TÄTIGKEIT — tippe, zieh, schätze,
+/// schreib, stell ein, bau — und nicht mit dem Ziel. Drei Modi zeigen ihre
+/// Frage ausserdem gar nicht als Text (flaggenQuizBild, umrissBild,
+/// umrissMultiple: dort IST das Bild die Frage); für die ist dieser Satz die
+/// einzige Anleitung, die je erscheint.
+String lernModusKurzanleitung(LernModus m) => t(switch (m) {
+  LernModus.flaggenQuizBild =>
+      'Tippe das Land an, zu dem die gezeigte Flagge gehört.',
+  LernModus.flaggenQuizMultiple =>
+      'Tippe die Flagge an, die zum genannten Land gehört.',
+  LernModus.hauptstaedteMultiple =>
+      'Tippe die Hauptstadt des genannten Landes an.',
+  LernModus.hauptstaedteEingabe =>
+      'Schreib die Hauptstadt des genannten Landes.',
+  LernModus.umrissBild =>
+      'Tippe das Land an, zu dem der gezeigte Umriss gehört.',
+  LernModus.umrissMultiple =>
+      'Tippe den Umriss an, der zum genannten Land gehört.',
+  LernModus.flaggenQuizEingabe =>
+      'Schreib das Land, zu dem die gezeigte Flagge gehört.',
+  LernModus.umrissEingabe =>
+      'Schreib das Land, zu dem der gezeigte Umriss gehört.',
+  LernModus.waehrungsQuiz =>
+      'Tippe die Währung an, mit der im gezeigten Land bezahlt wird.',
+  LernModus.sortierSpiel =>
+      'Zieh die Länder mit dem Finger in die richtige Reihenfolge.',
+  LernModus.preisSchaetzen =>
+      'Schieb den Regler auf den Wert, den du schätzt.',
+  LernModus.wirtschaftssektoren =>
+      'Tippe den Wirtschaftssektor an, der im Land am stärksten ist.',
+  LernModus.nachbarland =>
+      'Tippe das Land an, das an das genannte grenzt.',
+  LernModus.bipGesamt =>
+      'Tippe die Wirtschaftsleistung an, die zum Land passt.',
+  LernModus.flaeche =>
+      'Tippe die Fläche an, die zum Land passt.',
+  LernModus.extremFrage =>
+      'Tippe das Land an, auf das der Superlativ zutrifft.',
+  LernModus.waehrungZuLand =>
+      'Tippe das Land an, in dem mit dieser Währung bezahlt wird.',
+  LernModus.extremFrageLeicht =>
+      'Tippe das Land an, auf das der Superlativ zutrifft.',
+  LernModus.zufallsFakt =>
+      'Tippe das Land an, über das der Fakt spricht.',
+  LernModus.bekanntesGebaeude =>
+      'Tippe das Land an, in dem das Bauwerk steht.',
+  LernModus.grenzkettenRaetsel =>
+      'Tippe das Land an, durch das der Weg NICHT führen muss.',
+  LernModus.flaechenVergleich =>
+      'Tippe an, wie oft das kleinere Land in das größere passt.',
+  LernModus.zweiWahrheiten =>
+      'Tippe die Karte mit der Aussage an, die NICHT stimmt.',
+  LernModus.wasGehoertNichtDazu =>
+      'Tippe das Land an, das nicht zu den anderen drei passt.',
+  LernModus.laenderRanking =>
+      'Stell am Zahlenschloss ein, auf welchem Platz das Land liegt.',
+  LernModus.nachbarschaftsKette =>
+      'Bau einen Weg vom Start zum Ziel — Nachbarland für Nachbarland.',
+});
+
+/// Modi mit eigener Bedienung, die eine ausführliche Anleitung bekommen.
+///
+/// Dieselben vier wie in [kNichtAlsWelteinstieg], und aus demselben Grund:
+/// bei ihnen genügt Antippen nicht. Wer die Geste nicht kennt, sitzt vor
+/// einem Bildschirm, auf dem nichts zu passieren scheint.
+///
+/// Die Anleitung öffnet sich beim ERSTEN Vorkommen von selbst und ist danach
+/// über den Knopf in der Spielfläche erreichbar.
+const Set<LernModus> kModiMitAnleitung = {
+  LernModus.sortierSpiel,
+  LernModus.preisSchaetzen,
+  LernModus.laenderRanking,
+  LernModus.nachbarschaftsKette,
+};
+
+/// Die ausführliche Anleitung für [kModiMitAnleitung] — Absatz für Absatz.
+///
+/// Aufbau wie bei den Tages-Challenges (siehe higher_lower_screen.dart): erst
+/// was man sieht, dann die Bedienung, dann die Wertung. Der zweite Absatz
+/// beschreibt immer die GESTE, denn genau die fehlt sonst überall: beim
+/// Sortier-Spiel stand bisher nur "↑ Größtes oben" auf dem Schirm, aber
+/// nirgends, dass man ziehen muss.
+///
+/// Für alle übrigen Modi leer — sie kommen mit [lernModusKurzanleitung] aus.
+List<String> lernModusAnleitung(LernModus m) => switch (m) {
+  LernModus.sortierSpiel => [
+      t('Du siehst fünf Länder in zufälliger Reihenfolge und darüber die '
+          'Kategorie, nach der sortiert wird — zum Beispiel Bevölkerung '
+          'oder Fläche.'),
+      t('Halte ein Land gedrückt und zieh es nach oben oder unten. Die '
+          'anderen rücken dabei von selbst zur Seite. Das größte gehört '
+          'nach oben, das kleinste nach unten.'),
+      t('Wenn die Reihenfolge steht, tippe auf "Prüfen". Danach siehst du '
+          'die richtige Reihenfolge mit den echten Werten.'),
+      t('Die Kategorie bleibt für die ganze Station dieselbe — du musst '
+          'dich also nur einmal darauf einstellen.'),
+    ],
+  LernModus.preisSchaetzen => [
+      t('Du siehst ein Land und eine Kategorie, zum Beispiel "Fläche von '
+          'Brasilien". Gesucht ist der echte Wert.'),
+      t('Schieb den Regler mit dem Finger nach links oder rechts. Über dem '
+          'Regler siehst du dabei laufend, welchen Wert du gerade '
+          'eingestellt hast.'),
+      t('Tippe auf "Schätzung bestätigen", wenn du zufrieden bist. Danach '
+          'erscheint der tatsächliche Wert und wie weit du danebenlagst.'),
+      t('Du musst nicht genau treffen: alles innerhalb von 20 Prozent gilt '
+          'als richtig.'),
+    ],
+  LernModus.laenderRanking => [
+      t('Gefragt ist, auf welchem Platz ein Land in einer Kategorie liegt — '
+          'zum Beispiel "Welchen Platz belegt Kenia in der Kategorie '
+          'Fläche?". Platz 1 ist immer der höchste Wert.'),
+      t('Die Zahl stellst du an einem Zahlenschloss ein: wisch die Walzen '
+          'nach oben oder unten, bis deine Zahl in der Mitte steht. Die '
+          'linke Walze ist die Zehnerstelle, die rechte die Einerstelle.'),
+      t('Tippe auf "Bestätigen", wenn die Zahl stimmt. Wie viele Länder '
+          'überhaupt gewertet werden, steht über dem Schloss.'),
+      t('Du musst nicht genau treffen: je näher du am richtigen Platz '
+          'liegst, desto mehr Punkte gibt es.'),
+    ],
+  LernModus.nachbarschaftsKette => [
+      t('Du bekommst ein Startland und ein Zielland. Beide liegen auf '
+          'demselben Kontinent, aber nicht nebeneinander.'),
+      t('Unter der Karte stehen die Nachbarländer deines aktuellen Landes. '
+          'Tippe eines an, um dorthin weiterzugehen — dein Weg wächst '
+          'dadurch Schritt für Schritt.'),
+      t('Verläufst du dich, bringt dich "Schritt zurück" wieder eine '
+          'Station zurück. Von manchen Ländern geht es nicht weiter, dann '
+          'musst du diesen Weg ohnehin verlassen.'),
+      t('Sobald du am Ziel bist, ist die Frage vorbei. Je kürzer dein Weg, '
+          'desto mehr Punkte — der kürzestmögliche gibt die volle Zahl.'),
+    ],
+  _ => const [],
+};
+
 /// Zeitlimit in Sekunden für [modus] in Abschnitt 4 (Meister) — 0 bedeutet
 /// kein Timer. Nach Modus-Kategorie gestaffelt: schnelle Bild-/Multiple-
 /// Erkennung bekommt am wenigsten Zeit, Eingabe-Modi (Tippen kostet Zeit) und

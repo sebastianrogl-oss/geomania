@@ -135,7 +135,13 @@ void main() {
 
   testWidgets('Sortierspiel-UI: nach Prüfen erscheint korrekte Reihenfolge mit Werten + Weiter-Button, kein Auto-Advance',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    // Der Merker MUSS gesetzt sein: sonst öffnet der Quiz-Screen beim ersten
+    // Vorkommen dieses Modus von selbst die Anleitung (siehe
+    // OnboardingService), und die läge dann als Bottom-Sheet über der
+    // Spielfläche — jeder Tap ginge an den Sheet-Hintergrund statt an den
+    // geprüften Knopf. Hier geht es um das Spiel, nicht um das Onboarding.
+    SharedPreferences.setMockInitialValues(
+        {'onboarding_modus_sortierSpiel': true});
     final station = LernStation(
       id: 'test_sortier',
       modus: LernModus.sortierSpiel,

@@ -141,7 +141,11 @@ void main() {
 
   testWidgets('Preisschätzen-UI: nach Bestätigen erscheinen echter Wert + Abweichung + Weiter-Button, kein Auto-Advance',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    // Siehe sortierspiel_test.dart: ohne diesen Merker öffnet der Quiz-Screen
+    // beim ersten Vorkommen des Modus die Anleitung, und das Bottom-Sheet
+    // fängt die Taps dieses Tests ab.
+    SharedPreferences.setMockInitialValues(
+        {'onboarding_modus_preisSchaetzen': true});
     final station = LernStation(
       id: 'test_preis',
       modus: LernModus.preisSchaetzen,

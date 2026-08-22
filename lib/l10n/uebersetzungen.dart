@@ -21,6 +21,7 @@ import 'uebersetzungen_lernpfad.dart';
 import 'uebersetzungen_lernwelten.dart';
 import 'uebersetzungen_mapquiz.dart';
 import 'uebersetzungen_marktbriefing.dart';
+import 'uebersetzungen_onboarding.dart';
 import 'uebersetzungen_outlinequiz.dart';
 import 'uebersetzungen_portfolio.dart';
 import 'uebersetzungen_portfolio_aufloesung.dart';
@@ -86,6 +87,7 @@ final Map<String, String> uebersetzungen = {
   ...uebersetzungenPortfolio,
   ...uebersetzungenPortfolioAufloesung,
   ...uebersetzungenMarktbriefing,
+  ...uebersetzungenOnboarding,
   ...uebersetzungenOutlineQuiz,
   ...uebersetzungenPortfolioInvestieren,
   ...uebersetzungenPortfolioBeispiel,

@@ -1763,6 +1763,25 @@ class _StationSheetState extends State<_StationSheet> {
               fontWeight: FontWeight.w600,
             ),
           ),
+          // Der Modus-Name allein sagt nichts über die Bedienung — "Länder-
+          // Ranking" oder "Nachbarschafts-Kette" musste man bisher raten.
+          // Ein Satz, der mit der Tätigkeit beginnt, steht hier vor dem
+          // START-Knopf und damit an der einzigen Stelle, an der man ihn in
+          // Ruhe liest.
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              lernModusKurzanleitung(widget.modus),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: Color(0xFF1A1A1A),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           if (widget.abgeschlossen) ...[
             const SizedBox(height: 12),
             Container(

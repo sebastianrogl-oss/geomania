@@ -18,6 +18,7 @@ import '../services/benachrichtigungs_service.dart';
 import '../services/einstellungen_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/gelernte_fakten_service.dart';
+import '../services/onboarding_service.dart';
 import '../services/skala_service.dart';
 import '../services/station_session_service.dart';
 import '../widgets/abzeichen_popup.dart';
@@ -25,6 +26,7 @@ import '../widgets/erinnerung_dialog.dart';
 import '../widgets/flaggen_widget.dart';
 import '../widgets/halbzeit_inhalt.dart';
 import '../widgets/level_skip_button.dart';
+import '../widgets/spiel_erklaerung.dart';
 import '../widgets/streak_feier_overlay.dart';
 import 'station_abschluss_screen.dart';
 import '../theme/app_theme.dart';
@@ -424,8 +426,44 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       _session = session;
       _loading = false;
     });
-    if (session.hatTimer) _startCountdown();
     _initFrageState(session.aktuelleFrage);
+    // Die Anleitung MUSS vor dem Countdown kommen: sonst läuft in einem
+    // Meister-Abschnitt die Uhr, während der Spieler noch liest.
+    await _zeigeAnleitungFallsErstesMal(session.aktuelleFrage?.modus);
+    if (!mounted) return;
+    if (session.hatTimer) _startCountdown();
+  }
+
+  /// Öffnet beim ERSTEN Vorkommen eines Modus mit eigener Bedienung dessen
+  /// Anleitung — einmal je Modus, danach nie wieder von selbst.
+  ///
+  /// Der Merker wird gesetzt, BEVOR das Sheet erscheint: wer die App
+  /// mittendrin schliesst, soll die Anleitung nicht beim nächsten Start
+  /// erneut vorgesetzt bekommen. Sie bleibt ja über den Knopf in der
+  /// Spielfläche jederzeit erreichbar.
+  ///
+  /// Läuft absichtlich über den Modus der ersten FRAGE und nicht über
+  /// station.modus: bei zu dünner Datenlage weicht der Generator auf einen
+  /// anderen Modus aus (siehe ermittleTatsaechlichenModus), und dann wäre die
+  /// Anleitung die zum falschen Spiel.
+  Future<void> _zeigeAnleitungFallsErstesMal(LernModus? modus) async {
+    if (modus == null || !kModiMitAnleitung.contains(modus)) return;
+    if (await OnboardingService.modusErklaerungGezeigt(modus)) return;
+    await OnboardingService.merkeModusErklaerung(modus);
+    if (!mounted) return;
+
+    // Auf den ersten Frame warten: das Sheet braucht einen aufgebauten Baum,
+    // und setState() oben ist zu diesem Zeitpunkt noch nicht gezeichnet.
+    final fertig = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        fertig.complete();
+        return;
+      }
+      await zeigeModusAnleitung(context, modus);
+      fertig.complete();
+    });
+    await fertig.future;
   }
 
   void _initFrageState(Frage? frage) {
@@ -2267,6 +2305,11 @@ class _SortierListe extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: anleitungsKnopf(context, LernModus.sortierSpiel),
+        ),
+        const SizedBox(height: 10),
         Text(
           frage.frage,
           textAlign: TextAlign.center,
@@ -2550,7 +2593,23 @@ class _PreisUI extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return bestaetigt ? _buildErgebnis() : _buildEingabe();
+    // Der Anleitungs-Knopf sitzt hier statt in den beiden Unter-Ansichten:
+    // _buildEingabe und _buildErgebnis bekommen keinen BuildContext, und ihn
+    // nur durchzureichen, um denselben Knopf zweimal zu bauen, waere doppelt
+    // umstaendlich.
+    //
+    // Die Tages-Challenge-Fassung dieses Spiels (preis_schaetzen_screen.dart)
+    // hat ihren Erklaerungs-Knopf laengst — im Lernpfad fehlte er bisher.
+    return Column(
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: anleitungsKnopf(context, LernModus.preisSchaetzen),
+        ),
+        const SizedBox(height: 10),
+        bestaetigt ? _buildErgebnis() : _buildEingabe(),
+      ],
+    );
   }
 
   Widget _buildEingabe() {
@@ -3706,6 +3765,11 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI> {
 
     return Column(
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: anleitungsKnopf(context, LernModus.laenderRanking),
+        ),
+        const SizedBox(height: 10),
         if (f.laenderCode.isNotEmpty) ...[
           _LandHeader(iso2: f.laenderCode),
           const SizedBox(height: 14),
@@ -4379,6 +4443,35 @@ class _SpielflaechenKnopf extends StatelessWidget {
   }
 }
 
+/// Der Anleitungs-Knopf für die Modi aus [kModiMitAnleitung].
+///
+/// Eigene Funktion statt eines weiteren Widgets, damit Symbol und
+/// Beschriftung an genau EINER Stelle stehen: der Knopf taucht in vier
+/// Modus-Oberflächen auf, und vier Kopien wären vier Gelegenheiten, sie
+/// auseinanderlaufen zu lassen.
+Widget anleitungsKnopf(BuildContext context, LernModus modus) =>
+    _SpielflaechenKnopf(
+      icon: Icons.help_outline_rounded,
+      beschriftung: t('Anleitung'),
+      onTap: () => zeigeModusAnleitung(context, modus),
+    );
+
+/// Öffnet die ausführliche Anleitung eines Modus.
+///
+/// Nutzt zeigeSpielErklaerung() aus widgets/spiel_erklaerung.dart — dasselbe
+/// Bottom-Sheet, das die vier Tages-Challenges schon verwenden. Der Lernpfad
+/// hatte bisher gar keinen Zugang dazu.
+Future<void> zeigeModusAnleitung(BuildContext context, LernModus modus) {
+  final absaetze = lernModusAnleitung(modus);
+  if (absaetze.isEmpty) return Future<void>.value();
+  return zeigeSpielErklaerung(
+    context,
+    titel: t('{modus} — so geht es', {'modus': lernModusLabel(modus)}),
+    abschnitte: absaetze,
+    farbe: const Color(0xFF4A9E4A),
+  );
+}
+
 /// Overlay mit den Merkmalen, auf die "Was gehört nicht dazu?" prüfen kann.
 ///
 /// Die Liste kommt aus [FragenGenerator.quartettKategorien] und damit aus
@@ -4706,6 +4799,11 @@ class _NachbarschaftsKetteUIState extends State<_NachbarschaftsKetteUI> {
 
     return Column(
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: anleitungsKnopf(context, LernModus.nachbarschaftsKette),
+        ),
+        const SizedBox(height: 10),
         // ── Start und Ziel ───────────────────────────────────────────────
         Row(
           mainAxisAlignment: MainAxisAlignment.center,

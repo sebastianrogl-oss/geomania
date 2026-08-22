@@ -25,36 +25,9 @@ import 'portfolio_screen.dart';
 import 'preis_schaetzen_screen.dart';
 import 'ranking_game_screen.dart';
 import 'station_quiz_screen.dart';
+import '../widgets/lernpfad_station_button.dart';
 import '../theme/app_theme.dart';
 
-IconData _modusIcon(LernModus m) => switch (m) {
-  LernModus.flaggenQuizBild => Icons.flag_rounded,
-  LernModus.flaggenQuizMultiple => Icons.flag_rounded,
-  LernModus.hauptstaedteMultiple => Icons.account_balance_rounded,
-  LernModus.hauptstaedteEingabe => Icons.account_balance_rounded,
-  LernModus.waehrungsQuiz => Icons.monetization_on_rounded,
-  LernModus.sortierSpiel => Icons.sort_rounded,
-  LernModus.preisSchaetzen => Icons.sell_rounded,
-  LernModus.wirtschaftssektoren => Icons.factory_rounded,
-  LernModus.umrissBild => Icons.map_rounded,
-  LernModus.umrissMultiple => Icons.map_rounded,
-  LernModus.flaggenQuizEingabe => Icons.flag_rounded,
-  LernModus.umrissEingabe => Icons.map_rounded,
-  LernModus.nachbarland => Icons.explore_rounded,
-  LernModus.bipGesamt => Icons.trending_up_rounded,
-  LernModus.flaeche => Icons.crop_square_rounded,
-  LernModus.extremFrage => Icons.emoji_events_rounded,
-  LernModus.waehrungZuLand => Icons.monetization_on_rounded,
-  LernModus.extremFrageLeicht => Icons.emoji_events_rounded,
-  LernModus.zufallsFakt => Icons.lightbulb_rounded,
-  LernModus.bekanntesGebaeude => Icons.temple_buddhist_rounded,
-  LernModus.grenzkettenRaetsel => Icons.route_rounded,
-  LernModus.flaechenVergleich => Icons.crop_square_rounded,
-  LernModus.zweiWahrheiten => Icons.psychology_alt_rounded,
-  LernModus.wasGehoertNichtDazu => Icons.filter_alt_off_rounded,
-  LernModus.laenderRanking => Icons.leaderboard_rounded,
-  LernModus.nachbarschaftsKette => Icons.alt_route_rounded,
-};
 
 class _Anims {
   final Animation<double> ringScale;
@@ -1005,7 +978,7 @@ class _Pfad extends StatelessWidget {
             Positioned(
               left: cx - 41,
               top: y - 41,
-              child: _FreiBtn(
+              child: LernpfadStationButton(
                 modus: angezeigterModus,
                 onTap: () => onStationTap(s),
               ),
@@ -1339,84 +1312,6 @@ class _PfeilUntenMaler extends CustomPainter {
   bool shouldRepaint(_PfeilUntenMaler o) => o.color != color;
 }
 
-// ── 3D Drückbarer Button ──────────────────────────────────────────────────────
-
-class _Druckbar3DBtn extends StatefulWidget {
-  final double kreisGroesse;
-  final double sockelHoehe;
-  final Color sockelFarbe;
-  final Widget inhalt;
-  final VoidCallback? onTap;
-
-  const _Druckbar3DBtn({
-    required this.kreisGroesse,
-    required this.sockelHoehe,
-    required this.sockelFarbe,
-    required this.inhalt,
-    this.onTap,
-  });
-
-  @override
-  State<_Druckbar3DBtn> createState() => _Druckbar3DBtnState();
-}
-
-class _Druckbar3DBtnState extends State<_Druckbar3DBtn> {
-  bool _gedrueckt = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final g = widget.kreisGroesse;
-    final s = widget.sockelHoehe;
-
-    return GestureDetector(
-      onTapDown: widget.onTap != null
-          ? (_) => setState(() => _gedrueckt = true)
-          : null,
-      onTapUp: widget.onTap != null
-          ? (_) {
-              setState(() => _gedrueckt = false);
-              widget.onTap!();
-            }
-          : null,
-      onTapCancel: () => setState(() => _gedrueckt = false),
-      child: SizedBox(
-        width: g,
-        height: g + s,
-        child: Stack(
-          children: [
-            // Sockel
-            Positioned(
-              top: s,
-              left: 0,
-              right: 0,
-              child: SizedBox(
-                width: g,
-                height: g,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: widget.sockelFarbe,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-            // Haupt-Kreis (sinkt beim Drücken)
-            AnimatedPositioned(
-              duration: Duration(milliseconds: _gedrueckt ? 50 : 100),
-              curve: Curves.easeOut,
-              top: _gedrueckt ? s : 0,
-              left: 0,
-              right: 0,
-              height: g,
-              child: widget.inhalt,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── Abgeschlossen (grünes 3D) ─────────────────────────────────────────────────
 
 class _DoneBtn extends StatelessWidget {
@@ -1425,7 +1320,7 @@ class _DoneBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Druckbar3DBtn(
+    return Druckbar3DButton(
       kreisGroesse: 82,
       sockelHoehe: 5,
       sockelFarbe: const Color(0xFF3D8B3D),
@@ -1446,35 +1341,6 @@ class _DoneBtn extends StatelessWidget {
 }
 
 // ── Freigeschaltet (grünes 3D mit Modus-Emoji) ───────────────────────────────
-
-class _FreiBtn extends StatelessWidget {
-  final LernModus modus;
-  final VoidCallback onTap;
-  const _FreiBtn({required this.modus, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return _Druckbar3DBtn(
-      kreisGroesse: 82,
-      sockelHoehe: 5,
-      sockelFarbe: const Color(0xFF3D8B3D),
-      inhalt: Container(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            colors: [Color(0xFF5DBB63), Color(0xFF4A9E4A)],
-            center: Alignment(-0.3, -0.3),
-            radius: 0.8,
-          ),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Icon(_modusIcon(modus), color: Colors.white, size: 32),
-        ),
-      ),
-      onTap: onTap,
-    );
-  }
-}
 
 // ── Pulsier-Ring Painter (einheitlich grün) ───────────────────────────────────
 
@@ -1547,7 +1413,7 @@ class _ActiveBtn extends StatelessWidget {
           Positioned(
             top: 0,
             left: 0,
-            child: _Druckbar3DBtn(
+            child: Druckbar3DButton(
               kreisGroesse: 90,
               sockelHoehe: 5,
               sockelFarbe: const Color(0xFF3D8B3D),
@@ -1561,7 +1427,7 @@ class _ActiveBtn extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Icon(_modusIcon(modus), color: Colors.white, size: 36),
+                  child: Icon(lernpfadModusIcon(modus), color: Colors.white, size: 36),
                 ),
               ),
               onTap: onTap,
@@ -1581,7 +1447,7 @@ class _LockedBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Druckbar3DBtn(
+    return Druckbar3DButton(
       kreisGroesse: 82,
       sockelHoehe: 5,
       sockelFarbe: const Color(0xFFB0AEA8),
@@ -1592,7 +1458,7 @@ class _LockedBtn extends StatelessWidget {
         ),
         child: Center(
           child: Icon(
-            _modusIcon(modus),
+            lernpfadModusIcon(modus),
             color: const Color(0xFF9E9C96),
             size: 28,
           ),
@@ -1774,7 +1640,7 @@ class _StationSheetState extends State<_StationSheet> {
             ),
           ),
           const SizedBox(height: 22),
-          Icon(_modusIcon(widget.modus), size: 56, color: const Color(0xFF4A9E4A)),
+          Icon(lernpfadModusIcon(widget.modus), size: 56, color: const Color(0xFF4A9E4A)),
           const SizedBox(height: 12),
           Text(
             lernModusLabel(widget.modus),

@@ -299,25 +299,16 @@ const Map<String, String> uebersetzungenOnboarding = {
       'Long streaks also earn you badges.',
 
   // ── Willkommens-Screen ─────────────────────────────────────────────────────
+  //
+  // Vier Zeilen, jede neben dem echten Bauteil aus der App. Beide Fassungen
+  // müssen in EINE Zeile passen, deshalb hier keine Nebensätze — auf schmalen
+  // Geräten setzt der Screen zu lange Zeilen zwar kleiner statt sie
+  // abzuschneiden, aber das soll die Ausnahme bleiben, nicht die Regel.
   'Schön, dass du da bist!': 'Good to have you here!',
-  'Kurz, worum es geht:': 'Briefly, what this is about:',
-  'Die Welt kennenlernen': 'Get to know the world',
-  'Flaggen, Hauptstädte, Umrisse, Währungen und noch einiges mehr — immer spielerisch, nie als Vokabelliste.':
-      'Flags, capitals, outlines, currencies and a good deal more — always as '
-          'a game, never as a vocabulary list.',
+  '195 Länder entdecken': 'Discover 195 countries',
   'Station für Station': 'One station at a time',
-  'Der Lernpfad führt dich durch die Kontinente. Jede Station ist eine kurze Runde in einer anderen Spielart — die nächste wartet, sobald du fertig bist.':
-      'The learning path takes you through the continents. Each station is a '
-          'short round in a different kind of game — the next one is waiting '
-          'as soon as you are done.',
-  'Sterne sammeln': 'Collect stars',
-  'Jede Frage, die du zum ersten Mal richtig hast, gibt einen Stern. Damit schaltest du später neue Profilbilder frei.':
-      'Every question you get right for the first time earns a star. Later on '
-          'you can spend them on new profile pictures.',
-  'Serie halten': 'Keep your streak',
-  'Spiel jeden Tag eine Station, dann wächst deine Serie. Tippe oben auf die Flamme oder den Stern, wenn du mehr wissen willst.':
-      'Play one station a day and your streak grows. Tap the flame or the '
-          'star at the top if you want to know more.',
+  'Jeden Tag dranbleiben': 'Keep it up every day',
+  'Abzeichen verdienen': 'Earn badges',
   'Los geht\'s': 'Let\'s go',
 
   // ── Debug ──────────────────────────────────────────────────────────────────

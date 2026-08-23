@@ -23,16 +23,32 @@ class ErklaerungButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => zeigeSpielErklaerung(context,
-          titel: titel, abschnitte: abschnitte, farbe: farbe),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEAEAE5),
-          borderRadius: BorderRadius.circular(10),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => zeigeSpielErklaerung(
+        context,
+        titel: titel,
+        abschnitte: abschnitte,
+        farbe: farbe,
+      ),
+      // Der sichtbare Knopf bleibt 36 px, die Tippfläche wächst auf 44 —
+      // dasselbe Muster wie beim Fragezeichen-Knopf im Quiz.
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAEAE5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.help_outline_rounded,
+              color: Color(0xFF1A1A1A),
+              size: 20,
+            ),
+          ),
         ),
-        child: const Icon(Icons.help_outline_rounded,
-            color: Color(0xFF1A1A1A), size: 20),
       ),
     );
   }
@@ -71,22 +87,38 @@ Future<void> zeigeSpielErklaerung(
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(titel,
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF1A1A1A))),
+                    child: Text(
+                      titel,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
                   ),
                   GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => Navigator.pop(ctx),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEAEAE5),
-                        borderRadius: BorderRadius.circular(20),
+                    // Der sichtbare Kreis bleibt 32 px; getroffen werden muss
+                    // er mit einem Finger, deshalb liegt eine 44er Fläche
+                    // darum. Ohne opaque wäre der freie Rand nicht tippbar.
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEAEAE5),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            color: Color(0xFF888888),
+                            size: 20,
+                          ),
+                        ),
                       ),
-                      child: const Icon(Icons.close_rounded,
-                          color: Color(0xFF888888), size: 20),
                     ),
                   ),
                 ],

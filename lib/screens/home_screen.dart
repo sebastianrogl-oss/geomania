@@ -571,6 +571,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 // ── Grüner Header ─────────────────────────────────────────────────────────────
 
 /// Abstand zwischen der Welt-Flagge und dem Block aus Flamme und Stern.
+/// Mindestmaß einer Tippfläche. Material nennt 48, Apple 44 — die App nimmt
+/// 44: der grüne Kopfbereich ist 56 hoch, mehr passt dort nicht hinein, ohne
+/// dass die Fläche über den Rand hinausragt.
+const double _kTippflaeche = 44;
+
 const double _kKopfFlaggeAbstand = 16;
 
 /// Um wie viel dieser Block gemeinsam nach links rückt.
@@ -684,84 +689,112 @@ class _GreenHeaderState extends State<_GreenHeader> {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => zeigeStreakErklaerung(context),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Transform.translate(
-                  offset: const Offset(5, -5),
-                  // Die Zahl steht hier daneben statt in der Flamme, deshalb
-                  // muss der erloschene Zustand ausdrücklich mitgegeben
-                  // werden.
-                  child: StreakFlamme(
-                    groesse: 45,
-                    erloschen: widget.streak == 0,
+            // Wie beim Stern daneben: die Zeile ist nur 27 px hoch, die
+            // Tippfläche wächst auf das Mindestmaß.
+            child: SizedBox(
+              height: _kTippflaeche,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Transform.translate(
+                    offset: const Offset(5, -5),
+                    // Die Zahl steht hier daneben statt in der Flamme, deshalb
+                    // muss der erloschene Zustand ausdrücklich mitgegeben
+                    // werden.
+                    child: StreakFlamme(
+                      groesse: 45,
+                      erloschen: widget.streak == 0,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${widget.streak}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () =>
-                zeigeSterneErklaerung(context, kErreichbareSterne),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('⭐', style: TextStyle(fontSize: 18)),
-                const SizedBox(width: 4),
-                // Zählt die im letzten Quiz verdienten Sterne hoch (vom alten
-                // auf den neuen Gesamtstand, siehe _punkteVon).
-                TweenAnimationBuilder<int>(
-                  tween: IntTween(begin: _punkteVon, end: widget.punkte),
-                  duration: const Duration(milliseconds: 800),
-                  curve: Curves.easeOut,
-                  builder: (context, wert, child) => Text(
-                    '$wert',
+                  const SizedBox(width: 4),
+                  Text(
+                    '${widget.streak}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w800,
                       fontSize: 16,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => zeigeSterneErklaerung(context, kErreichbareSterne),
+            // Stern und Zahl sind zusammen nur 38x18 gross — als Ziel fuer
+            // einen Finger zu wenig. Die Flaeche waechst auf das Mindestmass,
+            // die Grafik bleibt, wie sie ist (dasselbe Muster wie beim
+            // Fragezeichen-Knopf im Quiz).
+            // MINDESTmaß, nicht festes Maß: bei gedeckelter Schriftskala
+            // braucht der Inhalt gut 44 px, und eine starre 44er Box liefe
+            // dann um einen Pixel über.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: _kTippflaeche,
+                minHeight: _kTippflaeche,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('⭐', style: TextStyle(fontSize: 18)),
+                  const SizedBox(width: 4),
+                  // Zählt die im letzten Quiz verdienten Sterne hoch (vom alten
+                  // auf den neuen Gesamtstand, siehe _punkteVon).
+                  TweenAnimationBuilder<int>(
+                    tween: IntTween(begin: _punkteVon, end: widget.punkte),
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.easeOut,
+                    builder: (context, wert, child) => Text(
+                      '$wert',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const Spacer(),
           GestureDetector(
             onTap: widget.onProfilTap,
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: ClipOval(
-                child: ProfilbildService.istWeitformat(widget.profilbild)
-                    // Siehe profil_screen.dart: BoxFit.cover schnitt bei
-                    // "winken" die Hand ab, contain+Skalierung zeigt sie
-                    // vollständig.
-                    ? Transform.scale(
-                        scale: 1.25,
-                        child:
-                            Image.asset(widget.profilbild, fit: BoxFit.contain),
-                      )
-                    : Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Image.asset(widget.profilbild,
-                            fit: BoxFit.contain),
-                      ),
+            // Tippfläche auf das Mindestmaß, Bild bleibt bei 38.
+            child: SizedBox(
+              width: _kTippflaeche,
+              height: _kTippflaeche,
+              child: Center(
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: ClipOval(
+                    child: ProfilbildService.istWeitformat(widget.profilbild)
+                        // Siehe profil_screen.dart: BoxFit.cover schnitt bei
+                        // "winken" die Hand ab, contain+Skalierung zeigt sie
+                        // vollständig.
+                        ? Transform.scale(
+                            scale: 1.25,
+                            child: Image.asset(
+                              widget.profilbild,
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Image.asset(
+                              widget.profilbild,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -821,27 +854,42 @@ class _WeltBanner extends StatelessWidget {
             ),
           ),
           GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: onUebersicht,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.map_outlined, color: Colors.white, size: 15),
-                  const SizedBox(width: 4),
-                  Text(
-                    t('Welten'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
+            // Tippflaeche auf das Mindestmass; der sichtbare Knopf bleibt
+            // so flach, wie er ist.
+            child: SizedBox(
+              height: _kTippflaeche,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
                   ),
-                ],
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.map_outlined,
+                        color: Colors.white,
+                        size: 15,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        t('Welten'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

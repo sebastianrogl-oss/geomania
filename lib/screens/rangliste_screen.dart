@@ -330,7 +330,10 @@ class _ChallengePill extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        height: 38,
+        // 44 statt 38: darunter ist die Kachel als Fingerziel zu flach. Hier
+        // wächst ausnahmsweise das sichtbare Element mit — bei einer Kachel,
+        // die man antippt, wäre eine unsichtbare Fläche darum seltsam.
+        height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: active ? const Color(0xFF4A9E4A) : const Color(0xFFEAEAE5),

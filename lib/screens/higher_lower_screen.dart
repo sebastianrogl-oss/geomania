@@ -453,16 +453,23 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
             children: [
               GestureDetector(
                 onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEAEAE5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_rounded,
-                    color: Color(0xFF1A1A1A),
-                    size: 20,
+                // Sichtbarer Knopf bleibt 36 px, die Tippflaeche waechst auf 44.
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAEAE5),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: Color(0xFF1A1A1A),
+                        size: 20,
+                      ),
+                    ),
                   ),
                 ),
               ),

@@ -188,7 +188,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     // Runde berechnet — hier nur noch die Startposition des Sliders für
     // die fortgesetzte Frage neu bestimmen, NICHT die Skala selbst.
     final sk = _skala!;
-    final start = sk.min + TagesSeedService.startBruch(idx) * (sk.max - sk.min);
+    final start = sk.wertAn(TagesSeedService.startBruch(idx));
     setState(() {
       _idx = idx;
       _gesamt = gesamt;
@@ -232,9 +232,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     final sk = fragen.isNotEmpty
         ? SkalaService.ausRundenWerten(kat.id, werteDieserRunde)
         : null;
-    final start = sk != null
-        ? sk.min + TagesSeedService.startBruch(0) * (sk.max - sk.min)
-        : 50.0;
+    final start = sk != null ? sk.wertAn(TagesSeedService.startBruch(0)) : 50.0;
 
     setState(() {
       _fragen = fragen;
@@ -283,12 +281,15 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     // durch ein Ausreißer-Land 0-70 breit sein). Die skalen-relative Methode
     // berücksichtigt automatisch, wie breit die jeweils gezogene Runden-Skala
     // tatsächlich ist.
-    final skalaBreite = sk.max - sk.min;
+    // Der Abstand kommt aus der Skala selbst (SkalaErgebnis.abstand): bei den
+    // logarithmischen Kategorien zählt damit das VERHÄLTNIS statt der
+    // Differenz, bei allen anderen bleibt es beim Anteil an der Skalenbreite.
+    // Der Rundungs-Gleichstand steht bewusst davor und bleibt unberührt — wer
+    // optisch exakt trifft, bekommt die volle Punktzahl, auch wenn der Rohwert
+    // um ein Tausendstel abweicht.
     final dev = rundungsGleichstand
         ? 0.0
-        : skalaBreite <= 0
-            ? 0.0
-            : ((_sliderVal - real).abs() / skalaBreite * 100).clamp(0.0, 100.0);
+        : sk.abstand(_sliderVal, real).clamp(0.0, 100.0);
     final pts = rundungsGleichstand ? _kMaxPtsProFrage : _punkteFuer(dev);
     _ptsCtrl.forward(from: 0);
     setState(() {
@@ -349,8 +350,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     // — hier wird NUR die Slider-Startposition innerhalb dieser festen
     // Skala neu bestimmt, nicht die Skala selbst.
     final sk = _skala!;
-    final start =
-        sk.min + TagesSeedService.startBruch(nextIdx) * (sk.max - sk.min);
+    final start = sk.wertAn(TagesSeedService.startBruch(nextIdx));
     setState(() {
       _idx = nextIdx;
       _sliderVal = start.clamp(sk.min, sk.max);
@@ -648,6 +648,11 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                 t('Zu einem Land und einer Kategorie (z.B. Bevölkerung, BIP pro Kopf) siehst du eine Skala mit einem Schieberegler.'),
                 t('Bewege den Regler auf die Position, an der du den echten Wert vermutest, und bestätige deine Schätzung.'),
                 t('Je näher deine Schätzung am tatsächlichen Wert liegt, desto mehr Punkte bekommst du für diese Frage.'),
+                // Alltagssprachlich formuliert: keine Rede von Logarithmus,
+                // Verhältnis oder Skalentyp. Es soll nur erklären, warum bei
+                // Bevölkerung oder Fläche "knapp daneben" etwas anderes
+                // bedeutet als bei Lebenserwartung.
+                t('Bei Kategorien mit sehr großen Unterschieden — etwa Fläche oder Bevölkerung — kommt es darauf an, wie oft deine Schätzung in den echten Wert passt, nicht wie viel dazwischenliegt. Das Doppelte zu raten ist dort immer gleich weit daneben, egal ob es um 40 oder um 40 Millionen geht.'),
                 t('Das Spiel besteht aus mehreren Fragen hintereinander — am Ende siehst du deine Gesamtpunktzahl und alle Antworten im Überblick.'),
               ],
             ),
@@ -789,14 +794,20 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                         fontWeight: FontWeight.w600)),
               ),
               const SizedBox(height: 10),
+              // Der Regler läuft immer von 0 bis 1 — welche Achse dahinter
+              // steht, weiß allein die Skala. Bei linearen Kategorien ist die
+              // Umrechnung die Identität, das Verhalten bleibt also exakt wie
+              // vorher; bei den logarithmischen sitzen die Stufen dagegen auf
+              // gleichen VERHÄLTNISSEN statt gleichen Differenzen, sodass sich
+              // die Länder nicht mehr im linken Zehntel drängen.
               Slider(
-                value: _sliderVal.clamp(sk.min, sk.max),
-                min: sk.min,
-                max: sk.max,
+                value: sk.positionVon(_sliderVal),
+                min: 0,
+                max: 1,
                 divisions: sk.divisionen,
                 activeColor: const Color(0xFF4A9E4A),
                 inactiveColor: const Color(0xFFD0D0CB),
-                onChanged: (v) => setState(() => _sliderVal = v),
+                onChanged: (p) => setState(() => _sliderVal = sk.wertAn(p)),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -929,8 +940,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
 
                           // Visual scale track
                           _SkalaVisuell(
-                            min: sk.min,
-                            max: sk.max,
+                            skala: sk,
                             userVal: _sliderVal,
                             correctVal: realVal,
                             format: sk.format,
@@ -1175,16 +1185,22 @@ class _ErgebnisZeile extends StatelessWidget {
 // ── Skala-Visualisierung ──────────────────────────────────────────────────────
 
 class _SkalaVisuell extends StatelessWidget {
-  final double min, max, userVal, correctVal;
+  /// Dieselbe Skala, auf der auch geraten wurde — die Marker sitzen dadurch
+  /// auf derselben Achse wie vorher der Regler. Ohne das lägen bei den
+  /// logarithmischen Kategorien Regler und Auswertung auseinander.
+  final SkalaErgebnis skala;
+  final double userVal, correctVal;
   final String Function(double) format;
 
   const _SkalaVisuell({
-    required this.min,
-    required this.max,
+    required this.skala,
     required this.userVal,
     required this.correctVal,
     required this.format,
   });
+
+  double get min => skala.min;
+  double get max => skala.max;
 
   static const _markerGroesse = 18.0;
 
@@ -1192,8 +1208,8 @@ class _SkalaVisuell extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (_, constraints) {
       final w = constraints.maxWidth;
-      final userPct = ((userVal - min) / (max - min)).clamp(0.0, 1.0);
-      final correctPct = ((correctVal - min) / (max - min)).clamp(0.0, 1.0);
+      final userPct = skala.positionVon(userVal);
+      final correctPct = skala.positionVon(correctVal);
       final userX = userPct * w;
       final correctX = correctPct * w;
       const trackTop = 30.0;

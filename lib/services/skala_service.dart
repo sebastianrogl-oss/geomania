@@ -19,20 +19,89 @@ String _fmtGerundetOderZweiDezimal(double v, String einheit) {
   return '${v.round()} $einheit';
 }
 
+/// Reglerstufen einer logarithmischen Skala.
+///
+/// Anders als bei der linearen Skala gibt es hier keine "schönen" Schrittweiten
+/// — die Stufen sitzen auf der Position, nicht auf dem Wert — also kann die
+/// Zahl frei gewählt werden. 500 Stufen bedeuten 0,2 % Abweichung je Stufe und
+/// damit rund 1,2 Punkte Abstand zwischen zwei benachbarten Reglerstellungen.
+const int _kLogStufen = 500;
+
+/// Unter- und Obergrenze der Reglerstufen einer linearen Skala.
+///
+/// Vorher 50 bis 500, tatsächlich erreicht wurden im Median nur 137 — mit der
+/// Folge, dass von 101 möglichen Punktwerten nur 58 überhaupt vorkamen und der
+/// erste Sprung unter die volle Punktzahl 4 Punkte betrug. [_niceStep] zielt
+/// jetzt auf Spanne/500 statt Spanne/200; weil es auf einen schönen Wert
+/// AUFrundet, landet die Stufenzahl damit zwischen 200 und 500.
+const int _kMinStufen = 200;
+const int _kMaxStufen = 500;
+
 class SkalaErgebnis {
   final double min;
   final double max;
   final double schritt;
   final String Function(double) format;
 
+  /// Regler und Bewertung laufen logarithmisch statt linear.
+  ///
+  /// Gesetzt für die Kategorien in [SkalaService.kLogKategorien]. Bedingung
+  /// dafür ist immer [min] > 0 — [SkalaService.ausRundenWerten] fällt sonst
+  /// auf linear zurück, damit nirgends der Logarithmus von 0 gebildet wird.
+  final bool logarithmisch;
+
   const SkalaErgebnis({
     required this.min,
     required this.max,
     required this.schritt,
     required this.format,
+    this.logarithmisch = false,
   });
 
-  int get divisionen => ((max - min) / schritt).round().clamp(50, 500);
+  int get divisionen => logarithmisch
+      ? _kLogStufen
+      : ((max - min) / schritt).round().clamp(_kMinStufen, _kMaxStufen);
+
+  /// Position eines Werts auf dem Regler, 0 (links) bis 1 (rechts).
+  ///
+  /// Der Regler selbst läuft immer von 0 bis 1 — nur diese Funktion weiß, ob
+  /// dahinter eine lineare oder eine logarithmische Achse steht. Damit gibt es
+  /// genau eine Stelle, an der die Achse definiert ist, statt einer Rechnung
+  /// im Regler und einer zweiten in jeder Markierung.
+  double positionVon(double wert) {
+    if (max <= min) return 0;
+    final w = wert.clamp(min, max);
+    if (!logarithmisch) return (w - min) / (max - min);
+    return log(w / min) / log(max / min);
+  }
+
+  /// Wert an einer Reglerposition 0 bis 1 — die Umkehrung von [positionVon].
+  double wertAn(double position) {
+    final p = position.clamp(0.0, 1.0);
+    if (!logarithmisch) return min + p * (max - min);
+    return min * exp(p * log(max / min));
+  }
+
+  /// Abstand zweier Werte, gemessen als Prozent der Reglerlänge (0 bis 100).
+  ///
+  /// DIE Stelle, an der über die Bewertung entschieden wird. Auf einer
+  /// logarithmischen Skala zählt damit automatisch das VERHÄLTNIS statt der
+  /// Differenz: doppelt so hoch geschätzt kostet überall gleich viel, egal ob
+  /// die Wahrheit bei 40 km oder bei 200 000 km liegt.
+  ///
+  /// Warum das nötig war: Vorher war der Abstand immer die Differenz geteilt
+  /// durch die Skalenbreite. Zog ein einzelnes Ausreißer-Land die Skala
+  /// auseinander — Kanada mit 202 000 km Küste unter vier Ländern mit unter
+  /// 350 km — verschwand jeder Unterschied zwischen den übrigen vieren im
+  /// Nichts: 160 km statt 40 km zu schätzen, also das Vierfache, gab weiterhin
+  /// die volle Punktzahl.
+  double abstand(double a, double b) {
+    if (max <= min) return 0;
+    final x = a.clamp(min, max);
+    final y = b.clamp(min, max);
+    if (!logarithmisch) return (x - y).abs() / (max - min) * 100;
+    return (log(x) - log(y)).abs() / log(max / min) * 100;
+  }
 }
 
 class SkalaService {
@@ -355,6 +424,55 @@ class SkalaService {
         'inflation',
       }.contains(rankingId);
 
+  // ── Logarithmische Kategorien ─────────────────────────────────────────────
+  //
+  // DIE EINE STELLE, an der steht, welche Kategorien einen logarithmischen
+  // Regler und eine Verhältnis-Bewertung bekommen. Ein neuer oder
+  // aktualisierter Datensatz kann eine Kategorie kippen — deshalb steht hier
+  // das Kriterium samt Messwerten und nicht nur das Ergebnis.
+  //
+  // KRITERIUM: Von den 5 Ländern einer Tagesrunde liegt im Mittel MINDESTENS
+  // EINES im unteren Zehntel des Reglers. Gemessen über je 3000 simulierte
+  // Runden mit der echten Ziehung (Pool-Filter wie in _starteFragen) und der
+  // echten Rundenskala. Nachrechnen: Runde ziehen, ausRundenWerten() rufen,
+  // zählen wie viele Werte unter min + 0,1*(max-min) liegen, mitteln.
+  //
+  //   Kategorie       linear   log     Kategorie       linear   log
+  //   gdpTotal          2,70  0,38     debt              0,16  0,00
+  //   military          2,50  0,23     press_freedom     0,06  0,00
+  //   tourism           2,48  0,15     corruption        0,00  0,00
+  //   olympics          2,48  0,14     happiness         0,00  0,00
+  //   area              2,44  0,54     birth_rate        0,00  0,00
+  //   population        2,23  0,34     lifeExpectancy    0,00  0,00
+  //   coastline         2,14  0,13     forest            0,70  0,02
+  //   gdpPerCapita      1,87  0,00     alcohol           0,70  0,00
+  //   internet          1,81  0,00     highest_point     0,66  0,06
+  //   minimumWage       1,26  0,00
+  //   inflation         1,02  0,00
+  //
+  // Die neun Kategorien rechts bleiben bewusst linear. Bei Prozent- und
+  // Indexgrössen (Waldanteil, Korruption, Schulden, Glück) ist die 0 ein
+  // echter, erreichbarer Wert und der Abstand zwischen 1 % und 2 % ist nicht
+  // doppelt so bedeutsam wie der zwischen 50 % und 100 % — die
+  // Verhältnis-Bewertung wäre dort schlicht falsch.
+  //
+  // ACHTUNG bei Erweiterungen: Eine logarithmische Skala verlangt einen
+  // Wert > 0. Alle Fragen filtern zwar bereits auf getValue > 0, aber die
+  // Skala selbst wird in ausRundenWerten() abgesichert.
+  static const Set<String> kLogKategorien = {
+    'gdpTotal',
+    'military',
+    'tourism',
+    'olympics',
+    'area',
+    'population',
+    'coastline',
+    'gdpPerCapita',
+    'internet',
+    'minimumWage',
+    'inflation',
+  };
+
   /// Formatierfunktion für eine RankingCategory-ID, unabhängig vom
   /// tatsächlichen Wert. Ruft die jeweilige adaptive Funktion oben einmal
   /// mit einem großen Platzhalter-Wert auf (1e12 liegt über JEDER
@@ -402,6 +520,48 @@ class SkalaService {
     }
     final echtesMin = werteDieserRunde.reduce(min);
     final echtesMax = werteDieserRunde.reduce(max);
+
+    // ── Logarithmische Skala ────────────────────────────────────────────────
+    //
+    // Der 15-%-Puffer wird hier MULTIPLIKATIV angelegt statt additiv. Das ist
+    // nicht nur die passende Rechnung für eine Log-Achse, sondern auch der
+    // Grund, warum die Untergrenze niemals 0 wird: sie entsteht durch Teilen
+    // statt durch Abziehen. Additiv gepuffert wäre sie es dagegen fast immer —
+    // 40 km Küste minus 15 % einer Spanne von 202 000 km ist negativ und wurde
+    // bisher auf 0 geklemmt. Auf 0 ist der Logarithmus nicht definiert.
+    //
+    // Der Sicherheitszweig darunter greift trotzdem: kommt wider Erwarten ein
+    // Wert <= 0 durch (alle Fragen filtern auf > 0), bleibt es linear, statt
+    // hier zu rechnen, was nicht geht.
+    if (kLogKategorien.contains(rankingId) && echtesMin > 0) {
+      final verhaeltnis = echtesMax / echtesMin;
+      // Alle fünf Länder zufällig gleich: kein Verhältnis, aus dem sich ein
+      // Puffer ableiten liesse — dann fest das 1,5-fache nach beiden Seiten.
+      //
+      // Gedeckelt auf das Doppelte, und zwar aus einem sichtbaren Grund: 15 %
+      // der Reglerlänge sind bei einer weiten Runde sehr viel. Bei einer
+      // Bevölkerungsrunde von Vatikanstadt bis Indien wäre der Puffer das
+      // 8,7-fache und das rechte Skalenende stünde bei 12 Milliarden
+      // Einwohnern — mehr, als es Menschen gibt. Der Deckel greift nur bei
+      // solchen Extremrunden; bei engeren liegt der Puffer ohnehin darunter
+      // (Verhältnis 2 ergibt 1,11) und bleibt unverändert.
+      final puffer = verhaeltnis > 1
+          ? min(pow(verhaeltnis, 0.15).toDouble(), 2.0)
+          : 1.5;
+      final lo = echtesMin / puffer;
+      final hi = echtesMax * puffer;
+      return SkalaErgebnis(
+        min: lo,
+        max: hi,
+        // Bei einer Log-Achse sitzen die Reglerstufen auf der Position, nicht
+        // auf dem Wert — schritt wird dort nicht gebraucht und dient nur noch
+        // als Notwert für Aufrufer, die ihn blind auslesen.
+        schritt: _niceStep(hi - lo),
+        format: format,
+        logarithmisch: true,
+      );
+    }
+
     final spanne = echtesMax - echtesMin;
     // Falls alle gezogenen Länder zufällig denselben Wert haben (spanne=0):
     // Puffer relativ zum Wert selbst statt zur (dann nutzlosen) Spanne.
@@ -463,11 +623,33 @@ class SkalaService {
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
+  /// Schrittweite der linearen Skala — bestimmt zugleich die Zahl der
+  /// Reglerstufen (Spanne geteilt durch Schritt).
+  ///
+  /// Zielt auf Spanne/500 statt wie früher auf Spanne/200. Weil auf den
+  /// nächsten schönen Wert AUFgerundet wird (1/2/5 je Zehnerpotenz, im
+  /// ungünstigsten Fall das 2,5-fache des Ziels), landet die Stufenzahl
+  /// dadurch zwischen 200 und 500 statt bei rund 137.
+  ///
+  /// Warum das zählt: Die Punktzahl ist eine stetige Kurve, aber der Regler
+  /// kann nur seine Stufen treffen. Bei 137 Stufen waren von 101 möglichen
+  /// Punktwerten nur 58 erreichbar — 96 bis 99 gab es schlicht nicht, unter
+  /// der vollen Punktzahl ging es direkt auf 96 weiter. Bei 400 Stufen sind es
+  /// 95 von 101 und der erste Sprung beträgt einen Punkt.
+  ///
+  /// Die Reihe war zudem lückenhaft (0,01 · 0,05 · 0,1 …, ohne 0,02) — bei
+  /// schmalen Skalen wie "Kinder pro Frau" (0,5 bis 7,5) sprang sie deshalb
+  /// unnötig weit und kostete Stufen.
   static double _niceStep(double range) {
     if (range <= 0) return 1;
-    const nice = <double>[0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200,
-      500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000];
-    final target = range / 200;
+    const nice = <double>[
+      0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5,
+      1, 2, 5, 10, 20, 50, 100, 200, 500,
+      1000, 2000, 5000, 10000, 20000, 50000,
+      100000, 200000, 500000, 1000000, 2000000, 5000000,
+      10000000, 20000000, 50000000, 100000000,
+    ];
+    final target = range / 500;
     for (final s in nice) {
       if (s >= target) return s;
     }

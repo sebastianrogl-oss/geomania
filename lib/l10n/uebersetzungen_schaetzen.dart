@@ -27,6 +27,8 @@ const Map<String, String> uebersetzungenSchaetzen = {
       'Move the slider to where you think the real value is, and confirm your estimate.',
   'Je näher deine Schätzung am tatsächlichen Wert liegt, desto mehr Punkte bekommst du für diese Frage.':
       'The closer your estimate is to the actual value, the more points you get for that question.',
+  'Bei Kategorien mit sehr großen Unterschieden — etwa Fläche oder Bevölkerung — kommt es darauf an, wie oft deine Schätzung in den echten Wert passt, nicht wie viel dazwischenliegt. Das Doppelte zu raten ist dort immer gleich weit daneben, egal ob es um 40 oder um 40 Millionen geht.':
+      'In categories with huge differences — area or population, say — what counts is how many times your estimate fits into the real value, not how much lies between them. Guessing double is always equally far off there, whether the answer is 40 or 40 million.',
   'Das Spiel besteht aus mehreren Fragen hintereinander — am Ende siehst du deine Gesamtpunktzahl und alle Antworten im Überblick.':
       'The game has several questions in a row — at the end you see your total score and all answers at a glance.',
 

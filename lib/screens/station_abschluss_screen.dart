@@ -84,6 +84,38 @@ const _kAbschlussStaerke = 180;
 const _kRuhigeImpulse = 2;
 const _kRuhigerAbschlussStaerke = 90;
 
+// ── Aufteilung der Höhe ──────────────────────────────────────────────────────
+//
+// Die Ansicht soll ohne Wischen auf einen Blick passen. Video und Karte
+// bekommen dafür NICHT einen Anteil der Bildschirmhöhe, sondern den Platz, der
+// nach den festen Teilen übrig bleibt. Der Unterschied ist auf grossen Geräten
+// erheblich: Überschrift, Kennzahlen, Balken und Abstände brauchen immer
+// dieselben rund 255 px, egal wie hoch der Schirm ist. Ein fester Faktor auf
+// die Bildschirmhöhe verschenkte deshalb auf 412 x 915 rund 150 px, die dem
+// Video und der Karte zugestanden hätten.
+//
+// [_kFestStarr] sind Abstände und Symbole, die nicht mitwachsen, [_kFestText]
+// der Anteil, der an der Schriftskala hängt (Überschrift, Kennzahlen,
+// Beschriftungen). Beide Werte sind gemessen, nicht geschätzt: die festen
+// Teile brauchen 255 px bei Skala 1.0 und 305 px bei Skala 1.5.
+const double _kFestStarr = 155;
+const double _kFestText = 100;
+
+/// Aufteilung des verbleibenden Platzes. Die Karte bekommt den grösseren
+/// Anteil — sie trägt die Aussage der Ansicht, das Video ist Beiwerk.
+const double _kAnteilVideo = 0.35;
+const double _kAnteilKarte = 0.65;
+
+/// Untergrenzen: Darunter wird die Karte unleserlich. Wird der Platz noch
+/// enger (sehr grosse Systemschrift), scrollt die Ansicht wieder — das ist
+/// besser als eine Karte, auf der man nichts mehr erkennt.
+const double _kVideoMin = 80;
+const double _kKarteMin = 150;
+
+/// Obergrenzen für Tablets, damit nicht ein Riesenvideo entsteht.
+const double _kVideoMax = 240;
+const double _kKarteMax = 380;
+
 const _cGruen = Color(0xFF4A9E4A);
 const _cDunkel = Color(0xFF1A1A1A);
 const _cMittel = Color(0xFF888888);
@@ -305,13 +337,6 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Fläche für das spätere SVG: an die Bildschirmhöhe gebunden, aber
-    // begrenzt, damit auf kleinen Geräten die Kennzahlen nicht verdrängt
-    // werden und auf großen kein Riesenbild entsteht.
-    final schirmHoehe = MediaQuery.of(context).size.height;
-    final bildHoehe = (schirmHoehe * 0.30).clamp(160.0, 240.0);
-    final kartenHoehe = (schirmHoehe * 0.42).clamp(240.0, 360.0);
-
     return Scaffold(
       backgroundColor: _cHintergrund,
       body: SafeArea(
@@ -323,10 +348,20 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
           child: Column(
             children: [
               Expanded(
-                child: SingleChildScrollView(
+                child: LayoutBuilder(builder: (context, raum) {
+                  // Was nach den festen Teilen übrig ist, teilen sich Video
+                  // und Karte. Bleibt zu wenig (sehr grosse Systemschrift),
+                  // greifen die Untergrenzen und die Ansicht scrollt wieder.
+                  final skala = MediaQuery.textScalerOf(context).scale(1);
+                  final rest = raum.maxHeight - _kFestStarr - _kFestText * skala;
+                  final bildHoehe =
+                      (rest * _kAnteilVideo).clamp(_kVideoMin, _kVideoMax);
+                  final kartenHoehe =
+                      (rest * _kAnteilKarte).clamp(_kKarteMin, _kKarteMax);
+                  return SingleChildScrollView(
                   child: Column(
                     children: [
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
               _Auftritt(
                 verzoegerungMs: _kAuftritte['bild']!,
                 dauer: _kBildDauer,
@@ -337,7 +372,7 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
                   platzhalterBild: kAbschlussBild,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
               _Auftritt(
                 verzoegerungMs: _kAuftritte['ueberschrift']!,
                 dauer: _kFadeDauer,
@@ -352,7 +387,7 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
                   ),
                 ),
               ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       // Kennzahlen, Balken und Karte erscheinen GEMEINSAM;
                       // danach laufen ihre Animationen parallel.
                       _Auftritt(
@@ -396,13 +431,13 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 28),
+                            const SizedBox(height: 18),
                             _KontinentFortschritt(
                               welt: widget.welt,
                               werte: _kontinent,
                               startAbMs: _animationenAbMs,
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 10),
                             // Solange die Umrisse laden, bleibt die Fläche
                             // leer reserviert, damit nichts springt.
                             SizedBox(
@@ -422,10 +457,11 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 10),
                     ],
                   ),
-                ),
+                  );
+                }),
               ),
               _Auftritt(
                 verzoegerungMs: _kAuftritte['button']!,

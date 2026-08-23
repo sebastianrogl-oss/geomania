@@ -55,11 +55,11 @@ const Map<String, String> abzeichenBeschreibungenEn = {
   'stationen_100': 'You completed 100 stations on the learning path',
   'stationen_alle': 'You completed ALL stations on the learning path',
   'punkte_preis_bronze':
-      'You reached at least 400 points in a round of "The Big Guess"',
+      'You reached at least 250 points in a round of "The Big Guess"',
   'punkte_preis_silber':
-      'You reached at least 600 points in a round of "The Big Guess"',
+      'You reached at least 375 points in a round of "The Big Guess"',
   'punkte_preis_gold':
-      'You reached at least 780 points in a round of "The Big Guess"',
+      'You reached at least 488 points in a round of "The Big Guess"',
   'punkte_higher_lower_bronze':
       'You got at least 10 correct in a row in "Higher or Lower"',
   'punkte_higher_lower_silber':

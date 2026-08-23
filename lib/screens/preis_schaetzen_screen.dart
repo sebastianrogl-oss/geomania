@@ -32,7 +32,7 @@ class _Frage {
   _Frage(this.land, this.kat);
 }
 
-// ── Ergebnis pro Frage (für die finale 8-Fragen-Liste) ───────────────────────
+// ── Ergebnis pro Frage (für die finale Ergebnisliste) ───────────────────────
 
 class _SchaetzErgebnis {
   final String landIso;
@@ -83,7 +83,20 @@ class PreisSchaetzenScreen extends StatefulWidget {
 
 class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     with SingleTickerProviderStateMixin {
-  static const _kMaxPts = 800;
+  /// Fragen je Tagesrunde. Von 8 auf 5 gekürzt.
+  ///
+  /// Alles andere im Screen rechnet mit `_fragen.length` und zieht damit von
+  /// selbst mit: die Punkteanzeige "{a}/{b}", die Punktreihe über der Frage,
+  /// die Ergebnisliste am Ende und die Abbruchbedingung der Runde.
+  static const _kFragen = 5;
+
+  /// Höchstpunktzahl je Frage — siehe [_punkteFuer], das auf 0..100 begrenzt.
+  static const _kMaxPtsProFrage = 100;
+
+  /// Höchstpunktzahl einer Runde. Hängt an [_kFragen] und darf NICHT wieder
+  /// als feste Zahl geschrieben werden: an ihr hängen die Anzeige
+  /// "Rekord {a} / {b}" und die Erkennung der perfekten Runde.
+  static const _kMaxPts = _kFragen * _kMaxPtsProFrage;
   static const _kId = 'preis';
 
   late final RankingCategory _heutigeKat;
@@ -98,6 +111,15 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   double _abweichung = 0;
   int? _rekord;
   bool _neuerRekord = false;
+
+  /// Der Rekord für die Anzeige, gedeckelt auf die heutige Höchstpunktzahl.
+  ///
+  /// Rekorde aus der Zeit mit 8 Fragen können bis 800 gehen. Ungedeckelt
+  /// stünde in der Anzeige "740 / 500", was wie ein Fehler aussieht. Der
+  /// GESPEICHERTE Wert bleibt unangetastet — er entscheidet weiter über die
+  /// Abzeichen, und dort ist ein alter Rekord echt verdient.
+  int? get _rekordAnzeige =>
+      _rekord == null ? null : (_rekord! > _kMaxPts ? _kMaxPts : _rekord!);
   final List<_SchaetzErgebnis> _alleErgebnisse = [];
 
   late final AnimationController _ptsCtrl;
@@ -128,7 +150,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   }
 
   /// Zeigt das heute bereits erzielte Ergebnis erneut an, ohne eine neue
-  /// Runde zu starten (siehe PreisSchaetzenScreen.nurAnsicht). Die 8-Fragen-
+  /// Runde zu starten (siehe PreisSchaetzenScreen.nurAnsicht). Die Fragen-
   /// Liste wird aus dem beim Abschluss gespeicherten Detail-Ergebnis
   /// rekonstruiert (ChallengeErgebnisService), nicht neu berechnet.
   Future<void> _ladeHeutigesErgebnis() async {
@@ -192,17 +214,18 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     final kat = _heutigeKat;
     final rng = Random(TagesSeedService.seedFuer(_kId));
 
-    // 8 verschiedene Länder für die tägliche Kategorie
+    // Verschiedene Länder für die tägliche Kategorie
     final pool = countryRankings
         .where((c) => (kat.getValue(c) ?? -1) > 0)
         .where((c) => kat.id != 'area' || (c.area ?? 0) >= 0.1)
         .toList()
       ..shuffle(rng);
 
-    final fragen = pool.take(8).map((land) => _Frage(land, kat)).toList();
+    final fragen =
+        pool.take(_kFragen).map((land) => _Frage(land, kat)).toList();
 
     // EINMAL pro Tages-Runde aus den ECHTEN Werten der tatsächlich gezogenen
-    // 8 Länder berechnet — bleibt danach für alle 8 Fragen dieser Runde
+    // Länder berechnet — bleibt danach für alle Fragen dieser Runde
     // unverändert (siehe SkalaService.ausRundenWerten).
     final werteDieserRunde =
         fragen.map((f) => f.kat.getValue(f.land)!).toList();
@@ -266,7 +289,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
         : skalaBreite <= 0
             ? 0.0
             : ((_sliderVal - real).abs() / skalaBreite * 100).clamp(0.0, 100.0);
-    final pts = rundungsGleichstand ? 100 : _punkteFuer(dev);
+    final pts = rundungsGleichstand ? _kMaxPtsProFrage : _punkteFuer(dev);
     _ptsCtrl.forward(from: 0);
     setState(() {
       _beantwortet = true;
@@ -355,8 +378,8 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   //   alt  100   95   88   78   65   50   35   20    8    0
   //   neu  100   94   84   75   62   49   35   23   13    5
   int _punkteFuer(double dev) {
-    final punkte = 100 * exp(-dev / 17);
-    return punkte.round().clamp(0, 100);
+    final punkte = _kMaxPtsProFrage * exp(-dev / 17);
+    return punkte.round().clamp(0, _kMaxPtsProFrage);
   }
 
   String _labelFuer(int p) {
@@ -670,7 +693,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                             fontWeight: FontWeight.w600)),
                     const SizedBox(width: 6),
                     Text(t('{a} / {b} Punkte',
-                        {'a': '$_rekord', 'b': '$_kMaxPts'}),
+                        {'a': '$_rekordAnzeige', 'b': '$_kMaxPts'}),
                         style: const TextStyle(
                             color: Color(0xFFF9A825),
                             fontSize: 11,
@@ -1004,7 +1027,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
                 RekordBadge(
                   neuerRekord: _neuerRekord,
                   rekordText: _rekord != null
-                      ? t('{a} / {b} Punkte', {'a': '$_rekord', 'b': '$_kMaxPts'})
+                      ? t('{a} / {b} Punkte', {'a': '$_rekordAnzeige', 'b': '$_kMaxPts'})
                       : null,
                 ),
                 const SizedBox(height: 16),
@@ -1065,7 +1088,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   }
 }
 
-// ── Ergebnis-Liste (alle 8 Fragen) ────────────────────────────────────────────
+// ── Ergebnis-Liste (alle Fragen der Runde) ───────────────────────────────────
 
 class _ErgebnisListeKarte extends StatelessWidget {
   final List<_SchaetzErgebnis> ergebnisse;

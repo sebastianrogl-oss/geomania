@@ -100,7 +100,9 @@ bool _stationenAlle(AbzeichenKontext k) => k.gesamtAbgeschlosseneStationen >= 59
 //
 // Schwellenwerte je Challenge (Design-Entscheidung, kein fester Vorgabewert
 // aus dem Spiel selbst):
-// - preis/ranking_game: Rekord ist eine Punktzahl mit festem Maximum 800/Runde.
+// - preis: Rekord ist eine Punktzahl mit festem Maximum 500/Runde
+//   (5 Fragen x 100 Punkte).
+// - ranking_game: dasselbe Muster, dort weiterhin 800/Runde.
 // - higher_lower: Rekord ist die beste Serie ohne Deckel -> kleinere Schwellen.
 // - portfolio: Rekord ist der beste Tagesgewinn in $ (Startkapital 1000).
 
@@ -280,7 +282,7 @@ const List<Abzeichen> alleAbzeichen = [
   Abzeichen(
     id: 'punkte_preis_bronze',
     nameDe: 'Schätz-Talent',
-    beschreibungDe: 'Du hast in "Das große Schätzen" mind. 400 Punkte in einer Runde erreicht',
+    beschreibungDe: 'Du hast in "Das große Schätzen" mind. 250 Punkte in einer Runde erreicht',
     emoji: '🥉',
     tier: AbzeichenTier.bronze,
     kategorie: AbzeichenKategorie.challenges,
@@ -289,7 +291,7 @@ const List<Abzeichen> alleAbzeichen = [
   Abzeichen(
     id: 'punkte_preis_silber',
     nameDe: 'Schätz-Profi',
-    beschreibungDe: 'Du hast in "Das große Schätzen" mind. 600 Punkte in einer Runde erreicht',
+    beschreibungDe: 'Du hast in "Das große Schätzen" mind. 375 Punkte in einer Runde erreicht',
     emoji: '🥈',
     tier: AbzeichenTier.silber,
     kategorie: AbzeichenKategorie.challenges,
@@ -298,7 +300,7 @@ const List<Abzeichen> alleAbzeichen = [
   Abzeichen(
     id: 'punkte_preis_gold',
     nameDe: 'Schätz-Meister',
-    beschreibungDe: 'Du hast in "Das große Schätzen" mind. 780 Punkte in einer Runde erreicht',
+    beschreibungDe: 'Du hast in "Das große Schätzen" mind. 488 Punkte in einer Runde erreicht',
     emoji: '🥇',
     tier: AbzeichenTier.gold,
     kategorie: AbzeichenKategorie.challenges,
@@ -395,9 +397,16 @@ bool _kontinentAsien(AbzeichenKontext k) => _kontinent(k, 'asien');
 bool _kontinentOzeanien(AbzeichenKontext k) => _kontinent(k, 'ozeanien');
 bool _kontinentWelt(AbzeichenKontext k) => _kontinent(k, 'welt');
 
-bool _punktePreisBronze(AbzeichenKontext k) => _rekordMind(k, 'preis', 400);
-bool _punktePreisSilber(AbzeichenKontext k) => _rekordMind(k, 'preis', 600);
-bool _punktePreisGold(AbzeichenKontext k) => _rekordMind(k, 'preis', 780);
+// "Das grosse Schätzen" wurde von 8 auf 5 Fragen gekürzt, die Höchstpunktzahl
+// einer Runde damit von 800 auf 500. Die Schwellen sind auf denselben ANTEIL
+// umgerechnet, den sie vorher hatten (50 %, 75 %, 97,5 %) — sonst wären Silber
+// und Gold von einem Tag auf den anderen unerreichbar gewesen.
+//
+// Die Schwellen sinken dabei nur, niemand verliert also ein Abzeichen, das er
+// mit einer alten 8-Fragen-Runde verdient hat.
+bool _punktePreisBronze(AbzeichenKontext k) => _rekordMind(k, 'preis', 250);
+bool _punktePreisSilber(AbzeichenKontext k) => _rekordMind(k, 'preis', 375);
+bool _punktePreisGold(AbzeichenKontext k) => _rekordMind(k, 'preis', 488);
 
 bool _punkteHigherLowerBronze(AbzeichenKontext k) =>
     _rekordMind(k, 'higher_lower', 10);

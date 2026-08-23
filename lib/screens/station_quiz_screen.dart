@@ -2289,7 +2289,21 @@ class _EingabeUI extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             decoration: InputDecoration(
-              hintText: _hintText,
+              // hint als Widget statt hintText: bei grosser Systemschrift
+              // (ab 1.3) passte "Hauptstadt eingeben…" nicht mehr in das Feld
+              // und wurde abgeschnitten. Die FittedBox verkleinert den
+              // Platzhalter dann so weit, dass er ganz dasteht — bei normaler
+              // Schriftgroesse aendert sie nichts, denn scaleDown vergroessert
+              // nie.
+              hint: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  _hintText,
+                  maxLines: 1,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+              ),
               border: InputBorder.none,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

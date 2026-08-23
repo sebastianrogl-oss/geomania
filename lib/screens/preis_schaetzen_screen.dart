@@ -566,19 +566,33 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A1A)),
           onPressed: () => ChallengePanelSignal.zurueckZumPanel(context),
         ),
+        // FittedBox um beide Zeilen: bei grosser Systemschrift passte der
+        // Spielname nicht mehr in die Kopfzeile und wurde abgeschnitten
+        // (gemessen ab Skala 1.3). Er wird jetzt so weit verkleinert, dass er
+        // ganz dasteht — bei normaler Schriftgroesse aendert sich nichts,
+        // denn scaleDown vergroessert nie. Gleiche Loesung wie bei der
+        // Ueberschrift der Einstellungen.
         title: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(t('Das große Schätzen'),
-                style: const TextStyle(
-                    color: Color(0xFF1A1A1A),
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700)),
-            Text(_heutigeKat.label,
-                style: const TextStyle(
-                    color: Color(0xFF888888),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(t('Das große Schätzen'),
+                  maxLines: 1,
+                  style: const TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700)),
+            ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(_heutigeKat.label,
+                  maxLines: 1,
+                  style: const TextStyle(
+                      color: Color(0xFF888888),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500)),
+            ),
           ],
         ),
         centerTitle: true,

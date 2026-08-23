@@ -710,8 +710,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: _bg,
         foregroundColor: _textDark,
         elevation: 0,
-        title: Text(t('Einstellungen'),
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+        // FittedBox: bei Systemschrift 1.5 passte die Überschrift auf einem
+        // 320-px-Schirm nicht mehr in die Kopfzeile und wurde abgeschnitten.
+        // Sie wird jetzt so weit verkleinert, dass sie ganz dasteht — bei
+        // normaler Schriftgröße ändert sich nichts.
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(t('Einstellungen'),
+              maxLines: 1,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+        ),
       ),
       body: SafeArea(
         child: ListView(

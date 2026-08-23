@@ -33,6 +33,11 @@ const Map<String, String> abzeichenNamenEn = {
   'punkte_portfolio_bronze': 'Investment Talent',
   'punkte_portfolio_silber': 'Investment Pro',
   'punkte_portfolio_gold': 'Investment Master',
+  // "Day One" statt der angedachten "Old Guard": kuerzer — der Muenzname
+  // steht in einer schmalen Album-Zelle — und es sagt woertlich, was die
+  // Ehrung meint. "Old Guard" klingt eher nach Dienstalter als nach
+  // Fruehstart.
+  'urgestein': 'Day One',
 };
 
 const Map<String, String> abzeichenBeschreibungenEn = {
@@ -78,4 +83,5 @@ const Map<String, String> abzeichenBeschreibungenEn = {
       'You reached at least \$150 profit in the Portfolio in one day',
   'punkte_portfolio_gold':
       'You reached at least \$300 profit in the Portfolio in one day',
+  'urgestein': 'You were there from the very beginning',
 };

@@ -41,7 +41,21 @@ class AbzeichenKontext {
 
 enum AbzeichenTier { bronze, silber, gold }
 
-enum AbzeichenKategorie { serien, kontinente, meilensteine, challenges }
+enum AbzeichenKategorie {
+  serien,
+  kontinente,
+  meilensteine,
+  challenges,
+
+  /// Nicht erspielbar, nur verliehen — siehe [istVerliehen].
+  ///
+  /// Bekommt bewusst KEINEN eigenen Reiter im Münzalbum: fünf Reiter
+  /// schneiden auf 320 und 360 px schon bei normaler Schrift "Meilensteine"
+  /// und "Challenges" ab (gemessen: 52 px Platz für 69 px Text). Die
+  /// Ehrenmünzen hängen deshalb unten an der letzten Album-Seite — was der
+  /// Sache auch näher kommt, sie stehen damit ganz am Ende der Mappe.
+  ehrung,
+}
 
 class Abzeichen {
   final String id;
@@ -387,7 +401,42 @@ const List<Abzeichen> alleAbzeichen = [
     kategorie: AbzeichenKategorie.challenges,
     istErreicht: _punktePortfolioGold,
   ),
+
+  // ── Ehrung: nicht erspielbar ──────────────────────────────────────────────
+  Abzeichen(
+    id: 'urgestein',
+    nameDe: 'Urgestein',
+    beschreibungDe: 'Du warst von Anfang an dabei',
+    // Moai statt Grabstein: 🪦 stammt aus Emoji 13.0 (2020) und erscheint auf
+    // Android 10 und älter als leeres Rechteck — die App bündelt keine
+    // Emoji-Schrift, sondern nutzt die des Systems. 🗿 gibt es seit 2010 und
+    // ist überall vorhanden. Es wurde durch den pensionierten Modus
+    // bekanntesGebaeude gerade frei.
+    emoji: '🗿',
+    tier: AbzeichenTier.gold,
+    kategorie: AbzeichenKategorie.ehrung,
+    // Nie von selbst. istErreicht wird zwar wie bei allen anderen geprüft,
+    // liefert hier aber immer false — freigeschaltet wird die Münze
+    // ausschliesslich über AbzeichenService.verleihen().
+    istErreicht: _nie,
+  ),
 ];
+
+bool _nie(AbzeichenKontext k) => false;
+
+/// Abzeichen, die man sich erspielen kann — also alles ausser den Ehrungen.
+///
+/// Das Münzalbum zählt darüber ("x / y Münzen gesammelt"). Zählte es alle,
+/// bliebe für jeden, der die Ehrenmünze nicht hat, für immer eine Lücke
+/// stehen, obwohl er alles Erreichbare gesammelt hat.
+final List<Abzeichen> sammelbareAbzeichen = alleAbzeichen
+    .where((a) => a.kategorie != AbzeichenKategorie.ehrung)
+    .toList();
+
+/// Ehrenmünzen, in der Reihenfolge der Liste.
+final List<Abzeichen> ehrenAbzeichen = alleAbzeichen
+    .where((a) => a.kategorie == AbzeichenKategorie.ehrung)
+    .toList();
 
 bool _kontinentEuropa(AbzeichenKontext k) => _kontinent(k, 'europa');
 bool _kontinentSuedamerika(AbzeichenKontext k) => _kontinent(k, 'suedamerika');

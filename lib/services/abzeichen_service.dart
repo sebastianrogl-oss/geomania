@@ -21,6 +21,30 @@ class AbzeichenService {
     await prefs.setStringList(_kFreigeschaltet, ids.toList());
   }
 
+  /// Verleiht ein Abzeichen von aussen — für Ehrungen, die man sich nicht
+  /// erspielen kann (siehe [AbzeichenKategorie.ehrung]).
+  ///
+  /// Getrennt von [_pruefeUndSchalteFrei], weil dort IMMER eine Bedingung
+  /// gegen den Spielstand geprüft wird; eine Ehrung hat keine. Sie landet aber
+  /// im selben Speicher und wird danach überall wie jedes andere Abzeichen
+  /// behandelt.
+  ///
+  /// Liefert true, wenn die Münze neu dazukam — false, wenn sie schon da war.
+  /// Der Aufruf ist damit gefahrlos wiederholbar.
+  static Future<bool> verleihen(String abzeichenId) async {
+    final ids = await getFreigeschaltete();
+    if (!ids.add(abzeichenId)) return false;
+    await _speichern(ids);
+    return true;
+  }
+
+  /// Nimmt ein Abzeichen wieder zurück — gedacht zum Testen, damit sich der
+  /// Verleih-Weg samt Popup mehrfach durchspielen lässt.
+  static Future<void> entziehen(String abzeichenId) async {
+    final ids = await getFreigeschaltete();
+    if (ids.remove(abzeichenId)) await _speichern(ids);
+  }
+
   /// Einmaliger Hinweis "Wische für dein Münzalbum" im Profilbild-Dialog —
   /// wird nach dem ersten Anzeigen gemerkt und danach nie wieder gezeigt.
   static Future<bool> wurdeSwipeHinweisGezeigt() async {

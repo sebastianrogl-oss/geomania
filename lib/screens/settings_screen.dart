@@ -17,6 +17,7 @@ import '../services/sound_service.dart';
 import '../services/spielzeit_service.dart';
 import '../l10n/uebersetzungen.dart';
 import '../widgets/abzeichen_popup.dart';
+import '../services/abzeichen_service.dart';
 import '../widgets/streak_feier_overlay.dart';
 import 'station_quiz_screen.dart';
 import '../theme/app_theme.dart';
@@ -561,6 +562,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await AbzeichenPopup.zeigen(context, beispiele);
   }
 
+  // ── DEBUG: Ehrenmünze "Urgestein" (nur kDebugMode) ────────────────────────
+  //
+  // Anders als _abzeichenSimulieren() oben schaltet das hier WIRKLICH frei —
+  // es geht denselben Weg, den später auch die echte Verleihung nimmt
+  // (AbzeichenService.verleihen), und zeigt danach dasselbe Popup wie der
+  // Spielbetrieb. Danach steht die Münze am Ende des Münzalbums.
+  //
+  // "Entziehen" gibt es dazu, damit sich der Ablauf mehrfach durchspielen
+  // lässt, ohne den ganzen Spielstand zurückzusetzen.
+  Future<void> _urgesteinVerleihen() async {
+    final neu = await AbzeichenService.verleihen('urgestein');
+    if (!mounted) return;
+    final abzeichen = abzeichenById('urgestein');
+    if (neu && abzeichen != null) {
+      await AbzeichenPopup.zeigen(context, [abzeichen]);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('Urgestein war schon verliehen')),
+        backgroundColor: const Color(0xFFB8570A),
+      ));
+    }
+  }
+
+  Future<void> _urgesteinEntziehen() async {
+    await AbzeichenService.entziehen('urgestein');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(t('Urgestein entzogen')),
+      backgroundColor: const Color(0xFFB8570A),
+    ));
+  }
+
   // ── DEBUG: Sterne (nur kDebugMode) ────────────────────────────────────────
   //
   // Beide Buttons schreiben dieselben Keys wie der echte Spielbetrieb:
@@ -853,6 +886,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('3 Abzeichen gleichzeitig simulieren (Debug)'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: () => _abzeichenSimulieren(3),
+                ),
+                _Zeile(
+                  icon: Icons.hail_rounded,
+                  title: t('Urgestein verleihen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _urgesteinVerleihen,
+                ),
+                _Zeile(
+                  icon: Icons.undo_rounded,
+                  title: t('Urgestein entziehen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _urgesteinEntziehen,
                 ),
                 _Zeile(
                   icon: Icons.star_rounded,

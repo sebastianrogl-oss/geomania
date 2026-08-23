@@ -77,7 +77,11 @@ class _MuenzalbumSeiteState extends State<MuenzalbumSeite> {
 
   @override
   Widget build(BuildContext context) {
-    final anzahlErreicht = widget.freigeschaltete.length;
+    // Nur die erspielbaren mitzählen — passend zum Nenner unten. Eine
+    // verliehene Ehrenmünze darf den Zähler nicht über sein Maximum treiben.
+    final anzahlErreicht = sammelbareAbzeichen
+        .where((a) => widget.freigeschaltete.contains(a.id))
+        .length;
 
     return Container(
       decoration: const BoxDecoration(
@@ -91,7 +95,11 @@ class _MuenzalbumSeiteState extends State<MuenzalbumSeite> {
         children: [
           const SizedBox(height: 16),
           Text(
-            '$anzahlErreicht / ${alleAbzeichen.length} Münzen gesammelt',
+            // Gezählt wird über die ERSPIELBAREN Münzen. Die Ehrenmünzen
+            // stehen bewusst nicht im Nenner — sonst bliebe für jeden, der
+            // keine hat, für immer eine Lücke stehen, obwohl er alles
+            // Erreichbare gesammelt hat.
+            '$anzahlErreicht / ${sammelbareAbzeichen.length} Münzen gesammelt',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -251,6 +259,39 @@ class _KategorieSeite extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+        ],
+
+        // ── Ehrenmünzen ───────────────────────────────────────────────────
+        //
+        // Hängen unten an der LETZTEN Album-Seite, nicht an einem eigenen
+        // Reiter: fünf Reiter schneiden auf 320 und 360 px schon bei
+        // normaler Schriftgrösse "Meilensteine" und "Challenges" ab. Damit
+        // stehen sie zugleich ganz am Ende der Mappe, was zu einer Ehrung
+        // besser passt als ein eigener Abschnitt mittendrin.
+        if (ehrenAbzeichen.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8, top: 4),
+            child: Text(
+              'Ehrung',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.75),
+              ),
+            ),
+          ),
+          GridView(
+            gridDelegate: _gridDelegate,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              for (final a in ehrenAbzeichen)
+                _MuenzSlot(
+                  abzeichen: a,
+                  freigeschaltet: freigeschaltete.contains(a.id),
+                ),
+            ],
+          ),
         ],
       ],
     );

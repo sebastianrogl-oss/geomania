@@ -12,6 +12,7 @@ import '../services/daily_resume_service.dart';
 import '../services/tages_seed_service.dart';
 import '../services/skala_service.dart';
 import '../services/rangliste_service.dart';
+import '../services/sound_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/challenge_fertig_button.dart';
 import '../widgets/flaggen_widget.dart' show zeigeFlagge;
@@ -228,6 +229,9 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   }
 
   void _bestaetigen() {
+    // Nur der Knopfklang. Ob die Schätzung gut war, sagt die Punktzahl —
+    // richtig/falsch gibt es in den Tages-Challenges bewusst nicht.
+    SoundService.spiele(Klang.knopf);
     final q = _fragen[_idx];
     final real = q.kat.getValue(q.land)!;
     final sk = _skala!;
@@ -289,7 +293,11 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   bool _istProzentKategorie(String id) => SkalaService.istProzentKategorie(id);
 
   Future<void> _weiter() async {
+    SoundService.spiele(Klang.knopf);
     if (_idx + 1 >= _fragen.length) {
+      // Die Runde ist zu Ende — vor allem Speichern, damit der Klang zum Tipp
+      // gehört und nicht erst nach den awaits einsetzt.
+      SoundService.spiele(Klang.sieg);
       _neuerRekord = await ChallengeRekordService.setzeFallsBesser(_kId, _gesamt);
       await ChallengeRekordService.speichereHeutigePunkte(_kId, _gesamt);
       await ChallengeRekordService.summeErhoehen(_kId, _gesamt.toDouble());

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/challenge_panel_signal.dart';
 import '../services/locale_service.dart';
+import '../services/sound_service.dart';
 
 /// Tag, an dem die Tages-Challenges eingeführt wurden — Ausgabe #1 für alle 4.
 /// Vor Release auf das tatsächliche Launch-/Testdatum zurückgesetzt, damit
@@ -78,6 +79,7 @@ class _ChallengeStartScreenState extends State<ChallengeStartScreen> {
   }
 
   Future<void> _spielen() async {
+    SoundService.spiele(Klang.knopf);
     await Navigator.push(
       context,
       MaterialPageRoute(builder: widget.spielScreenBuilder),
@@ -166,8 +168,13 @@ class _ChallengeStartScreenState extends State<ChallengeStartScreen> {
                 child: _WeisserButton(
                   text: t('Ergebnisse'),
                   farbe: widget.farbe,
-                  onTap: () => Navigator.push(
-                      context, MaterialPageRoute(builder: widget.ergebnisScreenBuilder)),
+                  onTap: () {
+                    SoundService.spiele(Klang.knopf);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: widget.ergebnisScreenBuilder));
+                  },
                 ),
               ),
               const SizedBox(height: 12),

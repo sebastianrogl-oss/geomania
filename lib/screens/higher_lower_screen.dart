@@ -12,6 +12,7 @@ import '../services/daily_challenge.dart';
 import '../services/daily_resume_service.dart';
 import '../services/tages_seed_service.dart';
 import '../services/rangliste_service.dart';
+import '../services/sound_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/challenge_ergebnis_header.dart';
 import '../widgets/challenge_fertig_button.dart';
@@ -248,6 +249,9 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
 
   void _guess(bool guessHigher) {
     if (_answered || _gameOver) return;
+    // AUSDRÜCKLICH nur der Knopfklang: kein richtig/falsch, auch nicht bei
+    // Higher or Lower. Ob der Tipp stimmte, zeigt der Screen ohnehin sofort.
+    SoundService.spiele(Klang.knopf);
 
     final leftVal = _category.getValue(_leftCountry)!;
     final rightVal = _category.getValue(_rightCountry)!;
@@ -304,6 +308,8 @@ class _HigherLowerScreenState extends State<HigherLowerScreen> {
   }
 
   Future<List<Abzeichen>> _speichereErgebnis() async {
+    // Die Serie ist zu Ende, die Challenge damit abgeschlossen.
+    SoundService.spiele(Klang.sieg);
     final neuerRekord = await ChallengeRekordService.setzeFallsBesser(
       _kId,
       _score,

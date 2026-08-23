@@ -13,6 +13,7 @@ import '../../services/portfolio_service.dart';
 import '../../services/tages_seed_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/rangliste_service.dart';
+import '../../services/sound_service.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/abzeichen_popup.dart';
 import '../../widgets/flaggen_widget.dart' show zeigeFlagge;
@@ -143,6 +144,7 @@ class _PortfolioInvestierenScreenState
 
   void _weiterZurGewichtung() {
     if (_gewaehlt.length != _kAuswahlAnzahl) return;
+    SoundService.spiele(Klang.knopf);
     setState(() => _gewichtungPhase = true);
     _zwischenstandSpeichern();
   }
@@ -230,6 +232,10 @@ class _PortfolioInvestierenScreenState
 
   Future<void> _investierenUndAbschliessen() async {
     if (_wirdAbgeschlossen) return;
+    // Knopf und Abschluss fallen hier zusammen: mit diesem Tipp ist die
+    // Portfolio-Challenge des Tages vorbei.
+    SoundService.spiele(Klang.knopf);
+    SoundService.spiele(Klang.sieg);
     setState(() => _wirdAbgeschlossen = true);
 
     final tagesSeed = TagesSeedService.seedFuer('portfolio');

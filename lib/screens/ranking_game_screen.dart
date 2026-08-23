@@ -10,6 +10,7 @@ import '../services/daily_challenge.dart';
 import '../services/daily_resume_service.dart';
 import '../services/tages_seed_service.dart';
 import '../services/rangliste_service.dart';
+import '../services/sound_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/challenge_ergebnis_header.dart';
 import '../widgets/challenge_fertig_button.dart';
@@ -417,6 +418,8 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
   void _tippKategorie(String katId) {
     if (_verwendeteKategorien.contains(katId)) return;
     if (_aktuellerIndex >= _laender.length) return;
+    // Nur der Knopfklang — richtig/falsch bleibt in den Challenges stumm.
+    SoundService.spiele(Klang.knopf);
 
     final land = _laender[_aktuellerIndex];
     final kat = _tagesKats.firstWhere((k) => k.id == katId);
@@ -440,6 +443,8 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
   }
 
   Future<void> _abschliessen() async {
+    // Alle Länder zugeordnet — die Challenge ist geschafft.
+    SoundService.spiele(Klang.sieg);
     final pts = _gesamtPunkte();
     _neuerRekord = await ChallengeRekordService.setzeFallsBesser(_kId, pts);
     await ChallengeRekordService.speichereHeutigePunkte(_kId, pts);

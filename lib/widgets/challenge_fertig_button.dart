@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/challenge_panel_signal.dart';
+import '../services/sound_service.dart';
 
 /// Einheitlicher Abschluss-Button für alle Tages-Challenge-Ergebnis-Screens
 /// — Stil und Text ("Fertig") vom Portfolio-Auflösungs-Screen übernommen,
 /// ersetzt die vorher je Challenge unterschiedlichen "Weiter"-Buttons.
+///
+/// Der Knopfklang sitzt bewusst HIER und nicht in den vier Challenges: der
+/// Button ist ohnehin schon der gemeinsame Baustein für ihren Abschluss, und
+/// so kann keine Challenge ihn beim nächsten Umbau vergessen.
 class ChallengeFertigButton extends StatelessWidget {
   final VoidCallback? onTap;
 
@@ -13,7 +18,14 @@ class ChallengeFertigButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap ?? () => ChallengePanelSignal.zurueckZumPanel(context),
+      onTap: () {
+        SoundService.spiele(Klang.knopf);
+        if (onTap != null) {
+          onTap!();
+        } else {
+          ChallengePanelSignal.zurueckZumPanel(context);
+        }
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16),

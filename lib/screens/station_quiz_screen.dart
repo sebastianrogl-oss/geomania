@@ -27,7 +27,8 @@ import '../widgets/erinnerung_dialog.dart';
 import '../widgets/flaggen_widget.dart';
 import '../widgets/halbzeit_inhalt.dart';
 import '../widgets/level_skip_button.dart';
-import '../widgets/spiel_erklaerung.dart';
+import '../widgets/kennzahl_erklaerung.dart';
+import '../widgets/station_emoji.dart';
 import '../widgets/streak_feier_overlay.dart';
 import 'station_abschluss_screen.dart';
 import '../theme/app_theme.dart';
@@ -4602,17 +4603,22 @@ class _FragezeichenKnopf extends StatelessWidget {
 
 /// Öffnet die ausführliche Anleitung eines Modus.
 ///
-/// Nutzt zeigeSpielErklaerung() aus widgets/spiel_erklaerung.dart — dasselbe
-/// Bottom-Sheet, das die vier Tages-Challenges schon verwenden. Der Lernpfad
-/// hatte bisher gar keinen Zugang dazu.
+/// Nutzt zeigeKennzahlErklaerung() aus widgets/kennzahl_erklaerung.dart —
+/// dasselbe Overlay, mit dem die App Sterne und Serie erklärt. Vorher war es
+/// ein schlichtes Bottom-Sheet mit X-Symbol; die Anleitungen sehen jetzt aus
+/// wie alles andere Erklärende in der App.
+///
+/// Das Symbol ist NICHT neu erfunden, sondern das der Station im Lernpfad
+/// (modusEmoji) — so hängt die Anleitung sichtbar an dem Knopf, über den man
+/// den Modus betritt.
 Future<void> zeigeModusAnleitung(BuildContext context, LernModus modus) {
   final absaetze = lernModusAnleitung(modus);
   if (absaetze.isEmpty) return Future<void>.value();
-  return zeigeSpielErklaerung(
+  return zeigeKennzahlErklaerung(
     context,
+    symbol: modusEmoji(modus),
     titel: t('{modus} — so geht es', {'modus': lernModusLabel(modus)}),
-    abschnitte: absaetze,
-    farbe: const Color(0xFF4A9E4A),
+    absaetze: absaetze,
   );
 }
 

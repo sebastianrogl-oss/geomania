@@ -7,19 +7,21 @@ import '../l10n/uebersetzungen.dart';
 // Leitgröße ist der Seitenrand; alles andere ist bewusst absolut, weil dieses
 // Overlay Bildschirm-Chrome ist und nicht an einer Figur hängt.
 const double _kSeitenrand = 32;
+const double _kSeitenrandSenkrecht = 40;
 
 const _textDark = Color(0xFF1A1A1A);
 const _karte = Color(0xFFFFFDF7);
 
-/// Kurzerklärung für eine Kennzahl aus dem grünen Kopfbereich.
+/// Erklär-Overlay der App: Symbol, Überschrift, ein paar Absätze, unten ein
+/// Knopf zum Schließen.
 ///
-/// Sterne und Streak stehen dort dauerhaft, wurden aber nirgends erklärt: dass
-/// ein Stern für die erste richtige Antwort auf eine Frage steht und dass man
-/// damit Profilbilder freischaltet, war nur zu erraten.
+/// Genutzt für die Kennzahlen im grünen Kopfbereich (Sterne, Streak) UND für
+/// die ausführlichen Modus-Anleitungen im Lernpfad. Die lagen vorher in einem
+/// schlichten Bottom-Sheet mit X-Symbol; sie sehen jetzt aus wie alles andere
+/// Erklärende in der App, mit dem Emoji ihrer Station davor.
 ///
-/// Bewusst ein Dialog und kein Bottom-Sheet: es sind drei Sätze, und ein Sheet
-/// über den halben Bildschirm wäre dafür zu viel Aufhebens. Für die
-/// ausführlichen Modus-Anleitungen ist zeigeSpielErklaerung() zuständig.
+/// Bewusst ein Dialog und kein Bottom-Sheet: ein Sheet über den halben
+/// Bildschirm ist für ein paar Sätze zu viel Aufhebens.
 Future<void> zeigeKennzahlErklaerung(
   BuildContext context, {
   required String symbol,
@@ -37,7 +39,13 @@ Future<void> zeigeKennzahlErklaerung(
       onTap: () => Navigator.of(ctx).pop(),
       child: Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: _kSeitenrand),
+        // Auch senkrecht ein Rand: die längsten Modus-Anleitungen (Länder-
+        // Ranking, Nachbarschafts-Kette) füllen den Dialog sonst bis an die
+        // Bildschirmkante.
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: _kSeitenrand,
+          vertical: _kSeitenrandSenkrecht,
+        ),
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
           decoration: BoxDecoration(
@@ -69,19 +77,33 @@ Future<void> zeigeKennzahlErklaerung(
                 ],
               ),
               const SizedBox(height: 14),
-              for (final absatz in absaetze)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
-                    absatz,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: _textDark,
-                      height: 1.45,
-                    ),
+              // Scrollbar, aber nur wenn nötig: bei drei Sätzen ändert sich
+              // nichts, bei einer vierteiligen Modus-Anleitung auf einem
+              // schmalen Schirm rollt der Text, während Überschrift und Knopf
+              // stehen bleiben — sonst schöbe der Text den Knopf aus dem Bild.
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final absatz in absaetze)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            absatz,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _textDark,
+                              height: 1.45,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
+              ),
               const SizedBox(height: 2),
               Align(
                 alignment: Alignment.centerRight,

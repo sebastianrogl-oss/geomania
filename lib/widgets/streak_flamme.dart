@@ -35,7 +35,12 @@ const _kZahlVersatzRechtsAnteil = 0.036;
 /// Passt die Zahl nicht hinein (zwei-, dreistellige Streaks), verkleinert
 /// die FittedBox sie automatisch so weit wie nötig. Einstellige Zahlen
 /// bleiben unangetastet, weil scaleDown nur verkleinert.
-const _kZahlMaxBreiteAnteil = 0.40;
+/// 0.45 statt 0.40, seit die Flamme in der Profil-Kachel kleiner geworden
+/// ist: bei dreistelligen Streaks (ab 100 Tagen) reichte der Platz sonst
+/// nicht mehr, und die FittedBox setzte GENAU DIESE eine Zahl kleiner als die
+/// beiden daneben. Nur diese Kachel gibt ueberhaupt eine Zahl mit; die
+/// Kopfzeile zeigt ihre Zahl neben der Flamme.
+const _kZahlMaxBreiteAnteil = 0.45;
 
 /// Farbe der Zahl in der Flamme.
 ///

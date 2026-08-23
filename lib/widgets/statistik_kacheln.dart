@@ -31,7 +31,7 @@ const double _kSeitenverhaeltnis = 1.0;
 ///
 /// Deutlich knapper als zuvor (0.07): Münze und Flamme sind gewachsen, und im
 /// Quadrat kann der Platz dafür nur aus Rand, Abstand und Beschriftung kommen.
-const double _kInnenrand = 0.02;
+const double _kInnenrand = 0.005;
 
 /// Grundmaß der sichtbaren Grafikhöhe, als Anteil der Kachelseite.
 ///
@@ -49,15 +49,15 @@ const double _kButtonFaktor = 0.80;
 /// quadratische Kachel: die Münze ist ein voller Kreis, sie muss ganz
 /// hineinpassen, und über ihr steht noch die Beschriftung. Bei Kachelseite
 /// 116 wären 1.5 gleich 122 px — 27 px mehr, als das Grafikfeld hoch ist.
-const double _kMuenzFaktor = 1.16;
+const double _kMuenzFaktor = 1.276; // 1.16 × 1.1
 
 /// Die Flamme ist die größte der drei — sie darf das, weil ihre Leinwand zu
 /// gut 40 % aus durchsichtigem Rand besteht.
-const double _kFlammeFaktor = 1.20;
+const double _kFlammeFaktor = 1.008; // 0.84 × 1.2
 
 /// Höhe des Grafikfelds: so hoch wie das größte der drei Elemente, damit die
 /// Beschriftungen darunter auf einer Linie stehen.
-const double _kGrafikAnteil = _kGrafikGrundmass * _kFlammeFaktor;
+const double _kGrafikAnteil = _kGrafikGrundmass * _kMuenzFaktor;
 
 /// Anteil ihrer Box, den die Flamme sichtbar ausfüllt.
 ///
@@ -78,6 +78,21 @@ const double _kFlammeSichtbar = 0.59;
 /// Mitte ihres Felds.
 const double _kFlammeHoeher = 0.045;
 
+/// Zusätzlicher fester Versatz der Flamme, in Pixeln, positiv = nach oben.
+/// Kommt zu dem Ausgleich oben dazu — nicht als Anteil, weil er eine bewusste
+/// optische Setzung ist und nicht aus der Grafik folgt.
+///
+/// Stand kurzzeitig auf 20; damit sass die Flamme zu hoch. Die 10 hier sind
+/// die Rücknahme um 10 Pixel nach unten.
+///
+/// Der Versatz liegt am Transform um die GANZE Flamme — die Zahl steckt in
+/// ihr drin und wandert deshalb zwangsläufig mit, bleibt also mittig.
+const double _kFlammeVersatz = 7; // 10 minus 3 px nach unten
+
+/// Versatz der Beschriftungen nach oben, in Pixeln. Rein optisch: die Zeile
+/// bleibt an ihrem Platz im Layout, sie wird nur höher gezeichnet.
+const double _kLabelVersatz = 5;
+
 /// Sockelhöhe des Stationsbuttons, als Anteil seines Durchmessers.
 /// Entspricht den 5 px bei 82 px Durchmesser aus dem Lernpfad.
 const double _kSockelAnteil = 0.061;
@@ -89,12 +104,12 @@ const double _kSockelAnteil = 0.061;
 /// So gewählt, dass auch dreistellige Zahlen (Stationen!) noch ohne
 /// Verkleinerung hineinpassen — sonst wären die Zahlen wieder unterschiedlich
 /// groß, sobald ein Zähler dreistellig wird.
-const double _kZahlAnteil = 0.40;
+const double _kZahlAnteil = 0.32; // 0.40 × 0.8
 
 /// Der Stationsbutton macht seine Zahl im selben Maß kleiner wie sich selbst,
 /// damit sie nicht plötzlich seinen ganzen Kreis füllt. Seine Zahl ist damit
 /// als einzige kleiner als die beiden anderen.
-const double _kZahlFaktorButton = _kButtonFaktor;
+const double _kZahlFaktorButton = 1.0;
 
 /// Breite, die der Zahl im Kreis zur Verfügung steht, als Anteil des
 /// Durchmessers.
@@ -103,10 +118,16 @@ const double _kZahlBereich = 0.82;
 /// Beschriftung unter der Grafik. Knapper als zuvor (0.095 / 0.03 / 1.2) —
 /// der Platz geht an Münze und Flamme.
 const double _kLabelAnteil = 0.085;
-const double _kAbstandGrafikLabel = 0.02;
+/// Kein eigener Abstand mehr: die Beschriftung wird ohnehin 5 px nach oben
+/// gezeichnet, und das Grafikfeld braucht jeden Rest — mit 0.005 lief die
+/// Kachel um 0,35 px ueber.
+const double _kAbstandGrafikLabel = 0;
 
 /// Zeilenhöhe der Beschriftung, als Vielfaches ihrer Schriftgröße.
-const double _kLabelZeilenhoehe = 1.15;
+/// 1.12 statt 1.15: die gewachsene Muenze braucht das letzte halbe Pixel —
+/// ohne das lief die Kachel um 0,35 px ueber. Der Unterlaenge im "g" von
+/// "Abzeichen" bleibt genug Raum.
+const double _kLabelZeilenhoehe = 1.12;
 
 /// Abstand zwischen zwei Kacheln.
 const double _kKachelAbstand = 8;
@@ -220,20 +241,23 @@ class _Kachel extends StatelessWidget {
                   child: Center(child: grafik(grundmass, zahlGroesse)),
                 ),
                 SizedBox(height: seite * _kAbstandGrafikLabel),
-                Text(
-                  label,
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: _kLabelFarbe,
-                    fontSize: seite * _kLabelAnteil,
-                    fontWeight: FontWeight.w700,
-                    // Feste Zeilenhöhe, sonst stimmt die Rechnung unten
-                    // nicht: die voreingestellte Zeilenhöhe von Poppins ist
-                    // rund das 1,7-fache der Schriftgröße, und auf schmalen
-                    // Geräten lief die Kachel damit um knapp einen Pixel
-                    // über. 1.2 lässt der Unterlänge im "g" von "Abzeichen"
-                    // genug Raum.
-                    height: _kLabelZeilenhoehe,
+                Transform.translate(
+                  offset: const Offset(0, -_kLabelVersatz),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: _kLabelFarbe,
+                      fontSize: seite * _kLabelAnteil,
+                      fontWeight: FontWeight.w700,
+                      // Feste Zeilenhöhe, sonst stimmt die Rechnung unten
+                      // nicht: die voreingestellte Zeilenhöhe von Poppins ist
+                      // rund das 1,7-fache der Schriftgröße, und auf schmalen
+                      // Geräten lief die Kachel damit um knapp einen Pixel
+                      // über. 1.2 lässt der Unterlänge im "g" von "Abzeichen"
+                      // genug Raum.
+                      height: _kLabelZeilenhoehe,
+                    ),
                   ),
                 ),
               ],
@@ -274,7 +298,7 @@ class _Flamme extends StatelessWidget {
       // dass die Grafik in ihrer Leinwand tiefer sitzt als die Mitte. Die
       // Zahl in der Flamme wandert mit, sie gehört zum selben Bild.
       child: Transform.translate(
-        offset: Offset(0, -box * _kFlammeHoeher),
+        offset: Offset(0, -box * _kFlammeHoeher - _kFlammeVersatz),
         child: StreakFlamme(groesse: box, zahl: zahl, zahlGroesse: zahlGroesse),
       ),
     );

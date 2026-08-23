@@ -77,8 +77,11 @@ void main() {
     }
   });
 
-  testWidgets('Flamme und Münze zeigen ihre Zahl gleich groß, der Button '
-      'anteilig kleiner', (tester) async {
+  testWidgets('alle drei Zahlen sind gleich groß', (tester) async {
+    // Die Zahl im Stationsbutton war zwischenzeitlich absichtlich kleiner
+    // (0.8 wie der Button selbst). Jetzt gilt wieder für alle drei dieselbe
+    // Größe — und zwar die des Buttons, die anderen beiden sind zu ihr
+    // heruntergezogen worden.
     await baue(tester, const Size(412, 915));
     final streak = gerendert(tester, '7');
     final abzeichen = gerendert(tester, '12');
@@ -86,9 +89,8 @@ void main() {
 
     expect(abzeichen, moreOrLessEquals(streak, epsilon: 0.5),
         reason: 'Streak $streak vs. Abzeichen $abzeichen');
-    // Der Button ist 0.8-mal so groß wie das Grundmaß, seine Zahl ebenso.
-    expect(stationen, moreOrLessEquals(streak * 0.8, epsilon: 0.6),
-        reason: 'Stationen $stationen, erwartet ${streak * 0.8}');
+    expect(stationen, moreOrLessEquals(streak, epsilon: 0.5),
+        reason: 'Streak $streak vs. Stationen $stationen');
   });
 
   testWidgets('keine Zahl wird nachträglich verkleinert — ein-, zwei- und '

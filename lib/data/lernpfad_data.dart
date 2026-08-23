@@ -37,7 +37,7 @@ enum LernModus {
   flaechenVergleich,    // "Wie oft passt X in Y?" — zwei Umrisse massstabsgetreu
   zweiWahrheiten,       // "Welche Aussage stimmt NICHT?" — 2 wahre, 1 erfundene
   wasGehoertNichtDazu,  // Vier Laender, drei teilen ein Merkmal — welches nicht?
-  laenderRanking,       // "Welchen Platz belegt X?" — Eingabe per Zahlenschloss
+  laenderRanking,       // "Welchen Platz belegt X?" — Eingabe per Rang-Balken
   nachbarschaftsKette,  // Weg von A nach B ueber Nachbarlaender selbst bauen
 }
 
@@ -163,7 +163,7 @@ bool istSpielModus(LernModus m) => kSpielModi.contains(m);
 ///
 /// Nicht "Spiel-Modus" ist das Kriterium, sondern eine eigene Bedienung:
 /// Sortieren zieht Karten in eine Reihenfolge, Preis-Schaetzen und
-/// Laender-Ranking brauchen Regler beziehungsweise Zahlenschloss, die
+/// Laender-Ranking brauchen Regler beziehungsweise Rang-Balken, die
 /// Nachbarschafts-Kette baut einen Weg Schritt fuer Schritt. Wer eine Welt
 /// betritt, soll zuerst etwas antippen duerfen.
 ///
@@ -1010,7 +1010,7 @@ String lernModusKurzanleitung(LernModus m) => t(switch (m) {
   LernModus.wasGehoertNichtDazu =>
       'Tippe das Land an, das nicht zu den anderen drei passt.',
   LernModus.laenderRanking =>
-      'Stell am Zahlenschloss ein, auf welchem Platz das Land liegt.',
+      'Schieb den Griff auf den Platz, den du vermutest.',
   LernModus.nachbarschaftsKette =>
       'Bau einen Weg vom Start zum Ziel — Nachbarland für Nachbarland.',
 });
@@ -1068,15 +1068,15 @@ List<String> lernModusAnleitung(LernModus m) => switch (m) {
       t('Du musst nicht genau treffen: alles innerhalb von 20 Prozent gilt '
           'als richtig.'),
     ],
+  // Vorher vier Absätze, davon zwei allein für die Bedienung des
+  // Zahlenschlosses. Der Balken erklärt sich beim Anschauen — geblieben ist,
+  // was man ihm nicht ansieht: worum gefragt wird und dass Nähe genügt.
   LernModus.laenderRanking => [
       t('Gefragt ist, auf welchem Platz ein Land in einer Kategorie liegt — '
           'zum Beispiel "Welchen Platz belegt Kenia in der Kategorie '
           'Fläche?". Platz 1 ist immer der höchste Wert.'),
-      t('Die Zahl stellst du an einem Zahlenschloss ein: wisch die Walzen '
-          'nach oben oder unten, bis deine Zahl in der Mitte steht. Die '
-          'linke Walze ist die Zehnerstelle, die rechte die Einerstelle.'),
-      t('Tippe auf "Bestätigen", wenn die Zahl stimmt. Wie viele Länder '
-          'überhaupt gewertet werden, steht über dem Schloss.'),
+      t('Schieb den Griff auf den Platz, den du vermutest, und tippe auf '
+          '"Bestätigen".'),
       t('Du musst nicht genau treffen: je näher du am richtigen Platz '
           'liegst, desto mehr Punkte gibt es.'),
     ],

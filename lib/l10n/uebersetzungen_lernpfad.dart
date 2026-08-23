@@ -102,7 +102,7 @@ const Map<String, String> uebersetzungenLernpfad = {
   'Gemeinsame Grenze zu einem Land': 'A shared border with one country',
   'Schließen': 'Close',
 
-  // Länder-Ranking mit Zahlenschloss
+  // Länder-Ranking mit Rang-Balken
   'Länder-Ranking': 'Country ranking',
   'Welchen Platz belegt {land} in der Kategorie {kategorie}?':
       'What rank does {land} hold for {kategorie}?',

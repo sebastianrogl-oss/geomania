@@ -339,7 +339,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   // eingehende vom abgehenden Kind (siehe _inhaltMitWisch).
   Key? _aktuellerInhaltKey;
 
-  // Länder-Ranking: Stand des Zahlenschlosses für die aktuelle Frage.
+  // Länder-Ranking: Stand des Rang-Balkens für die aktuelle Frage.
   bool _rankingBestaetigt = false;
   int _rankingEingabe = 0;
 
@@ -757,7 +757,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     _vorruecken();
   }
 
-  // ── Länder-Ranking (Zahlenschloss) ────────────────────────────────────────
+  // ── Länder-Ranking (Rang-Balken) ──────────────────────────────────────────
 
   void _rankingBestaetigen(int eingabe) {
     if (_rankingBestaetigt || _session == null) return;
@@ -841,8 +841,8 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   bool _hatEigenenWeiterButton(LernModus m) =>
       m == LernModus.sortierSpiel ||
       m == LernModus.preisSchaetzen ||
-      // Das Zahlenschloss trägt seinen Bestätigen- bzw. Weiter-Button selbst,
-      // damit er direkt unter den Walzen sitzt statt am Bildschirmfuß.
+      // Der Rang-Balken trägt seinen Bestätigen- bzw. Weiter-Button selbst,
+      // damit er direkt unter dem Balken sitzt statt am Bildschirmfuß.
       m == LernModus.laenderRanking ||
       // Die Nachbarschafts-Kette hat bis zum Erreichen des Ziels gar keinen
       // Weiter-Button — sie endet, wenn der Weg steht.
@@ -3622,47 +3622,62 @@ class _WasGehoertNichtDazuUI extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Länder-Ranking — Zahlenschloss
+// Länder-Ranking — Rang-Balken
 // ══════════════════════════════════════════════════════════════════════════════
 //
-// Leitgröße ist die Walzenhöhe; Ziffergröße, Rahmenstärke und Breite der
-// Walzen sind Anteile davon.
+// Vorher stand hier ein Zahlenschloss aus drei Walzen. Es brauchte zwei Sätze
+// Anleitung, und man drehte an drei Rädern eine dreistellige Zahl ein, die man
+// ohnehin nur schätzen kann. Für eine Position in einer Reihe ist ein Balken
+// die passendere Geste: man zeigt hin, statt eine Zahl zu buchstabieren.
+//
+// Leitgröße ist die Höhe der Griffscheibe; Spurhöhe, Skalenstriche und
+// Abstände sind Anteile davon.
 
-/// Leitgröße: die Kantenlänge EINES Schlosses. Es ist quadratisch, alle
-/// weiteren Maße leiten sich daraus ab.
-const _kSchlossGroesse = 96.0;
+/// Leitgröße: Durchmesser des Griffs. Zugleich die Mindest-Tippfläche in der
+/// Höhe — gezogen wird ohnehin auf der ganzen Balkenbreite.
+const _kGriffGroesse = 30.0;
 
-/// Randstärke des Schlossrahmens.
-const _kSchlossRand = 2.5;
+/// Höhe der Spur, auf der der Griff läuft.
+const _kSpurHoehe = _kGriffGroesse * 0.33;
 
-/// Höhe des Sichtfensters — die Innenfläche des Rahmens.
-///
-/// Die itemExtent der Walze ist GENAU so hoch. Nur dann steht immer exakt
-/// eine Ziffer im Fenster und keine Nachbarziffer ragt angeschnitten herein.
-const _kSchlossFenster = _kSchlossGroesse - 2 * _kSchlossRand;
+/// Gesamthöhe des Balkenbereichs: Griff plus Platz für die Skalenstriche
+/// darunter.
+const _kBalkenHoehe = _kGriffGroesse * 1.6;
 
-const _kZifferGroesseAnteil = 0.55; // ~52pt bei 96px Kantenlänge
-const _kSchlossRadiusAnteil = 0.17;
+/// Länge der Skalenstriche, kurz und lang.
+const _kStrichKurz = _kGriffGroesse * 0.17;
+const _kStrichLang = _kGriffGroesse * 0.32;
 
-/// Abstand zwischen den drei getrennten Schlössern.
-const _kSchlossAbstand = 14.0;
-
-/// Rang-Zeichen links vor den Schlössern. Bewusst klein gegenüber den 53pt
-/// großen Ziffern: es soll die Zahl einordnen, nicht mit ihr konkurrieren.
-const _kRangZeichenGroesse = 18.0;
-const _kRangZeichenAbstand = 8.0;
-
-/// Ziffern je Stelle. Die Hunderterstelle führt nur 0 und 1 — mehr als 199
-/// Rangplätze gibt es in keiner Kategorie (die größten Felder umfassen 197
-/// Länder), Ziffern ab 2 wären dort tote Wege.
-const _kZiffernProWalze = [2, 10, 10];
+const _kGriffRand = 2.5;
 
 /// Höchster überhaupt vergebener Rangplatz — Rückfallwert, wenn eine Frage
 /// die Feldgröße nicht mitliefert.
 const _kMaxRang = 197;
 
-const _cSchlossRahmen = Color(0xFF1A1A1A);
-const _cSchlossGrund = Color(0xFFF4F5EE);
+const _cRangRahmen = Color(0xFF1A1A1A);
+const _cRangSpur = Color(0xFFDDDCD5);
+const _cRangStrich = Color(0xFFBFBEB6);
+const _cRangGewaehlt = Color(0xFF4A9E4A);
+const _cRangEcht = Color(0xFFF9A825);
+const _cRangAbstand = Color(0xFFD94040);
+
+/// Rasterschritt der Skalenstriche.
+///
+/// KEINE Länderdichte: Auf einer Rang-Achse liegt hinter jedem Platz genau ein
+/// Land, die Verteilung ist also per Definition gleichmässig. Ein Strich je
+/// Land ergäbe bei 197 Ländern auf einem 320-px-Schirm einen Abstand von
+/// 1,4 px — eine graue Fläche ohne Aussage. Die Striche sind deshalb eine
+/// SKALA zur Orientierung, kein Dichtebild: alle [_rasterSchritt] Plätze ein
+/// kurzer, alle fünf davon ein langer.
+///
+/// Der Schritt wächst mit der Feldgrösse, damit nie mehr als rund 40 Striche
+/// entstehen — darunter verschwimmen sie.
+int _rasterSchritt(int gesamt) {
+  for (final s in [1, 2, 5, 10, 20, 25]) {
+    if (gesamt / s <= 40) return s;
+  }
+  return 50;
+}
 
 /// Toleranz in Rangplätzen, bis zu der die Antwort als richtig zählt.
 ///
@@ -3682,84 +3697,195 @@ int rankingPunkte(int abweichung) {
   return (100 * exp(-(abweichung - 5) / 21)).round().clamp(0, 100);
 }
 
-/// Ein einzelnes Schloss: eine Walze in eigenem Rahmen.
+/// Der Rang-Balken: eine Spur von Platz 1 bis zum letzten Platz, ein Griff.
 ///
-/// Drei davon stehen nebeneinander statt einer durchgehenden Leiste — jedes
-/// mit eigenem Rand und eigener Grundfläche, damit man die drei Stellen als
-/// getrennte Räder liest.
-class _Walze extends StatelessWidget {
-  final FixedExtentScrollController controller;
-  final bool gesperrt;
-  final ValueChanged<int> onZiffer;
+/// Zeichnet drei Dinge übereinander:
+///  * die Skala (Striche zur Orientierung, siehe [_rasterSchritt]),
+///  * nach dem Bestätigen die Strecke zwischen Schätzung und Wahrheit,
+///  * die Markierungen selbst.
+///
+/// Der Griff wird über [wert] von aussen gesetzt, nicht intern gehalten: nach
+/// dem Bestätigen fährt eine Animation ihn auf den echten Platz, und dieselbe
+/// Eigenschaft muss dann die Position bestimmen wie vorher der Finger.
+class _RangBalken extends StatelessWidget {
+  /// Zahl der gewerteten Länder — der letzte Platz.
+  final int gesamt;
 
-  /// Anzahl der Ziffern dieser Walze. Die Hunderterstelle führt nur 0 und 1:
-  /// mehr als 199 Rangplätze gibt es in keiner Kategorie, Ziffern ab 2 wären
-  /// dort tote Wege.
-  final int ziffern;
+  /// Aktuelle Position des Griffs. Als double, damit die Animation nach dem
+  /// Bestätigen weich läuft statt in Rangschritten zu springen.
+  final double wert;
 
-  const _Walze({
-    required this.controller,
-    required this.gesperrt,
-    required this.onZiffer,
-    this.ziffern = 10,
+  /// Der abgegebene Tipp. Null, solange nicht bestätigt wurde.
+  final int? geraten;
+
+  /// Der echte Platz. Null, solange nicht bestätigt wurde.
+  final int? echt;
+
+  /// Null sperrt die Bedienung (nach dem Bestätigen).
+  final ValueChanged<double>? onZiehen;
+
+  const _RangBalken({
+    required this.gesamt,
+    required this.wert,
+    required this.onZiehen,
+    this.geraten,
+    this.echt,
   });
+
+  /// Rangplatz an einer Berührungsstelle.
+  ///
+  /// Die Breite kommt aus dem eigenen RenderBox statt aus einem LayoutBuilder:
+  /// Der gesamte Fragen-Inhalt steckt in einem IntrinsicHeight (siehe build()
+  /// des Screens), und ein LayoutBuilder kann dort keine intrinsische Höhe
+  /// melden — er wirft "LayoutBuilder does not support returning intrinsic
+  /// dimensions". Zum Zeitpunkt einer Berührung ist das Layout ohnehin fertig,
+  /// die Grösse steht also fest.
+  double _ausX(BuildContext context, double x) {
+    final breite = (context.findRenderObject() as RenderBox?)?.size.width ?? 0;
+    final rand = _kGriffGroesse / 2;
+    final nutz = (breite - 2 * rand).clamp(1.0, double.infinity);
+    final anteil = ((x - rand) / nutz).clamp(0.0, 1.0);
+    return 1 + anteil * (gesamt - 1);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: _kSchlossGroesse,
-      height: _kSchlossGroesse,
-      decoration: BoxDecoration(
-        color: _cSchlossGrund,
-        borderRadius:
-            BorderRadius.circular(_kSchlossGroesse * _kSchlossRadiusAnteil),
-        border: Border.all(color: _cSchlossRahmen, width: _kSchlossRand),
-        boxShadow: const [
-          BoxShadow(
-              color: _cSchlossRahmen, offset: Offset(0, 4), blurRadius: 0),
-        ],
-      ),
-      // Doppelt geklippt: der Container schneidet an der abgerundeten Ecke,
-      // die Walze selbst noch einmal an ihrem Fenster.
-      clipBehavior: Clip.antiAlias,
-      child: ListWheelScrollView.useDelegate(
-        controller: controller,
-        // Genau die Fensterhöhe: eine Ziffer füllt das Fenster aus, die
-        // benachbarten liegen vollständig außerhalb.
-        itemExtent: _kSchlossFenster,
-        clipBehavior: Clip.hardEdge,
-        // squeeze 1.0 statt 1.15: gestauchte Elemente rücken näher zusammen
-        // und würden die Nachbarziffern wieder ins Fenster schieben.
-        squeeze: 1.0,
-        // Flach statt zylindrisch — bei nur einer sichtbaren Ziffer bringt
-        // die Wölbung nichts und würde die große Ziffer verzerren.
-        perspective: 0.001,
-        diameterRatio: 100,
-        physics: gesperrt
-            ? const NeverScrollableScrollPhysics()
-            : const FixedExtentScrollPhysics(),
-        onSelectedItemChanged: (i) => onZiffer(i % ziffern),
-        // Endlos-Delegate: eine echte Schlosswalze hat keinen Anfang und kein
-        // Ende, die letzte Ziffer geht direkt in die erste über.
-        childDelegate: ListWheelChildLoopingListDelegate(
-          children: [
-            for (var z = 0; z < ziffern; z++)
-              Center(
-                child: Text(
-                  '$z',
-                  style: const TextStyle(
-                    fontSize: _kSchlossGroesse * _kZifferGroesseAnteil,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF1A1A1A),
-                    height: 1.0,
-                  ),
-                ),
-              ),
-          ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      // Antippen springt hin, Ziehen folgt dem Finger. Beides über dieselbe
+      // Umrechnung, damit ein Tipp und ein Zug an derselben Stelle denselben
+      // Platz ergeben.
+      onTapDown:
+          onZiehen == null ? null : (d) => onZiehen!(_ausX(context, d.localPosition.dx)),
+      onHorizontalDragUpdate:
+          onZiehen == null ? null : (d) => onZiehen!(_ausX(context, d.localPosition.dx)),
+      child: SizedBox(
+        height: _kBalkenHoehe,
+        width: double.infinity,
+        child: CustomPaint(
+          painter: _RangBalkenMaler(
+            gesamt: gesamt,
+            wert: wert,
+            geraten: geraten,
+            echt: echt,
+          ),
         ),
       ),
     );
   }
+}
+
+class _RangBalkenMaler extends CustomPainter {
+  final int gesamt;
+  final double wert;
+  final int? geraten;
+  final int? echt;
+
+  _RangBalkenMaler({
+    required this.gesamt,
+    required this.wert,
+    required this.geraten,
+    required this.echt,
+  });
+
+  /// Bildpunkt eines Rangplatzes. Die Spur lässt links und rechts je einen
+  /// halben Griff Rand, damit der Griff an den Enden nicht abgeschnitten wird.
+  double _zuX(double rang, double breite) {
+    final rand = _kGriffGroesse / 2;
+    final anteil = gesamt <= 1 ? 0.0 : (rang - 1) / (gesamt - 1);
+    return rand + anteil.clamp(0.0, 1.0) * (breite - 2 * rand);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final mitteY = _kGriffGroesse / 2;
+    double zuX(double r) => _zuX(r, size.width);
+    final links = zuX(1);
+    final rechts = zuX(gesamt.toDouble());
+
+    // ── Spur ────────────────────────────────────────────────────────────
+    final spur = Rect.fromLTRB(
+      links, mitteY - _kSpurHoehe / 2, rechts, mitteY + _kSpurHoehe / 2);
+    final radius = Radius.circular(_kSpurHoehe / 2);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(spur, radius),
+      Paint()..color = _cRangSpur,
+    );
+
+    // ── Skala ───────────────────────────────────────────────────────────
+    final schritt = _rasterSchritt(gesamt);
+    final strich = Paint()
+      ..color = _cRangStrich
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
+    for (var r = 1; r <= gesamt; r += schritt) {
+      final x = zuX(r.toDouble());
+      // Jeder fünfte Strich länger — dieselbe Gliederung wie auf einem Lineal.
+      final lang = ((r - 1) ~/ schritt) % 5 == 0;
+      final laenge = lang ? _kStrichLang : _kStrichKurz;
+      canvas.drawLine(
+        Offset(x, mitteY + _kSpurHoehe / 2 + 3),
+        Offset(x, mitteY + _kSpurHoehe / 2 + 3 + laenge),
+        strich,
+      );
+    }
+
+    // ── Strecke zwischen Tipp und Wahrheit ──────────────────────────────
+    if (geraten != null && echt != null) {
+      final a = zuX(geraten!.toDouble());
+      final b = zuX(echt!.toDouble());
+      final von = a < b ? a : b;
+      final bis = a < b ? b : a;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(von, mitteY - _kSpurHoehe / 2, bis,
+              mitteY + _kSpurHoehe / 2),
+          radius,
+        ),
+        Paint()..color = _cRangAbstand.withValues(alpha: 0.85),
+      );
+      // Der abgegebene Tipp bleibt als flacher Pflock stehen, während der
+      // Griff weiterwandert — sonst wäre nach der Animation nicht mehr zu
+      // sehen, worauf man getippt hatte.
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+              center: Offset(a, mitteY),
+              width: _kGriffRand * 2,
+              height: _kGriffGroesse * 0.7),
+          const Radius.circular(2),
+        ),
+        Paint()..color = _cRangGewaehlt,
+      );
+    }
+
+    // ── Griff ───────────────────────────────────────────────────────────
+    final gx = zuX(wert);
+    final gefuellt = echt == null ? _cRangGewaehlt : _cRangEcht;
+    // Harter Schatten ohne Weichzeichnung, wie bei allen Knöpfen der App.
+    canvas.drawCircle(
+      Offset(gx, mitteY + 3),
+      _kGriffGroesse / 2,
+      Paint()..color = _cRangRahmen,
+    );
+    canvas.drawCircle(
+      Offset(gx, mitteY),
+      _kGriffGroesse / 2,
+      Paint()..color = _cRangRahmen,
+    );
+    canvas.drawCircle(
+      Offset(gx, mitteY),
+      _kGriffGroesse / 2 - _kGriffRand,
+      Paint()..color = gefuellt,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RangBalkenMaler alt) =>
+      alt.wert != wert ||
+      alt.geraten != geraten ||
+      alt.echt != echt ||
+      alt.gesamt != gesamt;
 }
 
 class _LaenderRankingUI extends StatefulWidget {
@@ -3782,20 +3908,46 @@ class _LaenderRankingUI extends StatefulWidget {
   State<_LaenderRankingUI> createState() => _LaenderRankingUIState();
 }
 
-class _LaenderRankingUIState extends State<_LaenderRankingUI> {
-  late final List<FixedExtentScrollController> _ctrl = [
-    for (var i = 0; i < 3; i++) FixedExtentScrollController(initialItem: 0),
-  ];
-  final _ziffern = [0, 0, 0];
+class _LaenderRankingUIState extends State<_LaenderRankingUI>
+    with SingleTickerProviderStateMixin {
+  /// Aktuelle Griffposition als Rangplatz. Kommagenau, weil der Finger
+  /// zwischen zwei Plätzen stehen kann und die Auflösungs-Animation weich
+  /// laufen soll; angezeigt und gewertet wird der gerundete Wert.
+  late double _position;
 
-  // Vibrations-Einstellungen VORAB laden: zwischen dem Einrasten der Walze
-  // und dem Impuls darf kein await liegen, sonst kommt er zu spät.
+  /// Fährt den Griff nach dem Bestätigen auf den echten Platz.
+  late final AnimationController _fahrt;
+  Animation<double>? _fahrtAnim;
+
+  // Vibrations-Einstellungen VORAB laden: zwischen dem Überfahren einer
+  // Skalenmarke und dem Impuls darf kein await liegen, sonst kommt er zu spät.
   bool _vibrationAn = false;
   bool _hatAmplitude = false;
+
+  /// Letzte Marke, auf der ein Impuls ausgelöst wurde, und wann.
+  ///
+  /// Der Balken bewegt sich stufenlos — ein Impuls je Rangplatz wären beim
+  /// Durchziehen über 197 Plätze 197 Stösse. Gekoppelt ist die Haptik
+  /// stattdessen an die SICHTBARE Skala: ein Impuls, sobald der Griff eine
+  /// Skalenmarke überfährt. Dazu eine Mindestpause, damit ein schneller Wisch
+  /// nicht doch zum Dauerbrummen wird.
+  int? _letzteMarke;
+  DateTime _letzterImpuls = DateTime.fromMillisecondsSinceEpoch(0);
+  static const _kImpulsPause = Duration(milliseconds: 55);
+
+  int get _gesamt =>
+      (widget.frage.meta['gesamt'] as num?)?.toInt() ?? _kMaxRang;
+
+  int get _eingabe => _position.round().clamp(1, _gesamt);
 
   @override
   void initState() {
     super.initState();
+    // Startpunkt in der Mitte: von dort ist es in beide Richtungen gleich
+    // weit, und es setzt keinen falschen Hinweis auf die Antwort.
+    _position = ((_gesamt + 1) / 2).roundToDouble();
+    _fahrt = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900));
     EinstellungenService.vibrationAktiv.then((aktiv) async {
       if (!aktiv) return;
       final amp = await Vibration.hasAmplitudeControl();
@@ -3811,66 +3963,68 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI> {
   @override
   void didUpdateWidget(covariant _LaenderRankingUI old) {
     super.didUpdateWidget(old);
-    // Der Belohnungsmoment: nach dem Bestätigen drehen die Walzen sichtbar auf
-    // den echten Rangplatz weiter.
-    if (!old.bestaetigt && widget.bestaetigt) _dreheAufAntwort();
+    // Der Belohnungsmoment: nach dem Bestätigen wandert der Griff sichtbar auf
+    // den echten Rangplatz. Beim Zahlenschloss taten das die Walzen; die Geste
+    // ist eine andere, der Moment bleibt derselbe.
+    if (!old.bestaetigt && widget.bestaetigt) _fahreZurAntwort();
+    // Neue Frage: Griff zurück in die Mitte.
+    if (old.frage.id != widget.frage.id) {
+      _fahrt.stop();
+      _fahrtAnim = null;
+      _position = ((_gesamt + 1) / 2).roundToDouble();
+      _letzteMarke = null;
+    }
   }
 
   @override
   void dispose() {
-    for (final c in _ctrl) {
-      c.dispose();
-    }
+    _fahrt.dispose();
     super.dispose();
   }
 
-  /// Kurzer, sehr dezenter Impuls beim Einrasten einer Ziffer.
-  void _rasten() {
+  /// Kurzer, sehr dezenter Impuls beim Überfahren einer Skalenmarke.
+  void _rasten(double neu) {
     if (!_vibrationAn) return;
+    final schritt = _rasterSchritt(_gesamt);
+    final marke = ((neu - 1) / schritt).floor();
+    if (marke == _letzteMarke) return;
+    _letzteMarke = marke;
+    final jetzt = DateTime.now();
+    if (jetzt.difference(_letzterImpuls) < _kImpulsPause) return;
+    _letzterImpuls = jetzt;
     if (_hatAmplitude) {
-      Vibration.vibrate(duration: 20, amplitude: 40);
+      Vibration.vibrate(duration: 18, amplitude: 35);
     } else {
-      Vibration.vibrate(duration: 20);
+      Vibration.vibrate(duration: 18);
     }
   }
 
-  /// Der eingestellte Rangplatz, auf das gültige Feld begrenzt.
-  ///
-  /// Die dynamische Beschränkung der Einerwalze (bei 1_9 nur noch bis 5) habe
-  /// ich bewusst weggelassen: die Walzen sind Endlos-Räder, deren Kinderzahl
-  /// sich mitten im Drehen ändern müsste — das ruckelt und fühlt sich kaputt
-  /// an. Stattdessen wird hier gekappt. 000 gibt es als Rangplatz nicht und
-  /// zählt als 001.
-  int get _eingabe {
-    final roh = _ziffern[0] * 100 + _ziffern[1] * 10 + _ziffern[2];
-    final feld =
-        (widget.frage.meta['gesamt'] as num?)?.toInt() ?? _kMaxRang;
-    return roh.clamp(1, feld);
+  void _ziehen(double neu) {
+    if (widget.bestaetigt) return;
+    _rasten(neu);
+    setState(() => _position = neu);
   }
 
-  void _dreheAufAntwort() {
-    final rang = int.tryParse(widget.frage.richtigeAntwort) ?? 0;
-    final ziel = [rang ~/ 100 % 10, rang ~/ 10 % 10, rang % 10];
-    for (var i = 0; i < 3; i++) {
-      // Immer VORWÄRTS drehen und mindestens eine volle Umdrehung: das sieht
-      // nach einem Schloss aus, das aufspringt, statt nach einem Sprung.
-      // Modulo je Walze, weil die Hunderterstelle nur zwei Ziffern hat.
-      final n = _kZiffernProWalze[i];
-      final jetzt = _ctrl[i].selectedItem;
-      final schritte = ((ziel[i] - _ziffern[i]) % n + n) % n + n;
-      _ctrl[i].animateToItem(
-        jetzt + schritte,
-        duration: Duration(milliseconds: 700 + i * 160),
-        curve: Curves.easeOutBack,
-      );
-    }
+  void _fahreZurAntwort() {
+    final rang = (int.tryParse(widget.frage.richtigeAntwort) ?? 1)
+        .clamp(1, _gesamt)
+        .toDouble();
+    _fahrtAnim = Tween<double>(begin: _position, end: rang).animate(
+      CurvedAnimation(parent: _fahrt, curve: Curves.easeOutBack),
+    )..addListener(() {
+        if (mounted) setState(() => _position = _fahrtAnim!.value);
+      });
+    _fahrt.forward(from: 0);
   }
 
   @override
   Widget build(BuildContext context) {
     final f = widget.frage;
     final rang = int.tryParse(f.richtigeAntwort) ?? 0;
-    final gesamt = (f.meta['gesamt'] as num?)?.toInt() ?? 0;
+    // Über den Getter, damit hier und in der Bedienung dieselbe Feldgrösse
+    // gilt — auch wenn eine Frage sie ausnahmsweise nicht mitliefert.
+    final feld = _gesamt;
+    final gesamt = feld;
     final abweichung = (widget.eingabe - rang).abs();
 
     return Column(
@@ -3892,50 +4046,61 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI> {
           style: const TextStyle(
               fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF888888)),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
-        // ── Die drei Schlösser ───────────────────────────────────────────
+        // ── Der Rang-Balken ──────────────────────────────────────────────
         //
-        // FittedBox: die Reihe ist mit Rang-Zeichen rund 340px breit, auf
-        // einem 360px-Gerät stehen nach den Seitenrändern aber nur 328px zur
-        // Verfügung. Statt umzubrechen oder überzulaufen skaliert die
-        // Komposition dort als Ganzes herunter — die Verhältnisse zwischen
-        // Zeichen, Schlössern und Abständen bleiben erhalten.
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Das Rang-Zeichen steht LINKS: "#143" liest sich in der
-              // richtigen Reihenfolge, und im Deutschen steht "Platz" ohnehin
-              // vor der Zahl, nicht dahinter.
-              Padding(
-                padding: const EdgeInsets.only(right: _kRangZeichenAbstand),
-                child: Text(
-                  '#',
-                  style: TextStyle(
-                    fontSize: _kRangZeichenGroesse,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF888888),
-                  ),
-                ),
+        // Die gewählte Zahl steht ÜBER dem Griff und wandert mit ihm.
+        //
+        // Positioniert über Align statt über einen LayoutBuilder: der ganze
+        // Fragen-Inhalt steckt in einem IntrinsicHeight, dort kann ein
+        // LayoutBuilder keine intrinsische Höhe melden. Align hat hier sogar
+        // den besseren Nebeneffekt — bei -1 sitzt die Zahl bündig links, bei
+        // +1 bündig rechts, sie kann also gar nicht aus dem Balken laufen.
+        SizedBox(
+          height: 30,
+          width: double.infinity,
+          child: Align(
+            alignment: Alignment(
+                feld <= 1
+                    ? 0.0
+                    : (((_position - 1) / (feld - 1)).clamp(0.0, 1.0) * 2 - 1),
+                0),
+            child: Text(
+              t('Platz {n}', {'n': '$_eingabe'}),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color:
+                    widget.bestaetigt ? _cRangEcht : const Color(0xFF1A1A1A),
               ),
-              for (var i = 0; i < 3; i++) ...[
-                if (i > 0) const SizedBox(width: _kSchlossAbstand),
-                _Walze(
-                  controller: _ctrl[i],
-                  gesperrt: widget.bestaetigt,
-                  ziffern: _kZiffernProWalze[i],
-                  onZiffer: (z) {
-                    if (_ziffern[i] == z) return;
-                    setState(() => _ziffern[i] = z);
-                    if (!widget.bestaetigt) _rasten();
-                  },
-                ),
-              ],
-            ],
+            ),
           ),
+        ),
+        _RangBalken(
+          gesamt: feld,
+          wert: _position,
+          geraten: widget.bestaetigt ? widget.eingabe : null,
+          echt: widget.bestaetigt ? rang : null,
+          onZiehen: widget.bestaetigt ? null : _ziehen,
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(t('Platz {n}', {'n': '1'}),
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF888888))),
+            Text(t('Platz {n}', {'n': '$feld'}),
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF888888))),
+          ],
         ),
         const SizedBox(height: 22),
 

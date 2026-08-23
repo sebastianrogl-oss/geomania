@@ -56,8 +56,8 @@ const Map<String, String> uebersetzungenOnboarding = {
       'Tap the card with the statement that is NOT true.',
   'Tippe das Land an, das nicht zu den anderen drei passt.':
       'Tap the country that does not fit with the other three.',
-  'Stell am Zahlenschloss ein, auf welchem Platz das Land liegt.':
-      'Set the number lock to the rank the country holds.',
+  'Schieb den Griff auf den Platz, den du vermutest.':
+      'Slide the handle to the rank you think it is.',
   'Bau einen Weg vom Start zum Ziel — Nachbarland für Nachbarland.':
       'Build a route from start to finish — one neighbouring country at a time.',
 
@@ -95,13 +95,8 @@ const Map<String, String> uebersetzungenOnboarding = {
       'The question is what rank a country holds in a category — "what rank '
           'does Kenya hold for area?", for example. Rank 1 is always the '
           'highest value.',
-  'Die Zahl stellst du an einem Zahlenschloss ein: wisch die Walzen nach oben oder unten, bis deine Zahl in der Mitte steht. Die linke Walze ist die Zehnerstelle, die rechte die Einerstelle.':
-      'You set the number on a number lock: swipe the wheels up or down until '
-          'your number sits in the middle. The left wheel is the tens digit, '
-          'the right one the units.',
-  'Tippe auf "Bestätigen", wenn die Zahl stimmt. Wie viele Länder überhaupt gewertet werden, steht über dem Schloss.':
-      'Tap "Confirm" once the number is right. How many countries are ranked '
-          'at all is shown above the lock.',
+  'Schieb den Griff auf den Platz, den du vermutest, und tippe auf "Bestätigen".':
+      'Slide the handle to the rank you think it is, then tap "Confirm".',
   'Du musst nicht genau treffen: je näher du am richtigen Platz liegst, desto mehr Punkte gibt es.':
       'You do not have to be exact: the closer you are to the right rank, the '
           'more points you get.',

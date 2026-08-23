@@ -738,79 +738,100 @@ class _RevealedPanel extends StatelessWidget {
       duration: const Duration(milliseconds: 300),
       width: double.infinity,
       color: bgColor,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          zeigeFlagge(
-            country.iso2,
-            width: 72,
-            height: 48,
-            borderRadius: 6,
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              country.name,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF1A1A1A),
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF888888),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.65),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: Color(0xFF1A1A1A),
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          if (isCorrect != null) ...[
-            const SizedBox(height: 10),
-            Icon(
-              isCorrect! ? Icons.check_circle_rounded : Icons.cancel_rounded,
-              color: isCorrect!
-                  ? const Color(0xFF4A9E4A)
-                  : const Color(0xFFE57373),
-              size: 28,
-            ),
-          ],
-          if (hinweis != null) ...[
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                hinweis!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF4A9E4A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+      // Die Karte bekommt eine feste halbe Bildschirmhöhe, ihr Inhalt haengt
+      // aber an der Systemschrift UND an der Länge des Ländernamens: bei
+      // Skala 1.5 lief sie mit langen Namen (zwei Zeilen) um rund 10 px
+      // ueber. Die FittedBox verkleinert dann die ganze Karte gleichmaessig,
+      // statt Text abzuschneiden — passt der Inhalt, tut sie nichts, denn
+      // scaleDown vergroessert nie.
+      child: LayoutBuilder(
+        builder: (context, platz) => FittedBox(
+          fit: BoxFit.scaleDown,
+          child: SizedBox(
+            // Feste Breite: sonst bekaeme die Spalte in der FittedBox
+            // unbegrenzte Breite und der Ländername wuerde nie umbrechen.
+            width: platz.maxWidth,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                zeigeFlagge(
+                  country.iso2,
+                  width: 72,
+                  height: 48,
+                  borderRadius: 6,
                 ),
-              ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    country.name,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF888888),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 21,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (isCorrect != null) ...[
+                  const SizedBox(height: 10),
+                  Icon(
+                    isCorrect!
+                        ? Icons.check_circle_rounded
+                        : Icons.cancel_rounded,
+                    color: isCorrect!
+                        ? const Color(0xFF4A9E4A)
+                        : const Color(0xFFE57373),
+                    size: 28,
+                  ),
+                ],
+                if (hinweis != null) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      hinweis!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF4A9E4A),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -1003,56 +1024,73 @@ class _HiddenPanel extends StatelessWidget {
       child: Container(
         width: double.infinity,
         color: kHintergrund,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            zeigeFlagge(
-              country.iso2,
-              width: 72,
-              height: 48,
-              borderRadius: 6,
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                country.name,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF1A1A1A),
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                ),
+        // Wie bei der aufgedeckten Karte: passt der Inhalt bei grosser
+        // Systemschrift nicht mehr in die halbe Bildschirmhoehe, wird die
+        // ganze Karte gleichmaessig kleiner statt der Text abgeschnitten.
+        child: LayoutBuilder(
+          builder: (context, platz) => FittedBox(
+            fit: BoxFit.scaleDown,
+            child: SizedBox(
+              width: platz.maxWidth,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  zeigeFlagge(
+                    country.iso2,
+                    width: 72,
+                    height: 48,
+                    borderRadius: 6,
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      country.name,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF1A1A1A),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Color(0xFF555555),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.75),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFFD0D0CB),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Text(
+                      '?  ?  ?',
+                      style: TextStyle(
+                        color: Color(0xFF999999),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 6,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFF555555),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.75),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFD0D0CB), width: 1),
-              ),
-              child: const Text(
-                '?  ?  ?',
-                style: TextStyle(
-                  color: Color(0xFF999999),
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 6,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

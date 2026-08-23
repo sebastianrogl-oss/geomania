@@ -637,6 +637,15 @@ class _GreenHeaderState extends State<_GreenHeader> {
 
   @override
   Widget build(BuildContext context) {
+    // Die Schrift wächst hier ungebremst mit der Systemeinstellung mit.
+    //
+    // Zwischenzeitlich stand hier eine Deckelung auf Skala 1.2, weil die
+    // Zeile bei 1.5 um 11 px seitlich überlief. Der Überlauf kam aber nicht
+    // von der Zeile, sondern von einer starren 44-px-Box, die die Tippfläche
+    // um Stern und Zahl vergrößern sollte: deren Inhalt braucht bei 1.5 rund
+    // 55 px. Seit dort eine MINDESTgröße statt einer festen Größe steht
+    // (ConstrainedBox weiter unten), passt alles ohne Deckelung — nachgemessen
+    // auf 320, 360 und 412 px bei Skala 1.0, 1.3 und 1.5.
     return Container(
       height: 56,
       decoration: const BoxDecoration(
@@ -876,18 +885,27 @@ class _Pfad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Die Systemschriftgröße geht in die Höhe des Abschnitts-Bands ein, und
+    // die wiederum in die Wegpunkte des Pfades — deshalb hier einmal lesen
+    // und durchreichen, statt im Stack an mehreren Stellen erneut.
+    final textSkala = MediaQuery.textScalerOf(context).scale(1);
     return LayoutBuilder(
-      builder: (_, constraints) => _buildStack(constraints.maxWidth),
+      builder: (_, constraints) => _buildStack(constraints.maxWidth, textSkala),
     );
   }
 
-  Widget _buildStack(double w) {
+  Widget _buildStack(double w, double textSkala) {
     // Mitte → HalbR(60%) → Rechts(65%) → HalbR → Mitte → HalbL(40%) → Links(35%) → HalbL
     const xPat = [0.50, 0.60, 0.65, 0.60, 0.50, 0.40, 0.35, 0.40];
     const vGap = 130.0;
     const topPad = 120.0;
     const bannerBeforeGap = 50.0;
-    const bannerH = 56.0;
+    // Das Band trägt zwei Textzeilen, und der Untertitel bricht um. Bei einer
+    // eingestellten Systemschrift von 1.5 lief es deshalb um bis zu 39 px
+    // über. Die Höhe wächst jetzt mit der Schrift mit — das darf sie, weil
+    // sie hier berechnet wird und damit in die Wegpunkte des Pfades eingeht.
+    // Bei Skala 1.0 bleibt es bei den bisherigen 56.
+    final bannerH = 56.0 * textSkala.clamp(1.0, 1.7);
     const bannerAfterGap = 55.0; // > 41px Radius → keine Station auf dem Banner
 
     final overlays = <Widget>[];
@@ -1535,6 +1553,12 @@ class _AbschnittTrenner extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   t(abschnitt.untertitel),
+                  // Höchstens zwei Zeilen: das Band hat eine berechnete Höhe
+                  // (siehe bannerH), und ein dritter Umbruch — möglich bei
+                  // großer Systemschrift und langen Untertiteln — würde sie
+                  // sprengen.
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
                     color: istFrei

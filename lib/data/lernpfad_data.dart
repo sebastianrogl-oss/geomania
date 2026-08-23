@@ -25,11 +25,15 @@ enum LernModus {
   zufallsFakt,          // Rätsel-artiger Fun-Fact → gesuchtes Land erraten
   bekanntesGebaeude,    // "In welchem Land steht [Bauwerk]?"
   grenzkettenRaetsel,   // "Durch welches Land MUSST du NICHT fahren?"
-  // ── Noch nicht im Lernpfad ────────────────────────────────────────────────
-  // Die folgenden Modi sind fertig gebaut, stehen aber bewusst in KEINER der
-  // Modi-Listen der Level (_modiEinsteiger … _modiMeister). Sie werden
-  // ausschliesslich ueber den Debug-Bereich der Einstellungen geoeffnet und
-  // koennen dadurch keine echte Station belegen.
+  // ── Zuletzt dazugekommen ──────────────────────────────────────────────────
+  // Diese fuenf standen anfangs in KEINER Modi-Liste der Level und waren nur
+  // ueber den Debug-Bereich erreichbar. Inzwischen belegen sie echte
+  // Stationen — zusammen 138 der 594, also knapp ein Viertel des Pfads.
+  //
+  // Wer hier etwas ergaenzt, traegt den Modus auch in
+  // lib/data/modus_kategorien.dart ein, sonst zaehlt er in keinem
+  // Fortschrittsbalken des Profils mit. test/modus_kategorien_test.dart
+  // schlaegt in dem Fall fehl.
   flaechenVergleich,    // "Wie oft passt X in Y?" — zwei Umrisse massstabsgetreu
   zweiWahrheiten,       // "Welche Aussage stimmt NICHT?" — 2 wahre, 1 erfundene
   wasGehoertNichtDazu,  // Vier Laender, drei teilen ein Merkmal — welches nicht?

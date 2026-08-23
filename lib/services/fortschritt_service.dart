@@ -98,9 +98,15 @@ class LernpfadSnapshot {
   }
 
   /// Fortschritt (0.0-1.0) über ALLE Stationen des gesamten Lernpfads, deren
-  /// Modus in [modi] enthalten ist — für Profil-Kategorien, die mehrere
-  /// LernModus-Werte zu einer Anzeige zusammenfassen (z.B. "Länder-Daten &
-  /// Rekorde" aus preisSchaetzen+extremFrage+wirtschaftssektoren+...).
+  /// Modus in [modi] enthalten ist — für die Profil-Kategorien aus
+  /// lib/data/modus_kategorien.dart, die mehrere LernModus-Werte zu einem
+  /// Balken zusammenfassen (z.B. "Länder-Daten" aus preisSchaetzen +
+  /// wirtschaftssektoren + waehrungsQuiz + waehrungZuLand).
+  ///
+  /// Gezählt wird über den HEUTIGEN Lernpfad. Gespeicherte Ergebnisse zu
+  /// Stationen, die es nicht mehr gibt, liegen weiter unter ihrer Stations-ID
+  /// in den Einstellungen, werden hier aber nie gelesen — sie gehen dadurch
+  /// weder verloren noch verfälschen sie einen Prozentwert.
   double modiFortschritt(Set<LernModus> modi) {
     int done = 0, total = 0;
     for (final w in lernwelten) {

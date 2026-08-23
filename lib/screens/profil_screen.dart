@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
 import '../data/lernpfad_data.dart';
+import '../data/modus_kategorien.dart';
 import '../services/einstellungen_service.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/ad_service.dart';
@@ -21,46 +22,11 @@ import '../theme/app_theme.dart';
 
 const _challengeIds = ['preis', 'higher_lower', 'ranking_game', 'portfolio'];
 
-// ── Lern-Fortschritt-Kategorien ────────────────────────────────────────────────
+// ── Lern-Fortschritt ──────────────────────────────────────────────────────────
 //
-// Jeder der 21 LernModus-Werte gehört zu genau einer der 7 Kategorien. bipGesamt,
-// flaeche, waehrungZuLand und extremFrageLeicht sind thematisch bei
-// "Länder-Daten & Rekorde" mit einsortiert (dieselbe Gruppe wie preisSchaetzen/
-// extremFrage/waehrungsQuiz), da die alte eigenständige Kategorie
-// "BIP & Wirtschaft" entfällt.
-const _kategorieFlaggen = {
-  LernModus.flaggenQuizBild,
-  LernModus.flaggenQuizMultiple,
-  LernModus.flaggenQuizEingabe,
-};
-const _kategorieHauptstaedte = {
-  LernModus.hauptstaedteMultiple,
-  LernModus.hauptstaedteEingabe,
-};
-const _kategorieUmrisse = {
-  LernModus.umrissBild,
-  LernModus.umrissMultiple,
-  LernModus.umrissEingabe,
-};
-const _kategorieLaenderDaten = {
-  LernModus.preisSchaetzen,
-  LernModus.extremFrage,
-  LernModus.wirtschaftssektoren,
-  LernModus.waehrungsQuiz,
-  LernModus.bipGesamt,
-  LernModus.flaeche,
-  LernModus.waehrungZuLand,
-  LernModus.extremFrageLeicht,
-};
-const _kategorieNachbarn = {
-  LernModus.nachbarland,
-  LernModus.grenzkettenRaetsel,
-};
-const _kategorieWissen = {
-  LernModus.zufallsFakt,
-  LernModus.bekanntesGebaeude,
-};
-const _kategorieSortieren = {LernModus.sortierSpiel};
+// Welcher Modus in welchem Balken zählt, steht in lib/data/modus_kategorien.dart
+// — dieser Screen rendert nur noch, was dort liegt. Ein neuer Modus wird
+// ausschliesslich dort eingetragen.
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -414,55 +380,15 @@ class _ProfilScreenState extends State<ProfilScreen> {
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.5)),
             const SizedBox(height: 10),
-            _ProgressRow(
-              modus: LernModus.flaggenQuizBild,
-              label: t('Flaggen'),
-              barColor: const Color(0xFF4A90D9),
-              fraction: _kategorieFortschritt(_kategorieFlaggen),
-            ),
-            const SizedBox(height: 8),
-            _ProgressRow(
-              modus: LernModus.hauptstaedteMultiple,
-              label: t('Hauptstädte'),
-              barColor: const Color(0xFF7C3AED),
-              fraction: _kategorieFortschritt(_kategorieHauptstaedte),
-            ),
-            const SizedBox(height: 8),
-            _ProgressRow(
-              modus: LernModus.umrissBild,
-              label: t('Umrisse'),
-              barColor: const Color(0xFF4A9E4A),
-              fraction: _kategorieFortschritt(_kategorieUmrisse),
-            ),
-            const SizedBox(height: 8),
-            _ProgressRow(
-              modus: LernModus.preisSchaetzen,
-              label: t('Länder-Daten & Rekorde'),
-              barColor: const Color(0xFFF9A825),
-              fraction: _kategorieFortschritt(_kategorieLaenderDaten),
-            ),
-            const SizedBox(height: 8),
-            _ProgressRow(
-              modus: LernModus.nachbarland,
-              label: t('Nachbarn & Grenzen'),
-              barColor: const Color(0xFF00897B),
-              fraction: _kategorieFortschritt(_kategorieNachbarn),
-            ),
-            const SizedBox(height: 8),
-            _ProgressRow(
-              modus: LernModus.zufallsFakt,
-              label: t('Wissen & Wahrzeichen'),
-              barColor: const Color(0xFFC0185A),
-              fraction: _kategorieFortschritt(_kategorieWissen),
-            ),
-            const SizedBox(height: 8),
-            _ProgressRow(
-              modus: LernModus.sortierSpiel,
-              label: t('Sortierspiel'),
-              barColor: const Color(0xFF1565C0),
-              fraction: _kategorieFortschritt(_kategorieSortieren),
-            ),
-            const SizedBox(height: 8),
+            for (final kategorie in kModusKategorien) ...[
+              _ProgressRow(
+                modus: kategorie.symbolModus,
+                label: t(kategorie.label),
+                barColor: kategorie.farbe,
+                fraction: _kategorieFortschritt(kategorie.modi),
+              ),
+              const SizedBox(height: 8),
+            ],
           ],
         ),
       ),
@@ -1288,14 +1214,24 @@ class _ProgressRow extends StatelessWidget {
             children: [
               StationEmoji(modus: modus, status: StationStatus.aktuell, fontSize: 28),
               const SizedBox(width: 10),
+              // Zwei Zeilen statt einer: "Ordnen & Vergleichen" braucht auf
+              // 320 px bei Schriftskala 1.5 rund 226 px und hätte in den 216 px
+              // der Zeile nicht mehr Platz — es wäre als "Ordnen & Vergleiche…"
+              // erschienen. Ein FittedBox oder eine Deckelung der Schriftskala
+              // träfe genau die Nutzer mit grosser Systemschrift; ein Umbruch
+              // kostet dagegen nur Höhe, und die Karte steht in einer
+              // Scroll-Ansicht. Unterhalb von Skala 1.5 bleibt jeder Name
+              // weiterhin einzeilig, die Optik ändert sich also für die
+              // meisten gar nicht.
               Expanded(
                 child: Text(label,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: Color(0xFF1A1A1A),
                         fontSize: 13,
-                        fontWeight: FontWeight.w800)),
+                        fontWeight: FontWeight.w800,
+                        height: 1.15)),
               ),
             ],
           ),

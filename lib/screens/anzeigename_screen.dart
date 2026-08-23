@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/auth_service.dart';
 import '../widgets/maskottchen_animation.dart';
+import '../widgets/sprach_umschalter.dart';
 import '../theme/app_theme.dart';
+
+/// Höhe, die oben für den Sprachumschalter freigehalten wird — seine eigene
+/// Höhe plus Schattenversatz und etwas Luft zum Maskottchen.
+const double _kUmschalterPlatz = 56;
 
 class AnzeigenameScreen extends StatefulWidget {
   final VoidCallback onFertig;
@@ -55,7 +60,9 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            return SingleChildScrollView(
+            return Stack(
+              children: [
+                SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
@@ -64,6 +71,11 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // Platz für den Sprachumschalter darüber. Er liegt im
+                    // Stack und damit ausserhalb dieser Spalte — ohne diese
+                    // Höhe würde das Maskottchen bei mittiger Anordnung auf
+                    // kurzen Bildschirmen darunter verschwinden.
+                    const SizedBox(height: _kUmschalterPlatz),
                     const MaskottchenAnimation(groesse: 200),
                     const SizedBox(height: 24),
                     Text(
@@ -174,6 +186,18 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
                   ],
                 ),
               ),
+            ),
+
+                // Oben rechts, ausserhalb der Scroll-Spalte: der Umschalter
+                // bleibt damit stehen, wenn der Inhalt bei aufgeklappter
+                // Tastatur scrollt, und die mittige Anordnung des Namensfelds
+                // bleibt unberührt.
+                const Positioned(
+                  top: 0,
+                  right: 24,
+                  child: SprachUmschalter(),
+                ),
+              ],
             );
           },
         ),

@@ -42,24 +42,53 @@ const double _kSkalaMax = 1.15;
 const double _kTextSkalaMin = 0.88;
 
 // Größen bei Skala 1.0 — im Layout jeweils × skala.
-const double _kCoiny = 198; // war 132
-const double _kFlamme = 92; // war 46
-const double _kMuenze = 84; // war 42
+//
+// Die drei Grafiken sind hier bewusst anders groß als dort, wo sie sonst
+// vorkommen: die Münze wirkt neben Flamme und Button sonst zu klein, der
+// Stationsbutton zu wuchtig. Das gilt NUR für diesen Screen — Profil und
+// Lernpfad bleiben unberührt.
+/// Coiny bekommt den Platz, den die schlankeren Rahmen und der entfallene
+/// Flaggen-Rahmen frei machen. Der Wert ist nur der WUNSCH — auf flachen
+/// Bildschirmen gibt das Flexible darunter nur das her, was übrig bleibt.
+const double _kCoiny = 260; // war 198
+const double _kFlamme = 132; // 110 × 1.2
+const double _kMuenze = 126; // 84 × 1.5
 
-/// Durchmesser des Stationsbuttons. Entspricht dem Lernpfad
-/// ([kStationsButtonGroesse]) — bei Skala 1.0 ist er dort und hier gleich
-/// groß.
-const double _kStationsButton = kStationsButtonGroesse;
+/// Symbol IN der Münze. Bleibt bei seiner bisherigen Größe (die Hälfte der
+/// alten 84er Münze) — die Münze wächst, das Abzeichen darauf nicht.
+const double _kMuenzSymbol = 42;
 
-/// Breite der Grafikspalte der drei Zeilen: so breit wie die größte Grafik,
-/// damit die Texte daneben bündig stehen.
-const double _kGrafikSpalte = _kFlamme;
+/// Durchmesser des Stationsbuttons: 0.9 des Lernpfad-Maßes
+/// ([kStationsButtonGroesse]).
+const double _kStationsButton = kStationsButtonGroesse * 0.9;
+
+/// Breite der Grafikspalte der Zeilen: so breit wie die größte Grafik, damit
+/// die Texte daneben bündig stehen.
+const double _kGrafikSpalte = _kMuenze;
+
+// ── Rahmen der Zeilen ────────────────────────────────────────────────────────
+//
+// Fläche und Radius sind die der Statistik-Kacheln im Profil
+// (widgets/statistik_kacheln.dart). Einen Rand haben die dort NICHT — der
+// kommt hier dazu, damit die vier Zeilen sauber voneinander getrennt wirken,
+// bleibt aber eine dünne, stark aufgehellte Linie. Kein harter Schatten wie
+// bei den Knöpfen: das würde die Zeilen zu Schaltflächen machen, die sie
+// nicht sind.
+const Color _kZeilenFlaeche = Color(0xFFEAEAE5);
+const double _kZeilenRadius = 14;
+const double _kZeilenRandStaerke = 1;
+const double _kZeilenRandDeckkraft = 0.12;
+
+/// Innenabstand der Rahmen. Waagerecht bleibt es bei 10; senkrecht ist es
+/// deutlich knapper, weil dort die Höhe knapp ist und der Rahmen die Grafik
+/// nicht zusätzlich einrahmen muss — sie bringt ihren eigenen Rand mit.
+const double _kZeilenInnenrandWaagerecht = 10;
+const double _kZeilenInnenrandSenkrecht = 3;
 
 // Abstände bei Skala 1.0.
 const double _kAbstandCoinyTitel = 16;
 const double _kAbstandTitelBand = 18;
 const double _kAbstandBandZeile = 10;
-const double _kAbstandZeilenBlock = 22;
 const double _kAbstandZwischenZeilen = 12;
 const double _kAbstandVorButton = 24;
 const double _kSpalteZuText = 14;
@@ -101,14 +130,20 @@ class WillkommenScreen extends StatelessWidget {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final skala = (constraints.maxHeight / _kBezugsHoehe)
-                .clamp(_kSkalaMin, _kSkalaMax);
+            final skala = (constraints.maxHeight / _kBezugsHoehe).clamp(
+              _kSkalaMin,
+              _kSkalaMax,
+            );
             final textSkala = skala.clamp(_kTextSkalaMin, 1.0);
             final spalte = _kGrafikSpalte * skala;
 
             return Padding(
               padding: EdgeInsets.fromLTRB(
-                  _kSeitenrand, 8 * skala, _kSeitenrand, 12 * skala),
+                _kSeitenrand,
+                8 * skala,
+                _kSeitenrand,
+                12 * skala,
+              ),
               child: Column(
                 // Oben ausgerichtet statt mittig: übrige Höhe sammelt sich
                 // dadurch unten unter dem Knopf, statt sich je zur Hälfte
@@ -149,20 +184,27 @@ class WillkommenScreen extends StatelessWidget {
 
                   // Blickfang: echte Flaggen, nacheinander eingeblendet. Sie
                   // sagen ohne ein Wort, worum die App geht.
-                  _Flaggenband(
-                    breite: constraints.maxWidth - 2 * _kSeitenrand,
+                  //
+                  // OHNE Rahmen: die Flaggen tragen ihre eigenen Kanten, eine
+                  // graue Fläche darum macht daraus einen Kasten im Kasten.
+                  Column(
+                    children: [
+                      _Flaggenband(
+                        breite: constraints.maxWidth - 2 * _kSeitenrand,
+                      ),
+                      SizedBox(height: _kAbstandBandZeile * skala),
+                      Text(
+                        t('195 Länder entdecken'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: _kZeilenGroesse * textSkala,
+                          fontWeight: FontWeight.w800,
+                          color: _textDark,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: _kAbstandBandZeile * skala),
-                  Text(
-                    t('195 Länder entdecken'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: _kZeilenGroesse * textSkala,
-                      fontWeight: FontWeight.w800,
-                      color: _textDark,
-                    ),
-                  ),
-                  SizedBox(height: _kAbstandZeilenBlock * skala),
+                  SizedBox(height: _kAbstandZwischenZeilen * skala),
 
                   // Die drei übrigen Zeilen, jede mit dem echten Bauteil aus
                   // der App links daneben.
@@ -202,7 +244,9 @@ class WillkommenScreen extends StatelessWidget {
                       // Stern stünde für die andere Währung der App.
                       inhalt: Icon(
                         Icons.workspace_premium_rounded,
-                        size: _kMuenze * skala * 0.5,
+                        // Feste Größe statt Anteil der Münze: die Münze ist
+                        // gewachsen, das Abzeichen darauf soll bleiben.
+                        size: _kMuenzSymbol * skala,
                         color: kMuenzInhaltFarbe,
                       ),
                     ),
@@ -272,8 +316,10 @@ class _Flaggenband extends StatefulWidget {
 
 class _FlaggenbandState extends State<_Flaggenband>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl =
-      AnimationController(vsync: this, duration: _kBandDauer)..forward();
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: _kBandDauer,
+  )..forward();
 
   @override
   void dispose() {
@@ -304,8 +350,11 @@ class _FlaggenbandState extends State<_Flaggenband>
             builder: (context, kind) {
               final t = CurvedAnimation(
                 parent: _ctrl,
-                curve: Interval(i * schritt, i * schritt + (1 - _kBandVersatz),
-                    curve: Curves.easeOutCubic),
+                curve: Interval(
+                  i * schritt,
+                  i * schritt + (1 - _kBandVersatz),
+                  curve: Curves.easeOutCubic,
+                ),
               ).value;
               return Opacity(
                 opacity: t,
@@ -363,6 +412,39 @@ class _Flagge extends StatelessWidget {
   }
 }
 
+// ── Rahmen ───────────────────────────────────────────────────────────────────
+
+/// Das abgerundete Rechteck um eine Zeile.
+///
+/// Fläche und Radius sind von den Statistik-Kacheln im Profil übernommen
+/// (widgets/statistik_kacheln.dart): #EAEAE5 und Radius 14. Der dünne Rand
+/// kommt hier dazu — die Profil-Kacheln haben keinen, hier trennt er die vier
+/// Zeilen sichtbar voneinander, ohne dass sie wie Knöpfe aussehen.
+class _Rahmen extends StatelessWidget {
+  final Widget child;
+  const _Rahmen({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: _kZeilenInnenrandWaagerecht,
+        vertical: _kZeilenInnenrandSenkrecht,
+      ),
+      decoration: BoxDecoration(
+        color: _kZeilenFlaeche,
+        borderRadius: BorderRadius.circular(_kZeilenRadius),
+        border: Border.all(
+          color: _textDark.withValues(alpha: _kZeilenRandDeckkraft),
+          width: _kZeilenRandStaerke,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
 // ── Zeile ────────────────────────────────────────────────────────────────────
 
 /// Grafik links in fester Spaltenbreite, EINE Zeile Text rechts.
@@ -387,33 +469,35 @@ class _Zeile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: spalte,
-          height: spalte,
-          child: Center(child: grafik),
-        ),
-        SizedBox(width: _kSpalteZuText * skala),
-        Expanded(
-          // Die englischen Fassungen sind mal kürzer, mal länger als die
-          // deutschen. Statt zu raten, ob beide passen: was nicht passt,
-          // wird kleiner gesetzt statt umgebrochen oder abgeschnitten.
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              text,
-              maxLines: 1,
-              style: TextStyle(
-                fontSize: _kZeilenGroesse * textSkala,
-                fontWeight: FontWeight.w800,
-                color: _textDark,
+    return _Rahmen(
+      child: Row(
+        children: [
+          SizedBox(
+            width: spalte,
+            height: spalte,
+            child: Center(child: grafik),
+          ),
+          SizedBox(width: _kSpalteZuText * skala),
+          Expanded(
+            // Die englischen Fassungen sind mal kürzer, mal länger als die
+            // deutschen. Statt zu raten, ob beide passen: was nicht passt,
+            // wird kleiner gesetzt statt umgebrochen oder abgeschnitten.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                text,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: _kZeilenGroesse * textSkala,
+                  fontWeight: FontWeight.w800,
+                  color: _textDark,
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

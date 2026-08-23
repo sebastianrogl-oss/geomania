@@ -32,6 +32,45 @@ import '../widgets/streak_feier_overlay.dart';
 import 'station_abschluss_screen.dart';
 import '../theme/app_theme.dart';
 
+// ── Maße der Reiz-Medien ──────────────────────────────────────────────────────
+//
+// Flagge und Umriss-Karte — das, worauf sich die Frage bezieht — standen mit
+// festen Pixelmaßen im Code: 260×170 und 220×145 für Flaggen, 180 und 200 px
+// Höhe für die Karten. Auf einem 320-px-Schirm bleiben nach den 16-px-Rändern
+// des Scrollbereichs nur 288 px übrig; die Flagge nahm dort also fast die
+// ganze Breite und rund ein Drittel der Bildschirmhöhe ein und schob den Rest
+// der Frage nach unten aus dem Bild.
+//
+// Die Maße hängen jetzt an der verfügbaren Breite. Die Obergrenze ist jeweils
+// der bisherige Festwert, und die Anteile sind so gewählt, dass sie ab rund
+// 400 px Bildschirmbreite greifen: auf Tablets und größeren Telefonen ändert
+// sich dadurch nichts.
+
+/// Innenabstand des Scrollbereichs in build() — links und rechts.
+const double _kInhaltsrand = 16;
+
+/// Anteil der nutzbaren Breite für eine Flagge bzw. eine Umriss-Karte.
+const double _kFlaggenAnteil = 0.70;
+const double _kKarteAnteilKlein = 0.50; // war fix 180 px hoch
+const double _kKarteAnteilGross = 0.55; // war fix 200 px hoch
+
+/// Untergrenze, damit der Reiz auf sehr schmalen Geräten erkennbar bleibt.
+const double _kFlaggeMin = 150;
+
+double _nutzbareBreite(BuildContext context) =>
+    MediaQuery.sizeOf(context).width - 2 * _kInhaltsrand;
+
+/// Breite einer Reiz-Flagge, nach oben begrenzt durch ihren bisherigen
+/// Festwert. Die Höhe leitet der Aufrufer aus dem Seitenverhältnis ab, damit
+/// die Flagge nicht verzerrt.
+double _flaggenBreite(BuildContext context, double hoechstens) =>
+    (_nutzbareBreite(context) * _kFlaggenAnteil)
+        .clamp(_kFlaggeMin, hoechstens);
+
+/// Höhe einer Umriss-Karte (die Breite füllt ohnehin die Zeile).
+double _kartenHoehe(BuildContext context, double anteil, double hoechstens) =>
+    (_nutzbareBreite(context) * anteil).clamp(110.0, hoechstens);
+
 // ── Geo-Cache (einmal laden, überall nutzen) ──────────────────────────────────
 
 Map<String, List<List<Offset>>>? _geoCache;
@@ -1884,14 +1923,18 @@ class _FlagBildUI extends StatelessWidget {
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 20),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: FlaggenWidget(
-              countryCode: frage.laenderCode,
-              width: 260,
-              height: 170,
-              borderRadius: 12),
-        ),
+        Builder(builder: (context) {
+          // 260×170 waren fest verdrahtet; das Seitenverhältnis bleibt.
+          final breite = _flaggenBreite(context, 260);
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: FlaggenWidget(
+                countryCode: frage.laenderCode,
+                width: breite,
+                height: breite * 170 / 260,
+                borderRadius: 12),
+          );
+        }),
         const SizedBox(height: 28),
         ...frage.antwortOptionen.map((opt) => _AntwortButton(
               text: opt,
@@ -2220,20 +2263,25 @@ class _EingabeUI extends StatelessWidget {
   // Zeigt den Reiz je nach Modus: Hauptstädte fragt nach der Hauptstadt eines
   // sichtbaren Landes (Flagge+Name verraten hier nichts), Flaggen/Umriss
   // fragen NACH dem Land selbst -> Name darf hier nicht mit angezeigt werden.
-  Widget _buildReiz() {
+  Widget _buildReiz(BuildContext context) {
     switch (frage.modus) {
       case LernModus.flaggenQuizEingabe:
+        // 220×145 waren fest verdrahtet; das Seitenverhältnis bleibt.
+        final breite = _flaggenBreite(context, 220);
         return ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: FlaggenWidget(
-              countryCode: frage.laenderCode, width: 220, height: 145, borderRadius: 12),
+              countryCode: frage.laenderCode,
+              width: breite,
+              height: breite * 145 / 220,
+              borderRadius: 12),
         );
       case LernModus.umrissEingabe:
         final rings = geoRings[frage.laenderCode] ?? [];
         final geoLoaded = geoRings.isNotEmpty;
         return Container(
           width: double.infinity,
-          height: 180,
+          height: _kartenHoehe(context, _kKarteAnteilKlein, 180),
           decoration: BoxDecoration(
             color: const Color(0xFFDFF2E1),
             borderRadius: BorderRadius.circular(20),
@@ -2268,7 +2316,7 @@ class _EingabeUI extends StatelessWidget {
 
     return Column(
       children: [
-        _buildReiz(),
+        _buildReiz(context),
         const SizedBox(height: 20),
         Text(
           frage.frage,
@@ -2848,7 +2896,7 @@ class _UmrissBildUI extends StatelessWidget {
         const SizedBox(height: 16),
         Container(
           width: double.infinity,
-          height: 200,
+          height: _kartenHoehe(context, _kKarteAnteilGross, 200),
           decoration: BoxDecoration(
             color: const Color(0xFFDFF2E1),
             borderRadius: BorderRadius.circular(20),
@@ -4728,6 +4776,10 @@ const kKetteToleranz = 1;
 const _kKetteFlaggeBreite = 34.0;
 const _kKetteChipRadius = 10.0;
 
+/// Was ein Nachbar-Chip neben dem Ländernamen belegt: Innenabstand (9+9),
+/// Flagge, Abstand dahinter (7) und die 2-px-Ränder beiderseits.
+const double _kChipBeiwerk = 9 + 9 + _kKetteFlaggeBreite + 7 + 4;
+
 /// Ein antippbares Nachbarland.
 class _NachbarChip extends StatelessWidget {
   final String iso2;
@@ -4763,8 +4815,19 @@ class _NachbarChip extends StatelessWidget {
                 borderRadius: 4),
             const SizedBox(width: 7),
             ConstrainedBox(
-              // Lange Namen dürfen den Chip nicht über die Zeile treiben.
-              constraints: const BoxConstraints(maxWidth: 130),
+              // Lange Namen dürfen den Chip nicht über die Zeile treiben —
+              // deshalb eine Obergrenze. Die stand bei festen 130 px, und
+              // dabei verschwanden Namen wie "Demokratische Republik Kongo"
+              // hinter einer Ellipse, obwohl in der Zeile Platz war.
+              //
+              // Die Grenze ist jetzt genau das, was in eine Zeile passt: die
+              // nutzbare Breite minus dem, was der Chip selbst braucht
+              // (Ränder, Flagge, Abstand, Rahmen). Kürzere Namen bleiben
+              // unberührt, denn der Chip misst sich nach seinem Inhalt.
+              constraints: BoxConstraints(
+                maxWidth: (_nutzbareBreite(context) - _kChipBeiwerk)
+                    .clamp(130.0, 260.0),
+              ),
               child: Text(
                 co?.name ?? iso2,
                 maxLines: 1,

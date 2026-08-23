@@ -108,13 +108,23 @@ class _ChallengeStartScreenState extends State<ChallengeStartScreen> {
               ),
             ),
             const Spacer(),
-            Image.asset(
-              widget.logoAsset,
-              width: 252,
-              height: 252,
-              errorBuilder: (c, e, s) =>
-                  Icon(widget.fallbackIcon, size: 198, color: Colors.white),
-            ),
+            // Das Logo stand mit festen 252×252 px im Code. Auf einem
+            // 320-px-Schirm sind das nach Rändern fast die ganze Breite und
+            // 44 % der Höhe. Es hängt jetzt an der verfügbaren Breite, mit
+            // den 252 als Obergrenze — ab rund 400 px Bildschirmbreite ändert
+            // sich dadurch nichts.
+            Builder(builder: (context) {
+              final seite =
+                  ((MediaQuery.sizeOf(context).width - 48) * 0.72)
+                      .clamp(150.0, 252.0);
+              return Image.asset(
+                widget.logoAsset,
+                width: seite,
+                height: seite,
+                errorBuilder: (c, e, s) => Icon(widget.fallbackIcon,
+                    size: seite * 198 / 252, color: Colors.white),
+              );
+            }),
             const SizedBox(height: 20),
             Text(widget.titel,
                 style: const TextStyle(

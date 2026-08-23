@@ -239,7 +239,11 @@ class _OutlineQuizScreenState extends State<OutlineQuizScreen> {
           // Silhouette card
           Container(
             width: double.infinity,
-            height: 220,
+            // War fest 220 px hoch — auf einem 320-px-Schirm ein Drittel der
+            // Höhe. Hängt jetzt an der verfügbaren Breite, Obergrenze bleibt
+            // der bisherige Wert (greift ab rund 400 px Bildschirmbreite).
+            height: ((MediaQuery.sizeOf(context).width - 32) * 0.58)
+                .clamp(130.0, 220.0),
             decoration: BoxDecoration(
               color: _accentLight,
               borderRadius: BorderRadius.circular(24),

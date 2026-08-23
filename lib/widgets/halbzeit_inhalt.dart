@@ -20,9 +20,8 @@ import 'ergebnis_video.dart';
 /// entscheidet halbzeitVideo() in widgets/ergebnis_video.dart, dieselbe
 /// Einstufung, nach der auch der Spruch gewählt wird.
 ///
-/// Dieses Bild springt ein, solange das Video lädt, und falls es gar nicht
-/// lädt. So bleibt an der Stelle immer etwas stehen, nie eine leere Fläche.
-const kHalbzeitBild = 'assets/icons/deko/coin_normal.png';
+/// Solange das Video lädt, bleibt die Fläche leer statt ein Standbild zu
+/// zeigen — siehe die Begründung an [ErgebnisVideo].
 
 // ── Größen ───────────────────────────────────────────────────────────────────
 // Das Bild nimmt den Platz ein, an dem sonst Frage und Antwortoptionen
@@ -120,7 +119,6 @@ class _HalbzeitInhaltState extends State<HalbzeitInhalt>
             child: ErgebnisVideo(
               pfad: halbzeitVideo(widget.richtigBisher, widget.beantwortet),
               hoehe: bildHoehe,
-              platzhalterBild: kHalbzeitBild,
             ),
           ),
           const SizedBox(height: _kAbstandBildSpruch),

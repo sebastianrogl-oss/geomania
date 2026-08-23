@@ -87,6 +87,21 @@ final _kVerlaufWaagerecht = LinearGradient(
 /// [pfad] wird bewusst nur einmal beim Anlegen ausgewertet. Ändert er sich doch
 /// (etwa durch einen Rebuild mit anderem Ergebnis), tauscht [didUpdateWidget]
 /// den Controller aus und gibt den alten frei.
+///
+/// ── Warum hier kein Platzhalter-Bild mehr steht ───────────────────────────
+///
+/// Vorher stand an dieser Stelle ein Standbild von Coiny, solange das Video
+/// lud. Weil der Controller erst in `initState` entsteht — also erst, wenn der
+/// Screen schon sichtbar ist — sah man dieses Bild rund eine halbe Sekunde
+/// lang und danach einen harten Schnitt auf das Video. Ein Standbild, das von
+/// einem Video abgelöst wird, ist genau der sichtbare Wechsel, den man nicht
+/// haben will.
+///
+/// Deshalb bleibt die Fläche jetzt leer (also im Screen-Hintergrund) und das
+/// Video blendet sich ein, sobald es bereit ist. Der Platz ist über [hoehe]
+/// die ganze Zeit reserviert, es springt also nichts. Laedt das Video gar
+/// nicht, bleibt die Flaeche leer — das faellt weniger auf als ein Standbild,
+/// das offensichtlich auf etwas wartet.
 class ErgebnisVideo extends StatefulWidget {
   /// Pfad des Videos, das gezeigt wird.
   final String pfad;
@@ -94,20 +109,18 @@ class ErgebnisVideo extends StatefulWidget {
   /// Höhe der Fläche — identisch mit der des vorherigen Platzhalters.
   final double hoehe;
 
-  /// Wird angezeigt, solange das Video lädt, und falls es nicht lädt. So bleibt
-  /// an der Stelle immer etwas stehen statt einer leeren Fläche.
-  final String platzhalterBild;
-
   const ErgebnisVideo({
     super.key,
     required this.pfad,
     required this.hoehe,
-    required this.platzhalterBild,
   });
 
   @override
   State<ErgebnisVideo> createState() => _ErgebnisVideoState();
 }
+
+/// Dauer, über die sich das fertige Video einblendet.
+const _kEinblendDauer = Duration(milliseconds: 300);
 
 class _ErgebnisVideoState extends State<ErgebnisVideo> {
   VideoPlayerController? _ctrl;
@@ -174,12 +187,17 @@ class _ErgebnisVideoState extends State<ErgebnisVideo> {
   @override
   Widget build(BuildContext context) {
     final ctrl = _ctrl;
+    final bereit = ctrl != null && ctrl.value.isInitialized;
     return SizedBox(
       height: widget.hoehe,
-      child: ctrl != null && ctrl.value.isInitialized
+      child: AnimatedOpacity(
+        opacity: bereit ? 1 : 0,
+        duration: _kEinblendDauer,
+        child: !bereit
+          ? const SizedBox.expand()
           // Nur der VideoPlayer selbst: keine Abspielleiste, kein Play-Knopf,
           // nichts Anklickbares — es soll wie eine Animation wirken.
-          ? Center(
+          : Center(
               child: AspectRatio(
                 aspectRatio: ctrl.value.aspectRatio,
                 child: Stack(
@@ -205,8 +223,8 @@ class _ErgebnisVideoState extends State<ErgebnisVideo> {
                   ],
                 ),
               ),
-            )
-          : Image.asset(widget.platzhalterBild, fit: BoxFit.contain),
+            ),
+      ),
     );
   }
 }

@@ -20,13 +20,10 @@ import '../theme/app_theme.dart';
 // Die Elemente erscheinen bewusst nacheinander statt gemeinsam — das dehnt den
 // Moment und lässt ihn wertiger wirken. Alle Zeitpunkte stehen in _kAuftritte.
 
-/// Oben läuft ein Video, das zum Ergebnis passt — welches, entscheidet
-/// abschlussVideo() in widgets/ergebnis_video.dart, dieselbe Einstufung, nach
-/// der auch [_ueberschrift] gewählt wird.
-///
-/// Dieses Bild springt ein, solange das Video lädt, und falls es gar nicht
-/// lädt. So bleibt an der Stelle immer etwas stehen, nie eine leere Fläche.
-const kAbschlussBild = 'assets/icons/deko/coin_winken.png';
+// Oben läuft ein Video, das zum Ergebnis passt — welches, entscheidet
+// abschlussVideo() in widgets/ergebnis_video.dart, dieselbe Einstufung, nach
+// der auch _ueberschrift gewählt wird. Solange es lädt, bleibt die Fläche leer
+// statt ein Standbild zu zeigen; die Begründung steht an ErgebnisVideo.
 
 // ── Timing der gestaffelten Einblendung ──────────────────────────────────────
 //
@@ -369,7 +366,6 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
                 child: ErgebnisVideo(
                   pfad: abschlussVideo(widget.richtig, widget.gesamtFragen),
                   hoehe: bildHoehe,
-                  platzhalterBild: kAbschlussBild,
                 ),
               ),
               const SizedBox(height: 14),

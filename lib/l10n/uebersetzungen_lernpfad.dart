@@ -10,6 +10,21 @@ const Map<String, String> uebersetzungenLernpfad = {
   '15-Sekunden-Timer pro Frage': '15-second timer per question',
   'Fortsetzen ({a}/{b})': 'Resume ({a}/{b})',
   'Welten': 'Worlds',
+
+  // Abschnitt gegen Werbung öffnen (Schloss im Abschnitts-Band).
+  // Der englische Text muss dieselbe Klarheit haben wie der deutsche: nur die
+  // erste Station, der Rest bleibt zu, nichts gilt als erledigt.
+  'Abschnitt {n} öffnen?': 'Open section {n}?',
+  'Sieh ein kurzes Video an, dann kannst du die ERSTE Station dieses Abschnitts sofort spielen.':
+      'Watch a short video and you can play the FIRST station of this section '
+          'right away.',
+  'Alle weiteren Stationen bleiben gesperrt. Sie öffnen sich wie immer nacheinander, sobald du die vorherige geschafft hast.':
+      'Every other station stays locked. They open one after another as usual, '
+          'each once you have finished the one before it.',
+  'Nichts davon zählt als erledigt: Es gibt keine Sterne, keine Abzeichen, und dein Fortschritt bleibt, wie er ist.':
+      'None of this counts as completed: no stars, no badges, and your '
+          'progress stays exactly as it is.',
+  'Video ansehen': 'Watch video',
   'Alle Welten': 'All worlds',
 
   // Streak-Feier (widgets/streak_feier_overlay.dart) und Abzeichen-Popup

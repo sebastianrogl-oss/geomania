@@ -415,6 +415,27 @@ class FortschrittService {
     // (Kein automatisches Abschnitt-Freischalten mehr hier.)
   }
 
+  /// Öffnet einen gesperrten Abschnitt, ohne irgendetwas als erledigt zu
+  /// verbuchen — gedacht für die Freischaltung gegen eine Rewarded Ad.
+  ///
+  /// Es wird GENAU EIN Schlüssel geschrieben, derselbe, den auch der normale
+  /// Weg setzt (lp_a_frei_). Alles andere folgt daraus von selbst: die
+  /// Freischaltung einer Station ist "Abschnitt frei UND (erste Station ODER
+  /// vorherige abgeschlossen)", weshalb hier nur die ERSTE Station spielbar
+  /// wird. Die übrigen bleiben hinter dem normalen Fortschritt.
+  ///
+  /// Nicht geschrieben werden: Stations-Ergebnisse, Sterne, Abzeichen,
+  /// Streak, Statistiken. Der Abschnitt zählt insbesondere NICHT als
+  /// abgeschlossen (lp_a_done_ bleibt unberührt).
+  ///
+  /// Wirkungslos, solange die WELT gesperrt ist: die Berechnung im Snapshot
+  /// verlangt zusätzlich weltFrei. Im Lernpfad kann das nicht auftreten, weil
+  /// dort immer die geöffnete Welt gezeigt wird.
+  static Future<void> abschnittFreischalten(String abschnittId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('$_aFrei$abschnittId', true);
+  }
+
   static Future<void> naechstenAbschnittFreischalten(
     String abschnittId, {
     SharedPreferences? prefs,

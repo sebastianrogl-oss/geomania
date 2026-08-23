@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../data/lernpfad_data.dart';
 import '../l10n/uebersetzungen.dart';
+import '../widgets/filmklappe_icon.dart';
 import '../services/ad_service.dart';
 import '../services/challenge_panel_signal.dart';
 import '../services/challenge_rekord_service.dart';
@@ -220,6 +221,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Wird beim Antippen der Geschenk-Kachel ausgelöst (statt wie zuvor
   // automatisch nach Stations-Abschluss) — sammelt die falsch beantworteten
   // Fragen des Abschnitts und startet die Wiederholungsrunde.
+  /// Tipp auf das Schloss eines gesperrten Abschnitts: bietet an, ihn gegen
+  /// eine Rewarded Ad zu öffnen.
+  ///
+  /// Freigeschaltet wird dabei ausschliesslich die ERSTE Station — das ergibt
+  /// sich aus der Rechnung im Snapshot und ist nicht extra gebaut: eine
+  /// Station gilt als frei, wenn ihr Abschnitt frei ist UND sie die erste ist
+  /// oder die vorherige abgeschlossen wurde. Der Dialog sagt das ausdrücklich,
+  /// damit niemand eine Komplett-Freischaltung erwartet.
+  Future<void> _gesperrtenAbschnittTippen(LernAbschnitt abschnitt) async {
+    final los = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _AbschnittFreischaltenDialog(abschnitt: abschnitt),
+    );
+    if (los != true || !mounted) return;
+
+    // Derselbe Weg wie beim Skip-Knopf im Quiz.
+    final belohnt = await AdService.zeigeRewardedAd(onBelohnt: () {});
+    if (!mounted) return;
+    if (!belohnt) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text(t('Werbung aktuell nicht verfügbar, versuch es später erneut')),
+        backgroundColor: const Color(0xFF888888),
+      ));
+      return;
+    }
+    await FortschrittService.abschnittFreischalten(abschnitt.id);
+    if (!mounted) return;
+    _load();
+  }
+
   Future<void> _wiederholungTippen(LernAbschnitt abschnitt) async {
     final falscheFragen =
         await FortschrittService.sammelFalscheFragenFuerAbschnitt(abschnitt.id);
@@ -514,6 +546,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             anims: _anims,
                             onStationTap: _stationTippen,
                             onWiederholungTap: _wiederholungTippen,
+                            onGesperrtenAbschnittTippen:
+                                _gesperrtenAbschnittTippen,
                             scrollController: _pfadScrollController,
                             onAktuelleStationY: _handleAktuelleStationY,
                             tatsaechlicheModi: _tatsaechlicheModi,
@@ -908,6 +942,8 @@ class _Pfad extends StatelessWidget {
   final _Anims anims;
   final void Function(LernStation) onStationTap;
   final void Function(LernAbschnitt) onWiederholungTap;
+  /// Tipp auf das Schloss eines gesperrten Abschnitts.
+  final void Function(LernAbschnitt) onGesperrtenAbschnittTippen;
   final ScrollController scrollController;
   final void Function(double y) onAktuelleStationY;
   // Tatsächlich zu spielender Modus je Station-ID (siehe
@@ -925,6 +961,7 @@ class _Pfad extends StatelessWidget {
     required this.anims,
     required this.onStationTap,
     required this.onWiederholungTap,
+    required this.onGesperrtenAbschnittTippen,
     required this.scrollController,
     required this.onAktuelleStationY,
     required this.tatsaechlicheModi,
@@ -995,6 +1032,7 @@ class _Pfad extends StatelessWidget {
               abschnitt: a,
               istFrei: aFrei,
               istDone: aDone,
+              onGesperrtTippen: () => onGesperrtenAbschnittTippen(a),
             ),
           ),
         );
@@ -1553,10 +1591,15 @@ class _AbschnittTrenner extends StatelessWidget {
   final LernAbschnitt abschnitt;
   final bool istFrei;
   final bool istDone;
+
+  /// Tipp auf das Schloss — bietet die Freischaltung gegen Werbung an.
+  final VoidCallback onGesperrtTippen;
+
   const _AbschnittTrenner({
     required this.abschnitt,
     required this.istFrei,
     required this.istDone,
+    required this.onGesperrtTippen,
   });
 
   @override
@@ -1618,20 +1661,37 @@ class _AbschnittTrenner extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Text(
-              istDone
-                  ? '✅'
-                  : istFrei
-                  ? '▼'
-                  : '🔒',
-              style: TextStyle(
-                fontSize: 16,
-                color: istFrei && !istDone ? const Color(0xFF4A9E4A) : null,
+          // Gesperrt: schlichtes graues Schloss-Symbol statt des Emojis, und
+          // antippbar — dahinter liegt das Angebot, den Abschnitt gegen eine
+          // Werbung zu öffnen. Die Tippfläche ist auf Fingermaß gebracht, der
+          // sichtbare Teil bleibt klein.
+          if (!istDone && !istFrei)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onGesperrtTippen,
+              child: SizedBox(
+                width: _kTippflaeche,
+                height: _kTippflaeche,
+                child: const Center(
+                  child: Icon(
+                    Icons.lock_rounded,
+                    size: 18,
+                    color: Color(0xFF9E9C96),
+                  ),
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                istDone ? '✅' : '▼',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: istFrei && !istDone ? const Color(0xFF4A9E4A) : null,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -2780,6 +2840,151 @@ class _KontinentFreischaltenDialogState
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Abschnitt gegen Werbung freischalten ─────────────────────────────────────
+
+/// Fragt, ob ein gesperrter Abschnitt gegen eine Rewarded Ad geöffnet werden
+/// soll — und sagt dabei ausdrücklich, was NICHT passiert.
+///
+/// Der Text ist bewusst unmissverständlich: freigeschaltet wird allein die
+/// erste Station. Wer hier eine Komplett-Freischaltung erwartet und dann drei
+/// gesperrte Stationen vorfindet, fühlt sich zu Recht getäuscht.
+class _AbschnittFreischaltenDialog extends StatelessWidget {
+  final LernAbschnitt abschnitt;
+  const _AbschnittFreischaltenDialog({required this.abschnitt});
+
+  static const _textDark = Color(0xFF1A1A1A);
+  static const _karte = Color(0xFFFFFDF7);
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        decoration: BoxDecoration(
+          color: _karte,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _textDark, width: 2),
+          boxShadow: const [
+            BoxShadow(color: _textDark, offset: Offset(0, 4), blurRadius: 0),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.lock_rounded, size: 22, color: _textDark),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    t('Abschnitt {n} öffnen?', {'n': '${abschnitt.stufe}'}),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: _textDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final absatz in [
+                      t('Sieh ein kurzes Video an, dann kannst du die ERSTE '
+                          'Station dieses Abschnitts sofort spielen.'),
+                      t('Alle weiteren Stationen bleiben gesperrt. Sie öffnen '
+                          'sich wie immer nacheinander, sobald du die '
+                          'vorherige geschafft hast.'),
+                      t('Nichts davon zählt als erledigt: Es gibt keine '
+                          'Sterne, keine Abzeichen, und dein Fortschritt '
+                          'bleibt, wie er ist.'),
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          absatz,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _textDark,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(false),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Text(
+                      t('Abbrechen'),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF888888),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4A9E4A),
+                      borderRadius: BorderRadius.circular(50),
+                      border: Border.all(color: _textDark, width: 2),
+                      boxShadow: const [
+                        BoxShadow(
+                            color: _textDark,
+                            offset: Offset(0, 3),
+                            blurRadius: 0),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const FilmklappeIcon(size: 15, color: Colors.white),
+                        const SizedBox(width: 7),
+                        Text(
+                          t('Video ansehen'),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

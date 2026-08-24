@@ -5,7 +5,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
@@ -83,11 +83,51 @@ class AuthService {
   static Stream<User?> get anmeldeStand => _auth.authStateChanges();
 
   /// Gilt der aktuelle Stand als angemeldet?
-  static bool get istAngemeldetFuerApp => _auth.currentUser != null;
+  ///
+  /// Ein anonymes Konto zählt NUR im Debug-Build. Wer aus einer alten Version
+  /// aktualisiert — die meldete jeden beim Start still anonym an — landet im
+  /// Release-Build damit auf dem Anmelde-Screen statt in einem Konto, aus dem
+  /// er nie wieder herauskäme. Sein Fortschritt geht dabei nicht verloren,
+  /// siehe [_anmeldenOderVerknuepfen].
+  static bool get istAngemeldetFuerApp {
+    final u = _auth.currentUser;
+    if (u == null) return false;
+    return kDebugMode || !u.isAnonymous;
+  }
 
   // ── Anmeldung ─────────────────────────────────────────────────────────────
 
-  static Future<AnmeldeErgebnis> _anmelden(AuthCredential zugangsdaten) async {
+  /// Meldet mit [zugangsdaten] an — und verknüpft sie, wenn gerade ein
+  /// anonymes Konto aktiv ist.
+  ///
+  /// Das Verknüpfen ist der Kern der Aktualisierungs-Geschichte: Wer aus der
+  /// alten Version kommt, hat ein anonymes Konto mit Anzeigenamen, reserviertem
+  /// Namen und Spieler-Dokument. `linkWithCredential` behält die BESTEHENDE
+  /// uid bei und hängt nur den Anbieter dazu — Name, Reservierung, Rangliste
+  /// und Cloud-Fortschritt gehören danach demselben Konto wie vorher. Ein
+  /// schlichtes `signInWithCredential` würde stattdessen eine neue uid
+  /// erzeugen, und der alte Name bliebe als Karteileiche reserviert.
+  ///
+  /// Gehört das Google-/Apple-Konto bereits zu einem echten Konto (zweites
+  /// Gerät, Neuinstallation), meldet Firebase 'credential-already-in-use'.
+  /// Dann ist die Anmeldung dort richtig, und das leere anonyme Konto wird
+  /// aufgegeben.
+  static Future<AnmeldeErgebnis> _anmeldenOderVerknuepfen(
+      AuthCredential zugangsdaten) async {
+    final aktuell = _auth.currentUser;
+    if (aktuell != null && aktuell.isAnonymous) {
+      try {
+        await aktuell.linkWithCredential(zugangsdaten);
+        return AnmeldeErgebnis.erfolgreich;
+      } on FirebaseAuthException catch (e) {
+        const schonVergeben = {
+          'credential-already-in-use',
+          'email-already-in-use',
+          'provider-already-linked',
+        };
+        if (!schonVergeben.contains(e.code)) rethrow;
+      }
+    }
     await _auth.signInWithCredential(zugangsdaten);
     return AnmeldeErgebnis.erfolgreich;
   }
@@ -123,7 +163,8 @@ class AuthService {
         // Firebase nichts anzubieten.
         return AnmeldeErgebnis.nichtEingerichtet;
       }
-      return await _anmelden(GoogleAuthProvider.credential(idToken: idToken));
+      return await _anmeldenOderVerknuepfen(
+          GoogleAuthProvider.credential(idToken: idToken));
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) {
         return AnmeldeErgebnis.abgebrochen;
@@ -152,7 +193,7 @@ class AuthService {
       );
       final token = apple.identityToken;
       if (token == null) return AnmeldeErgebnis.fehler;
-      return await _anmelden(
+      return await _anmeldenOderVerknuepfen(
         OAuthProvider("apple.com").credential(idToken: token, rawNonce: roh),
       );
     } on SignInWithAppleAuthorizationException catch (e) {

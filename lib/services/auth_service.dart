@@ -45,6 +45,39 @@ class AuthService {
   static bool get hatAnzeigename =>
       (_auth.currentUser?.displayName ?? '').trim().isNotEmpty;
 
+  /// Platzhalter, den [spielerAnlegen] einträgt, solange noch kein Name
+  /// gewählt wurde.
+  static const _kNamensPlatzhalter = 'Spieler';
+
+  /// Hat der Spieler in GeoMania selbst einen Namen gewählt und reserviert?
+  ///
+  /// NICHT dasselbe wie [hatAnzeigename] — und das ist der Punkt: Google
+  /// liefert bei der Anmeldung den Namen des Google-Kontos gleich mit, und
+  /// Firebase trägt ihn als displayName ein. Wer nur auf displayName schaut,
+  /// überspringt die Namensauswahl komplett: Der Spieler heisst dann in der
+  /// Rangliste wie in seinem Google-Konto — mit Klarnamen — und der Name ist
+  /// nie reserviert worden, kann also doppelt vorkommen.
+  ///
+  /// Massgeblich ist deshalb das eigene spieler-Dokument. `nameGewaehlt` setzt
+  /// ausschliesslich die Reservierungs-Transaktion.
+  static Future<bool> hatEigenenNamen() async {
+    final u = _auth.currentUser;
+    if (u == null) return false;
+    try {
+      final daten = (await _db.collection('spieler').doc(u.uid).get()).data();
+      if (daten == null) return false;
+      if (daten['nameGewaehlt'] == true) return true;
+      // Rückfall für Dokumente aus der Zeit vor diesem Feld: ein gespeicherter
+      // Name, der nicht der Platzhalter ist, war eine bewusste Wahl.
+      final name = (daten['anzeigename'] as String? ?? '').trim();
+      return name.isNotEmpty && name != _kNamensPlatzhalter;
+    } catch (_) {
+      // Kein Netz: lieber weiterspielen lassen als vor einer Namensabfrage
+      // festhängen, die ohne Verbindung ohnehin nicht durchginge.
+      return hatAnzeigename;
+    }
+  }
+
   /// Ändert sich bei An- und Abmeldung. Der StartWrapper hängt daran, damit
   /// ein Abmelden aus den Einstellungen sofort auf den Anmelde-Screen führt.
   static Stream<User?> get anmeldeStand => _auth.authStateChanges();
@@ -198,8 +231,9 @@ class AuthService {
         final vorhandenesDoc = await transaction.get(docRef);
         final altesSpielerDoc = await transaction.get(spielerRef);
 
-        if (vorhandenesDoc.exists &&
-            vorhandenesDoc.data()?['uid'] != u.uid) {
+        final schonMeins =
+            vorhandenesDoc.exists && vorhandenesDoc.data()?['uid'] == u.uid;
+        if (vorhandenesDoc.exists && !schonMeins) {
           // Name ist von JEMAND ANDEREM bereits vergeben.
           throw _NameVergebenException();
         }
@@ -214,13 +248,27 @@ class AuthService {
           }
         }
 
-        transaction.set(docRef, {
-          'uid': u.uid,
-          'anzeigename': neuerName,
-          'reserviertAm': FieldValue.serverTimestamp(),
-        });
-        transaction
-            .set(spielerRef, {'anzeigename': neuerName}, SetOptions(merge: true));
+        // NUR anlegen, nie überschreiben. firestore.rules erlauben für
+        // Reservierungen bewusst "create" und "delete", aber kein "update" —
+        // sonst könnte jeder ein fremdes Reservierungsdokument mit der eigenen
+        // uid überschreiben. Ein transaction.set() auf ein BESTEHENDES Dokument
+        // ist für die Regeln ein Update und wurde abgewiesen: Wer seinen
+        // eigenen Namen nur anders schrieb ("sebastian" -> "Sebastian"),
+        // bekam deshalb einen Berechtigungsfehler statt einer Änderung. Gehört
+        // die Reservierung schon mir, bleibt sie einfach stehen; die
+        // Schreibweise für die Anzeige liegt ohnehin im spieler-Dokument und
+        // im Anzeigenamen des Kontos.
+        if (!schonMeins) {
+          transaction.set(docRef, {
+            'uid': u.uid,
+            'anzeigename': neuerName,
+            'reserviertAm': FieldValue.serverTimestamp(),
+          });
+        }
+        transaction.set(
+            spielerRef,
+            {'anzeigename': neuerName, 'nameGewaehlt': true},
+            SetOptions(merge: true));
       });
     } on _NameVergebenException {
       return AnzeigenameErgebnis.bereitsVergeben;
@@ -252,7 +300,11 @@ class AuthService {
       final snap = await ref.get();
       if (!snap.exists) {
         await ref.set({
-          'anzeigename': u.displayName ?? 'Spieler',
+          // Bewusst NICHT der displayName des Anbieters: Google liefert den
+          // Klarnamen mit, und der darf nicht ungefragt in der Rangliste
+          // landen. Bis zur eigenen Wahl steht hier der Platzhalter.
+          'anzeigename': _kNamensPlatzhalter,
+          'nameGewaehlt': false,
           'erstelltAm': FieldValue.serverTimestamp(),
           'portfolioKapital': 1000.0,
           'portfolioRekord': 1000.0,

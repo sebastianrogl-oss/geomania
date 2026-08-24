@@ -130,6 +130,12 @@ class _StartWrapperState extends State<StartWrapper> {
   /// Spieler gar nicht sehen soll.
   bool? _willkommenGezeigt;
 
+  /// null = noch nicht geprüft. Ob der Spieler in GeoMania selbst einen Namen
+  /// gewählt hat, steht in seinem spieler-Dokument und muss geladen werden —
+  /// der displayName des Kontos taugt dafür nicht, siehe
+  /// AuthService.hatEigenenNamen.
+  bool? _nameGewaehlt;
+
   /// Auf An- und Abmeldung hören, damit "Abmelden" in den Einstellungen ohne
   /// Umweg wieder auf dem Anmelde-Screen landet.
   StreamSubscription<User?>? _anmeldung;
@@ -138,9 +144,18 @@ class _StartWrapperState extends State<StartWrapper> {
   void initState() {
     super.initState();
     _ladeOnboardingStand();
+    _pruefeName();
     _anmeldung = AuthService.anmeldeStand.listen((_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() => _nameGewaehlt = null);
+      _pruefeName();
     });
+  }
+
+  Future<void> _pruefeName() async {
+    if (!AuthService.istAngemeldetFuerApp) return;
+    final ja = await AuthService.hatEigenenNamen();
+    if (mounted) setState(() => _nameGewaehlt = ja);
   }
 
   @override
@@ -164,15 +179,15 @@ class _StartWrapperState extends State<StartWrapper> {
     // Reihenfolge beim allerersten Start:
     // Anmeldung -> Name -> Willkommen -> Lernpfad.
     if (!AuthService.istAngemeldetFuerApp) {
-      return AnmeldeScreen(onAngemeldet: () => setState(() {}));
+      return AnmeldeScreen(onAngemeldet: _pruefeName);
     }
-    if (!AuthService.hatAnzeigename) {
-      return AnzeigenameScreen(
-        onFertig: () => setState(() {}),
-      );
-    }
-    if (_willkommenGezeigt == null) {
+    if (_nameGewaehlt == null || _willkommenGezeigt == null) {
       return const Scaffold(backgroundColor: kHintergrund);
+    }
+    if (_nameGewaehlt == false) {
+      return AnzeigenameScreen(
+        onFertig: () => setState(() => _nameGewaehlt = true),
+      );
     }
     if (_willkommenGezeigt == false) {
       return WillkommenScreen(onFertig: _willkommenFertig);

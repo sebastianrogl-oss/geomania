@@ -595,6 +595,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  // ── DEBUG: Testkonto löschen (nur kDebugMode) ─────────────────────────────
+  //
+  // Räumt das anonyme Testkonto samt reserviertem Namen und Spieler-Dokument
+  // weg, damit sich der ganze Ablauf — Anmelden, Namen wählen, Willkommen —
+  // beliebig oft von vorne durchspielen lässt. Setzt zusätzlich den
+  // Willkommens-Merker zurück, sonst würde der Screen beim nächsten Durchlauf
+  // übersprungen.
+  Future<void> _testkontoLoeschen() async {
+    if (!AuthService.istTestkonto) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('Nur für Testkonten (Debug)')),
+        backgroundColor: const Color(0xFFB8570A),
+      ));
+      return;
+    }
+    final erfolg = await AuthService.testkontoLoeschen();
+    await OnboardingService.debugZuruecksetzen();
+    if (!mounted) return;
+    if (!erfolg) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('Löschen fehlgeschlagen (Debug)')),
+        backgroundColor: const Color(0xFFB8570A),
+      ));
+      return;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   // ── DEBUG: Ehrenmünze "Urgestein" (nur kDebugMode) ────────────────────────
   //
   // Anders als _abzeichenSimulieren() oben schaltet das hier WIRKLICH frei —
@@ -925,6 +953,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('3 Abzeichen gleichzeitig simulieren (Debug)'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: () => _abzeichenSimulieren(3),
+                ),
+                _Zeile(
+                  icon: Icons.person_off_rounded,
+                  title: t('Testkonto löschen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _testkontoLoeschen,
                 ),
                 _Zeile(
                   icon: Icons.hail_rounded,

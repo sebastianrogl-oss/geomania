@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import '../l10n/uebersetzungen.dart';
@@ -130,6 +131,30 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
                               text: t('Mit Apple anmelden'),
                               onTap: () =>
                                   _versuche(AuthService.mitAppleAnmelden),
+                            ),
+                          ],
+                          // Nur im Debug-Build: eine echte, anonyme
+                          // Firebase-Anmeldung. Sie liefert eine vollwertige
+                          // uid, danach läuft alles ganz normal weiter.
+                          if (kDebugMode) ...[
+                            const SizedBox(height: 20),
+                            GestureDetector(
+                              onTap: () => _versuche(AuthService.testAnmeldung),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12, horizontal: 8),
+                                child: Text(
+                                  t('Test-Anmeldung (Debug)'),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFB8570A),
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: Color(0xFFB8570A),
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ],

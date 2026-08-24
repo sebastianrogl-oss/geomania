@@ -78,17 +78,21 @@ class AuthService {
     }
   }
 
+  /// Anmeldung über ein anonymes Konto — das Testkonto des Debug-Knopfes.
+  static bool get istTestkonto => _auth.currentUser?.isAnonymous ?? false;
+
   /// Ändert sich bei An- und Abmeldung. Der StartWrapper hängt daran, damit
   /// ein Abmelden aus den Einstellungen sofort auf den Anmelde-Screen führt.
   static Stream<User?> get anmeldeStand => _auth.authStateChanges();
 
   /// Gilt der aktuelle Stand als angemeldet?
   ///
-  /// Ein anonymes Konto zählt NUR im Debug-Build. Wer aus einer alten Version
-  /// aktualisiert — die meldete jeden beim Start still anonym an — landet im
-  /// Release-Build damit auf dem Anmelde-Screen statt in einem Konto, aus dem
-  /// er nie wieder herauskäme. Sein Fortschritt geht dabei nicht verloren,
-  /// siehe [_anmeldenOderVerknuepfen].
+  /// Ein anonymes Konto zählt NUR im Debug-Build. Damit fällt zweierlei
+  /// zusammen: Der Test-Knopf lässt einen normal weiterspielen, und wer aus
+  /// einer alten Version aktualisiert — die meldete jeden beim Start still
+  /// anonym an — landet im Release-Build auf dem Anmelde-Screen statt in einem
+  /// Konto, aus dem er nie wieder herauskäme. Sein Fortschritt geht dabei
+  /// nicht verloren, siehe [_anmeldenOderVerknuepfen].
   static bool get istAngemeldetFuerApp {
     final u = _auth.currentUser;
     if (u == null) return false;
@@ -194,7 +198,7 @@ class AuthService {
       final token = apple.identityToken;
       if (token == null) return AnmeldeErgebnis.fehler;
       return await _anmeldenOderVerknuepfen(
-        OAuthProvider("apple.com").credential(idToken: token, rawNonce: roh),
+        OAuthProvider('apple.com').credential(idToken: token, rawNonce: roh),
       );
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
@@ -216,6 +220,21 @@ class AuthService {
     }
   }
 
+  /// Test-Anmeldung des Debug-Knopfes: ein echtes, anonymes Firebase-Konto.
+  ///
+  /// Es hat eine vollwertige uid, deshalb läuft danach ALLES normal weiter —
+  /// Namensreservierung, Spieler-Dokument, Rangliste, Cloud-Fortschritt. Die
+  /// Firestore-Regeln fragen nur `request.auth != null`, nicht nach dem
+  /// Anbieter.
+  static Future<AnmeldeErgebnis> testAnmeldung() async {
+    try {
+      await _auth.signInAnonymously();
+      return AnmeldeErgebnis.erfolgreich;
+    } catch (e) {
+      return _deute(e);
+    }
+  }
+
   static String _zufallsNonce([int laenge = 32]) {
     const zeichen =
         '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
@@ -234,6 +253,35 @@ class AuthService {
       // scheitern zu lassen.
     }
     await _auth.signOut();
+  }
+
+  /// Löscht das Testkonto samt reserviertem Namen und Spieler-Dokument.
+  ///
+  /// Damit lässt sich der ganze Ablauf — Anmelden, Namen wählen, Willkommen —
+  /// beliebig oft von vorne durchspielen. Bewusst auf anonyme Konten begrenzt:
+  /// ein echtes Google-Konto so wegzuräumen wäre eine Falle.
+  ///
+  /// Reihenfolge ist wichtig: erst die Firestore-Dokumente, dann das
+  /// Auth-Konto. Andersherum wäre man nach dem Löschen nicht mehr angemeldet
+  /// und die Regeln liessen das Aufräumen nicht mehr zu — der reservierte Name
+  /// bliebe für immer belegt.
+  static Future<bool> testkontoLoeschen() async {
+    final u = _auth.currentUser;
+    if (u == null || !u.isAnonymous) return false;
+    try {
+      final name = u.displayName;
+      if (name != null && _normalisiereName(name).isNotEmpty) {
+        await _db
+            .collection('anzeigenamen_reserviert')
+            .doc(_normalisiereName(name))
+            .delete();
+      }
+      await _db.collection('spieler').doc(u.uid).delete();
+      await u.delete();
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   // trim() allein reicht nicht: mehrfache/innere Leerzeichen (z.B. "Anna  Maria"

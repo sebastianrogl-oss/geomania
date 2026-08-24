@@ -562,6 +562,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await AbzeichenPopup.zeigen(context, beispiele);
   }
 
+  // ── Abmelden ──────────────────────────────────────────────────────────────
+  //
+  // Der lokale Spielstand bleibt liegen — er hängt an SharedPreferences, nicht
+  // am Konto. Wer sich mit demselben Konto wieder anmeldet, findet also alles
+  // vor; wer ein anderes nimmt, spielt auf demselben Gerät weiter, bekommt
+  // aber eine andere Cloud-Identität.
+  Future<void> _abmelden() async {
+    final ja = await showDialog<bool>(
+      context: context,
+      builder: (kontext) => AlertDialog(
+        title: Text(t('Abmelden?')),
+        content: Text(t('Dein Fortschritt auf diesem Gerät bleibt erhalten. '
+            'Zum Weiterspielen musst du dich wieder anmelden.')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(kontext, false),
+            child: Text(t('Abbrechen')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(kontext, true),
+            child: Text(t('Abmelden')),
+          ),
+        ],
+      ),
+    );
+    if (ja != true) return;
+    await AuthService.abmelden();
+    if (!mounted) return;
+    // Bis zur Wurzel zurück: dort hängt der StartWrapper am Anmeldestand und
+    // zeigt von selbst wieder den Anmelde-Screen.
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   // ── DEBUG: Ehrenmünze "Urgestein" (nur kDebugMode) ────────────────────────
   //
   // Anders als _abzeichenSimulieren() oben schaltet das hier WIRKLICH frei —
@@ -767,6 +800,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: t('Anzeigename ändern'),
                 subtitle: _anzeigename,
                 onTap: _anzeigenameAendern,
+              ),
+              const _Trenner(),
+              _Zeile(
+                icon: Icons.logout_rounded,
+                title: t('Abmelden'),
+                onTap: _abmelden,
               ),
             ]),
             const SizedBox(height: 24),

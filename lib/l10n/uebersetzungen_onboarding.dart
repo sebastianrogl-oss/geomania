@@ -306,6 +306,21 @@ const Map<String, String> uebersetzungenOnboarding = {
   'Abzeichen verdienen': 'Earn badges',
   'Los geht\'s': 'Let\'s go',
 
+  // ── Anmeldung ──────────────────────────────────────────────────────────────
+  'Melde dich an, damit dein Fortschritt und dein Platz in der Rangliste erhalten bleiben.':
+      'Sign in so your progress and your place on the leaderboard are kept.',
+  'Mit Google anmelden': 'Sign in with Google',
+  'Mit Apple anmelden': 'Sign in with Apple',
+  'Die Anmeldung ist noch nicht eingerichtet. Bitte versuch es später noch einmal.':
+      'Sign-in is not set up yet. Please try again later.',
+  'Die Anmeldung hat nicht geklappt — bitte versuch es erneut.':
+      'Sign-in did not work — please try again.',
+  'Abmelden': 'Sign out',
+  'Abmelden?': 'Sign out?',
+  'Dein Fortschritt auf diesem Gerät bleibt erhalten. Zum Weiterspielen musst du dich wieder anmelden.':
+      'Your progress on this device is kept. You will need to sign in again to '
+          'keep playing.',
+
   // ── Debug ──────────────────────────────────────────────────────────────────
   'Onboarding zurücksetzen (Debug)': 'Reset onboarding (debug)',
 };

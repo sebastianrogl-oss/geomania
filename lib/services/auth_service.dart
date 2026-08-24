@@ -1,7 +1,28 @@
+import 'dart:convert';
+import 'dart:io' show Platform;
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 enum AnzeigenameErgebnis { erfolgreich, bereitsVergeben, fehler }
+
+/// Ausgang eines Anmeldeversuchs.
+///
+/// [abgebrochen] ist ausdrücklich KEIN Fehler: wer den Google-Dialog wegwischt,
+/// soll keine rote Meldung sehen, sondern einfach wieder vor den Knöpfen
+/// stehen.
+///
+/// [nichtEingerichtet] trennt den einen Fall ab, der beim ersten Ausprobieren
+/// mit Abstand am wahrscheinlichsten ist: In der Firebase-Konsole ist der
+/// Anbieter noch nicht freigeschaltet oder der SHA-Fingerabdruck fehlt. Ohne
+/// diese Unterscheidung landet man bei "irgendwas ging schief" und sucht im
+/// Code statt in der Konsole.
+enum AnmeldeErgebnis { erfolgreich, abgebrochen, nichtEingerichtet, fehler }
 
 /// Interner Signal-Typ, um "Name bereits von jemand anderem vergeben" aus
 /// der Transaktion nach außen zu tragen — runTransaction() propagiert
@@ -24,18 +45,121 @@ class AuthService {
   static bool get hatAnzeigename =>
       (_auth.currentUser?.displayName ?? '').trim().isNotEmpty;
 
-  // Anonyme Anmeldung beim ersten Start
-  static Future<User?> anonymAnmelden() async {
-    try {
-      if (_auth.currentUser != null) {
-        return _auth.currentUser;
-      }
-      final result = await _auth.signInAnonymously();
-      return result.user;
-    } catch (e) {
-      print('Anmelde-Fehler: $e');
-      return null;
+  /// Ändert sich bei An- und Abmeldung. Der StartWrapper hängt daran, damit
+  /// ein Abmelden aus den Einstellungen sofort auf den Anmelde-Screen führt.
+  static Stream<User?> get anmeldeStand => _auth.authStateChanges();
+
+  /// Gilt der aktuelle Stand als angemeldet?
+  static bool get istAngemeldetFuerApp => _auth.currentUser != null;
+
+  // ── Anmeldung ─────────────────────────────────────────────────────────────
+
+  static Future<AnmeldeErgebnis> _anmelden(AuthCredential zugangsdaten) async {
+    await _auth.signInWithCredential(zugangsdaten);
+    return AnmeldeErgebnis.erfolgreich;
+  }
+
+  /// Übersetzt Firebase-Fehlercodes in die grobe Einteilung von
+  /// [AnmeldeErgebnis]. Die drei Codes unten bedeuten alle dasselbe: In der
+  /// Konsole fehlt noch etwas.
+  static AnmeldeErgebnis _deute(Object fehler) {
+    if (fehler is FirebaseAuthException) {
+      const konsole = {
+        'operation-not-allowed',
+        'invalid-credential',
+        'configuration-not-found',
+      };
+      if (konsole.contains(fehler.code)) return AnmeldeErgebnis.nichtEingerichtet;
     }
+    return AnmeldeErgebnis.fehler;
+  }
+
+  static Future<AnmeldeErgebnis> mitGoogleAnmelden() async {
+    try {
+      // Ohne Argumente: Auf Android holt sich das Plugin die Web-Client-ID aus
+      // der von google-services.json erzeugten String-Ressource
+      // default_web_client_id, auf iOS aus der GoogleService-Info.plist. Es
+      // muss also KEINE Client-ID im Code stehen — sie kommt aus den Dateien,
+      // die die Firebase-Konsole ausliefert.
+      await GoogleSignIn.instance.initialize();
+      final konto = await GoogleSignIn.instance.authenticate();
+      final idToken = konto.authentication.idToken;
+      if (idToken == null) {
+        // Genau der Fall "google-services.json enthält keinen oauth_client mit
+        // client_type 3" — die Anmeldung selbst klappt, aber ohne Token ist
+        // Firebase nichts anzubieten.
+        return AnmeldeErgebnis.nichtEingerichtet;
+      }
+      return await _anmelden(GoogleAuthProvider.credential(idToken: idToken));
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        return AnmeldeErgebnis.abgebrochen;
+      }
+      // "serverClientId must be provided on Android" landet hier.
+      return AnmeldeErgebnis.nichtEingerichtet;
+    } catch (e) {
+      return _deute(e);
+    }
+  }
+
+  /// Nur auf Apple-Plattformen aufrufen — siehe [appleVerfuegbar].
+  static Future<AnmeldeErgebnis> mitAppleAnmelden() async {
+    try {
+      // Firebase verlangt den Nonce doppelt: Apple bekommt den SHA-256-Abdruck
+      // zu sehen, Firebase den Klartext. Nur so lässt sich prüfen, dass das
+      // vorgelegte Token wirklich zu DIESER Anfrage gehört und nicht
+      // abgefangen und wiederverwendet wurde.
+      final roh = _zufallsNonce();
+      final apple = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: sha256.convert(utf8.encode(roh)).toString(),
+      );
+      final token = apple.identityToken;
+      if (token == null) return AnmeldeErgebnis.fehler;
+      return await _anmelden(
+        OAuthProvider("apple.com").credential(idToken: token, rawNonce: roh),
+      );
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return AnmeldeErgebnis.abgebrochen;
+      }
+      return AnmeldeErgebnis.nichtEingerichtet;
+    } catch (e) {
+      return _deute(e);
+    }
+  }
+
+  /// "Mit Apple anmelden" wird nur dort angeboten, wo es das System kennt.
+  static bool get appleVerfuegbar {
+    if (kIsWeb) return false;
+    try {
+      return Platform.isIOS || Platform.isMacOS;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static String _zufallsNonce([int laenge = 32]) {
+    const zeichen =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
+    final zufall = Random.secure();
+    return List.generate(
+        laenge, (_) => zeichen[zufall.nextInt(zeichen.length)]).join();
+  }
+
+  /// Meldet ab. Der lokale Spielstand bleibt liegen — er hängt an
+  /// SharedPreferences, nicht am Konto.
+  static Future<void> abmelden() async {
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (_) {
+      // Nicht mit Google angemeldet gewesen — kein Grund, das Abmelden
+      // scheitern zu lassen.
+    }
+    await _auth.signOut();
   }
 
   // trim() allein reicht nicht: mehrfache/innere Leerzeichen (z.B. "Anna  Maria"
@@ -79,8 +203,6 @@ class AuthService {
           // Name ist von JEMAND ANDEREM bereits vergeben.
           throw _NameVergebenException();
         }
-        // Falls vorhandeneUid == eigene uid: eigener Name wird nur
-        // aktualisiert (z.B. Groß-/Kleinschreibung geändert) — erlaubt.
 
         final alterName = altesSpielerDoc.data()?['anzeigename'] as String?;
         if (alterName != null) {

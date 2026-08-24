@@ -12,7 +12,12 @@
           "package_name": "com.example.geomania"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "514970095088-kn2hsp6uskc9cdb4bhl6bahji370bf6q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCT15gShbPJ1ManDEnXC8qyscAcQTTo8Ys"
@@ -20,7 +25,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "514970095088-kn2hsp6uskc9cdb4bhl6bahji370bf6q.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "514970095088-3gf2nh141ahlummjltc0n2gpohoeia34.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.northlight.geomania"
+              }
+            }
+          ]
         }
       }
     },
@@ -31,7 +48,28 @@
           "package_name": "com.northlight.geomania"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "514970095088-deooi55knipsho64o472julu4n4kms8f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.northlight.geomania",
+            "certificate_hash": "ac1096b86e3163eca4980bf96c3be667db2efab2"
+          }
+        },
+        {
+          "client_id": "514970095088-prh73m6oblqpioe3u2oeqo0ucutf7bt0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.northlight.geomania",
+            "certificate_hash": "512fce99c68b994562a56cdc2223589067485b0f"
+          }
+        },
+        {
+          "client_id": "514970095088-kn2hsp6uskc9cdb4bhl6bahji370bf6q.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCT15gShbPJ1ManDEnXC8qyscAcQTTo8Ys"
@@ -39,7 +77,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "514970095088-kn2hsp6uskc9cdb4bhl6bahji370bf6q.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "514970095088-3gf2nh141ahlummjltc0n2gpohoeia34.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.northlight.geomania"
+              }
+            }
+          ]
         }
       }
     }

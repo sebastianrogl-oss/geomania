@@ -1,8 +1,9 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show StreamSubscription, unawaited;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'firebase_options.dart';
@@ -16,6 +17,7 @@ import 'services/sound_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/rangliste_screen.dart';
 import 'screens/profil_screen.dart';
+import 'screens/anmelde_screen.dart';
 import 'screens/anzeigename_screen.dart';
 import 'screens/willkommen_screen.dart';
 import 'theme/app_theme.dart';
@@ -34,8 +36,11 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Anonym anmelden (unsichtbar für Nutzer)
-  await AuthService.anonymAnmelden();
+  // KEINE stille Anmeldung mehr beim Start. Vorher meldete die App jeden
+  // unsichtbar anonym an; damit gab es zwar sofort eine uid, aber auch ein
+  // Konto, das an genau dieses Gerät gebunden war und sich nie einem Menschen
+  // zuordnen liess. Angemeldet wird jetzt sichtbar über den AnmeldeScreen —
+  // siehe StartWrapper.
 
   // Vor runApp() laden, damit die App gleich in der zuletzt gewählten
   // Sprache startet statt kurz Deutsch aufzublitzen.
@@ -125,10 +130,23 @@ class _StartWrapperState extends State<StartWrapper> {
   /// Spieler gar nicht sehen soll.
   bool? _willkommenGezeigt;
 
+  /// Auf An- und Abmeldung hören, damit "Abmelden" in den Einstellungen ohne
+  /// Umweg wieder auf dem Anmelde-Screen landet.
+  StreamSubscription<User?>? _anmeldung;
+
   @override
   void initState() {
     super.initState();
     _ladeOnboardingStand();
+    _anmeldung = AuthService.anmeldeStand.listen((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _anmeldung?.cancel();
+    super.dispose();
   }
 
   Future<void> _ladeOnboardingStand() async {
@@ -143,7 +161,11 @@ class _StartWrapperState extends State<StartWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    // Reihenfolge beim allerersten Start: Name -> Willkommen -> Lernpfad.
+    // Reihenfolge beim allerersten Start:
+    // Anmeldung -> Name -> Willkommen -> Lernpfad.
+    if (!AuthService.istAngemeldetFuerApp) {
+      return AnmeldeScreen(onAngemeldet: () => setState(() {}));
+    }
     if (!AuthService.hatAnzeigename) {
       return AnzeigenameScreen(
         onFertig: () => setState(() {}),

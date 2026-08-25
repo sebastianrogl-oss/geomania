@@ -56,16 +56,64 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
   }
 
-  testWidgets('Kacheln sind quadratisch', (tester) async {
+  /// Breite EINER Kachel: die Reihe abzüglich der beiden Abstände, durch drei.
+  double kachelBreite(WidgetTester tester) =>
+      (tester.getSize(find.byType(StatistikKacheln)).width - 2 * 8) / 3;
+
+  testWidgets('Kacheln sind quadratisch bei normaler Schrift', (tester) async {
     await baue(tester, const Size(412, 915));
-    for (final label in ['Streak', 'Stationen', 'Abzeichen']) {
-      final kachel = find.ancestor(
-          of: find.text(label), matching: find.byType(AspectRatio));
-      final g = tester.getSize(kachel.first);
-      expect(g.width, moreOrLessEquals(g.height, epsilon: 0.5),
-          reason: 'Kachel "$label" ist ${g.width} x ${g.height}');
-    }
+    final hoehe = tester.getSize(find.byType(StatistikKacheln)).height;
+    expect(kachelBreite(tester), moreOrLessEquals(hoehe, epsilon: 0.5),
+        reason: 'Kachel ist ${kachelBreite(tester)} breit und $hoehe hoch');
   });
+
+  /// Die Grafik hängt an der Kachelbreite und ist von der Systemschrift
+  /// unabhängig; die Beschriftung darunter wächst mit ihr. Bei Schriftskala 1
+  /// blieben nach der letzten Größenanpassung rechnerisch 0,2 px übrig — jede
+  /// größere Systemschrift lief deshalb unten aus der Kachel heraus, auf
+  /// 412 px bei Skala 1.5 um 5,8 px.
+  ///
+  /// Weil die Größenverhältnisse von Grafik und Beschriftung bewusst so
+  /// gewählt sind, darf die Lösung KEINE davon stauchen: Stattdessen wächst
+  /// die Kachel. Quadratisch bleibt sie damit nur bei Skala 1.0 — darüber
+  /// wird sie genau so viel höher, wie die Beschriftung an Höhe gewinnt.
+  for (final skala in [1.3, 1.5]) {
+    testWidgets('kein Überlauf bei Schriftskala $skala', (tester) async {
+      final fehler = <FlutterErrorDetails>[];
+      final vorher = FlutterError.onError;
+      FlutterError.onError = fehler.add;
+      late double breite;
+      late double hoehe;
+      try {
+        await tester.binding.setSurfaceSize(const Size(412, 915));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.pumpWidget(MaterialApp(
+          builder: (kontext, kind) => MediaQuery(
+            data: MediaQuery.of(kontext)
+                .copyWith(textScaler: TextScaler.linear(skala)),
+            child: kind!,
+          ),
+          home: const Scaffold(
+            body: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: StatistikKacheln(
+                  streak: 7, stationen: 128, abzeichen: 12),
+            ),
+          ),
+        ));
+        await tester.pump(const Duration(milliseconds: 300));
+        breite = kachelBreite(tester);
+        hoehe = tester.getSize(find.byType(StatistikKacheln)).height;
+      } finally {
+        // Vor jedem expect zurücksetzen, sonst verschluckt die eigene
+        // Fehlerliste den Fehlschlag.
+        FlutterError.onError = vorher;
+      }
+      expect(fehler.map((f) => f.exception.toString()), isEmpty);
+      // Gewachsen, nicht geschrumpft.
+      expect(hoehe, greaterThanOrEqualTo(breite - 0.5));
+    });
+  }
 
   testWidgets('die drei Beschriftungen stehen auf einer Linie', (tester) async {
     await baue(tester, const Size(412, 915));

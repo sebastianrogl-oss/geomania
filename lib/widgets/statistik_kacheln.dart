@@ -19,12 +19,16 @@ import 'streak_flamme.dart';
 // sie in drei verschiedenen Größen (rund 17, 30 und 36 px). Anteile statt
 // Pixel schließen das aus: nichts wird mehr nachträglich skaliert.
 
-/// Höhe der Kachel im Verhältnis zu ihrer Breite. 1.0 = quadratisch.
+/// Mindesthöhe der Kachel im Verhältnis zu ihrer Breite. 1.0 = quadratisch.
 ///
-/// Der einzige Hebel, wenn die Grafiken größer werden sollen: in einem
-/// Quadrat ist bei rund 70 % der Kachelbreite Schluss, weil Grafik UND
-/// Beschriftung hineinpassen müssen. Ein Wert von z. B. 1.6 macht die Kacheln
-/// wieder hochkant und die Grafiken entsprechend größer.
+/// MINDEST-, nicht Festhöhe: Die Kachel darf höher werden, wenn die
+/// Beschriftung bei grosser Systemschrift mehr Platz braucht — siehe die
+/// Höhenrechnung in [_Kachel]. Bei Schriftskala 1.0 ist sie exakt quadratisch.
+///
+/// Der Hebel, wenn die Grafiken größer werden sollen: in einem Quadrat ist bei
+/// rund 70 % der Kachelbreite Schluss, weil Grafik UND Beschriftung
+/// hineinpassen müssen. Ein Wert von z. B. 1.6 macht die Kacheln hochkant und
+/// die Grafiken entsprechend größer.
 const double _kSeitenverhaeltnis = 1.0;
 
 /// Innenabstand der Kachel, als Anteil ihrer Seite.
@@ -215,9 +219,7 @@ class _Kachel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1 / _kSeitenverhaeltnis,
-      child: LayoutBuilder(
+    return LayoutBuilder(
         builder: (context, constraints) {
           final seite = constraints.maxWidth;
           final grundmass = seite * _kGrafikGrundmass;
@@ -227,8 +229,55 @@ class _Kachel extends StatelessWidget {
           final feldHoehe = seite * _kGrafikAnteil;
           final zahlGroesse = grundmass * _kZahlAnteil;
 
+          // ── Höhe der Kachel ─────────────────────────────────────────────
+          //
+          // Quadratisch ist nur der NORMALFALL, nicht das Gesetz. Die Grafik
+          // hängt an der Kachelseite und ist damit unabhängig von der
+          // Systemschrift; die Beschriftung darunter wächst dagegen mit ihr.
+          // Bei Schriftskala 1 blieben nach der letzten Größenanpassung
+          // rechnerisch 0,2 px übrig — jede Vergrößerung der Schrift lief
+          // deshalb unten aus der Kachel heraus.
+          //
+          // Statt Grafik oder Beschriftung zu stauchen (beides würde die
+          // gewollten Größenverhältnisse zerstören) wächst die Kachel jetzt
+          // mit: Sie ist so hoch wie ihre Seite ODER so hoch, wie ihr Inhalt
+          // es braucht — je nachdem, was mehr ist. Bei Skala 1.0 bleiben die
+          // Kacheln damit exakt quadratisch, darüber werden sie so viel höher
+          // wie die Beschriftung an Höhe gewinnt.
+          final innen = seite * _kInnenrand;
+          final labelStil = TextStyle(
+            color: _kLabelFarbe,
+            fontSize: seite * _kLabelAnteil,
+            fontWeight: FontWeight.w700,
+            // Feste Zeilenhöhe, sonst stimmt die Rechnung nicht: die
+            // voreingestellte Zeilenhöhe von Poppins ist rund das 1,7-fache
+            // der Schriftgröße. 1.12 lässt der Unterlänge im "g" von
+            // "Abzeichen" genug Raum.
+            height: _kLabelZeilenhoehe,
+          );
+          // GEMESSEN statt gerechnet. Schriftgröße mal Zeilenhöhe mal
+          // Skalierung ist nur eine Näherung — sie lag um rund einen halben
+          // Pixel daneben, und genau so viel lief die Kachel dann noch über.
+          // Der TextPainter liefert die Höhe, die der Text tatsächlich
+          // einnimmt, samt Schriftmetrik und Skalierung.
+          final labelHoehe = (TextPainter(
+            text: TextSpan(text: label, style: labelStil),
+            textDirection: TextDirection.ltr,
+            maxLines: 1,
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout())
+              .height;
+          final noetigeHoehe = 2 * innen +
+              feldHoehe +
+              seite * _kAbstandGrafikLabel +
+              labelHoehe;
+          final mindestHoehe = seite * _kSeitenverhaeltnis;
+          final hoehe =
+              noetigeHoehe > mindestHoehe ? noetigeHoehe : mindestHoehe;
+
           return Container(
-            padding: EdgeInsets.all(seite * _kInnenrand),
+            height: hoehe,
+            padding: EdgeInsets.all(innen),
             decoration: BoxDecoration(
               color: _kKachelFarbe,
               borderRadius: BorderRadius.circular(14),
@@ -243,28 +292,15 @@ class _Kachel extends StatelessWidget {
                 SizedBox(height: seite * _kAbstandGrafikLabel),
                 Transform.translate(
                   offset: const Offset(0, -_kLabelVersatz),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: TextStyle(
-                      color: _kLabelFarbe,
-                      fontSize: seite * _kLabelAnteil,
-                      fontWeight: FontWeight.w700,
-                      // Feste Zeilenhöhe, sonst stimmt die Rechnung unten
-                      // nicht: die voreingestellte Zeilenhöhe von Poppins ist
-                      // rund das 1,7-fache der Schriftgröße, und auf schmalen
-                      // Geräten lief die Kachel damit um knapp einen Pixel
-                      // über. 1.2 lässt der Unterlänge im "g" von "Abzeichen"
-                      // genug Raum.
-                      height: _kLabelZeilenhoehe,
-                    ),
-                  ),
+                  // DERSELBE Stil, mit dem oben die Höhe gemessen wurde —
+                  // sonst rechnet die Kachel mit anderen Werten, als sie
+                  // zeichnet.
+                  child: Text(label, maxLines: 1, style: labelStil),
                 ),
               ],
             ),
           );
         },
-      ),
     );
   }
 }

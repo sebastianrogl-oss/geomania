@@ -39,7 +39,6 @@ class ProfilScreen extends StatefulWidget {
 
 class _ProfilScreenState extends State<ProfilScreen> {
   Map<String, Set<String>> _spieltage = {};
-  Map<String, int> _challengeStreaks = {};
   Map<String, int> _challengeAnzahlGespielt = {};
   Map<String, double> _challengeSumme = {};
   Map<String, int?> _challengeRekord = {};
@@ -60,9 +59,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
       for (final id in _challengeIds)
         id: await ChallengeRekordService.getSpieltage(id),
     };
-    final streaks = <String, int>{
-      for (final id in _challengeIds) id: await ChallengeRekordService.getStreak(id),
-    };
     final anzahlGespielt = <String, int>{
       for (final id in _challengeIds)
         id: await ChallengeRekordService.getAnzahlGespielt(id),
@@ -82,7 +78,6 @@ class _ProfilScreenState extends State<ProfilScreen> {
     if (mounted) {
       setState(() {
         _spieltage = spieltage;
-        _challengeStreaks = streaks;
         _challengeAnzahlGespielt = anzahlGespielt;
         _challengeSumme = summe;
         _challengeRekord = rekord;
@@ -104,24 +99,33 @@ class _ProfilScreenState extends State<ProfilScreen> {
   double _kategorieFortschritt(Set<LernModus> modi) =>
       _lpSnap?.modiFortschritt(modi) ?? 0.0;
 
-  // ── Tages-Challenge-Statistikfelder ("Gesamt Punkte"/"Gesamt Rendite" +
-  // "Rekord") — zeigt den INSGESAMT über alle gespielten Tage aufsummierten
-  // Wert (aus summePunkte_*, siehe ChallengeRekordService.summeErhoehen),
-  // NICHT den Durchschnitt und NICHT nur den heutigen Wert.
+  // ── Tages-Challenge-Statistikfelder: Schnitt · Rekord · Gespielt ──────────
+  //
+  // Die Rohwerte kommen weiterhin aus summePunkte_* (siehe
+  // ChallengeRekordService.summeErhoehen) — angezeigt wird davon aber der
+  // Durchschnitt je Runde, nicht die Summe.
 
-  String _summePunkteText(String id) =>
-      (_challengeAnzahlGespielt[id] ?? 0) == 0
-          ? '—'
-          : (_challengeSumme[id] ?? 0).round().toString();
+  /// Durchschnitt JE RUNDE, nicht die Summe über alle Tage.
+  ///
+  /// Eine Summe wächst mit jedem Spieltag und sagt deshalb vor allem, wie
+  /// lange jemand dabei ist — neben "Rekord" und "Gespielt" steht sie damit
+  /// dreimal für dasselbe. Der Schnitt beantwortet dagegen die Frage, die
+  /// zwischen Bestwert und Anzahl fehlt: wie gut man üblicherweise ist.
+  String _schnittPunkteText(String id) {
+    final anzahl = _challengeAnzahlGespielt[id] ?? 0;
+    if (anzahl == 0) return '—';
+    return ((_challengeSumme[id] ?? 0) / anzahl).round().toString();
+  }
 
-  String _summeRenditeText(String id) =>
-      (_challengeAnzahlGespielt[id] ?? 0) == 0
-          ? '—'
-          : fmtProzent(_challengeSumme[id] ?? 0);
+  String _schnittRenditeText(String id) {
+    final anzahl = _challengeAnzahlGespielt[id] ?? 0;
+    if (anzahl == 0) return '—';
+    return fmtProzent((_challengeSumme[id] ?? 0) / anzahl);
+  }
 
   String _rekordText(String id) {
     // Portfolio zeigt nur die Prozent-Rendite (kein Dollar-Betrag mehr) —
-    // konsistent mit _summeRenditeText, das ebenfalls rein prozentual ist.
+    // konsistent mit _schnittRenditeText, das ebenfalls rein prozentual ist.
     if (id == 'portfolio') {
       final prozent = _portfolioRekordProzent;
       return prozent == null ? '—' : fmtProzent(prozent);
@@ -276,10 +280,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
               title: t('Das große Schätzen'),
               bg: const Color(0xFFFFF8E7),
               titleColor: const Color(0xFF5A3D00),
-              streak: _challengeStreaks['preis'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['preis'] ?? 0,
-              statWert1: _summePunkteText('preis'),
-              statLabel1: t('Gesamt Punkte'),
+              statWert1: _schnittPunkteText('preis'),
+              statLabel1: t('Schnitt'),
               statWert2: _rekordText('preis'),
               spieltage: _spieltage['preis'] ?? const {},
               titelVersatz: -3,
@@ -291,10 +294,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
               title: 'Higher or Lower',
               bg: const Color(0xFFEDF7ED),
               titleColor: const Color(0xFF1A3D1A),
-              streak: _challengeStreaks['higher_lower'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['higher_lower'] ?? 0,
-              statWert1: _summePunkteText('higher_lower'),
-              statLabel1: t('Gesamt geschafft'),
+              statWert1: _schnittPunkteText('higher_lower'),
+              statLabel1: t('Schnitt'),
               statWert2: _rekordText('higher_lower'),
               spieltage: _spieltage['higher_lower'] ?? const {},
             ),
@@ -305,10 +307,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
               title: t('Ranking-Quiz'),
               bg: const Color(0xFFF3EEFF),
               titleColor: const Color(0xFF3B1A6B),
-              streak: _challengeStreaks['ranking_game'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['ranking_game'] ?? 0,
-              statWert1: _summePunkteText('ranking_game'),
-              statLabel1: t('Gesamt Punkte'),
+              statWert1: _schnittPunkteText('ranking_game'),
+              statLabel1: t('Schnitt'),
               statWert2: _rekordText('ranking_game'),
               spieltage: _spieltage['ranking_game'] ?? const {},
             ),
@@ -319,10 +320,9 @@ class _ProfilScreenState extends State<ProfilScreen> {
               title: t('Portfolio des Tages'),
               bg: const Color(0xFFEBF3FF),
               titleColor: const Color(0xFF1A3A6B),
-              streak: _challengeStreaks['portfolio'] ?? 0,
               anzahlGespielt: _challengeAnzahlGespielt['portfolio'] ?? 0,
-              statWert1: _summeRenditeText('portfolio'),
-              statLabel1: t('Gesamt Rendite'),
+              statWert1: _schnittRenditeText('portfolio'),
+              statLabel1: t('Schnitt'),
               statWert2: _rekordText('portfolio'),
               spieltage: _spieltage['portfolio'] ?? const {},
               titelVersatz: -3,
@@ -1017,12 +1017,18 @@ class _ProfilbildFreischaltenDialogState
 
 // ── Challenge-Row ─────────────────────────────────────────────────────────────
 
+/// Kantenlänge des Challenge-Logos.
+///
+/// Von 70 auf 84 gewachsen: Seit das Logo in EINER Reihe neben allem anderen
+/// steht statt über den Kennzahlen, hat es die volle Kartenhöhe zur Verfügung
+/// und wirkte in der alten Größe verloren.
+const double _kChallengeLogo = 84;
+
 class _ChallengeRow extends StatelessWidget {
   final String logoAsset;
   final IconData fallbackIcon;
   final String title;
   final Color bg, titleColor;
-  final int streak;
   final int anzahlGespielt;
   final Set<String> spieltage;
   final String statWert1;
@@ -1039,7 +1045,6 @@ class _ChallengeRow extends StatelessWidget {
     required this.title,
     required this.bg,
     required this.titleColor,
-    required this.streak,
     required this.anzahlGespielt,
     required this.spieltage,
     required this.statWert1,
@@ -1060,10 +1065,23 @@ class _ChallengeRow extends StatelessWidget {
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: titleColor)),
         ),
         const SizedBox(height: 2),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF888888)),
-            textAlign: TextAlign.center),
+        // Einzeilig um jeden Preis: Bei grosser Systemschrift passt selbst
+        // "Rekord" nicht mehr in die rund 47 px breite Spalte eines 320-px-
+        // Geräts (es bräuchte 56) und bräche auf zwei, "Gespielt" sogar auf
+        // mehr Zeilen um. Ein Umbruch mitten in der Kennzahlenreihe zerreisst
+        // die Optik, deshalb schrumpft die Beschriftung stattdessen — wie die
+        // Zahl darüber auch. Sie bleibt dabei immer noch grösser als bei
+        // normaler Schriftgrösse, die Vergrösserung wirkt also weiter.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(label,
+              maxLines: 1,
+              style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF888888)),
+              textAlign: TextAlign.center),
+        ),
       ],
     );
   }
@@ -1084,63 +1102,61 @@ class _ChallengeRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      // EINE Reihe statt zwei übereinander: Das Logo steht links über die
+      // ganze Kartenhöhe, alles andere rechts daneben. Dadurch rücken die
+      // Kennzahlen nach rechts, das Logo bekommt die volle Höhe und sitzt
+      // mittig dazu, und die Kugelreihe wandert nach oben an die Stelle, an
+      // der vorher die Streak-Zeile stand.
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Logo — liegt direkt auf der Kartenfarbe, kein weißer
-              // Hintergrund/Kreis mehr, deutlich kleiner als die Karte selbst.
-              SizedBox(
-                width: 70,
-                height: 70,
-                child: Image.asset(
-                  logoAsset,
-                  fit: BoxFit.contain,
-                  errorBuilder: (c, e, s) => Icon(fallbackIcon, size: 44, color: titleColor),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Transform.translate(
-                      offset: Offset(0, titelVersatz),
-                      child: Text(title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800, color: titleColor)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      streak > 0
-                          ? t('🔥 Challenge-Streak: {n} Tage in Folge', {'n': '$streak'})
-                          : t('Noch keine Serie'),
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF888888)),
-                    ),
-                    const SizedBox(height: 6),
-                    _StreakStreifen(spieltage: spieltage),
-                  ],
-                ),
-              ),
-            ],
+          // Logo — liegt direkt auf der Kartenfarbe, kein weißer
+          // Hintergrund/Kreis.
+          SizedBox(
+            width: _kChallengeLogo,
+            height: _kChallengeLogo,
+            child: Image.asset(
+              logoAsset,
+              fit: BoxFit.contain,
+              errorBuilder: (c, e, s) =>
+                  Icon(fallbackIcon, size: _kChallengeLogo * 0.63, color: titleColor),
+            ),
           ),
-          const SizedBox(height: 12),
-          anzahlGespielt > 0
-              ? Row(
-                  children: [
-                    Expanded(child: _statFeld(statWert1, statLabel1)),
-                    Expanded(child: _statFeld(statWert2, t('Rekord'))),
-                  ],
-                )
-              : Text(t('Noch nicht gespielt'),
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF888888))),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Transform.translate(
+                  offset: Offset(0, titelVersatz),
+                  child: Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w800, color: titleColor)),
+                ),
+                const SizedBox(height: 8),
+                _StreakStreifen(spieltage: spieltage),
+                const SizedBox(height: 12),
+                anzahlGespielt > 0
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _statFeld(statWert1, statLabel1)),
+                          Expanded(child: _statFeld(statWert2, t('Rekord'))),
+                          Expanded(
+                              child: _statFeld('$anzahlGespielt', t('Gespielt'))),
+                        ],
+                      )
+                    : Text(t('Noch nicht gespielt'),
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF888888))),
+              ],
+            ),
+          ),
         ],
       ),
     );

@@ -8,9 +8,12 @@ const Map<String, String> uebersetzungenProfil = {
   'Challenges': 'Challenges',
   'Stationen': 'Stations',
   'HEUTE': 'TODAY',
-  'Ø Punkte': 'Avg. points',
-  'Ø geschafft': 'Avg. achieved',
-  'Ø Rendite': 'Avg. return',
+  // Kennzahlen der Tages-Challenge-Kacheln. Bewusst SEHR kurz: Die drei
+  // stehen nebeneinander in einer rund 47 px breiten Spalte (320-px-Gerät),
+  // und ein Umbruch mitten in der Reihe zerreisst die Optik. "Avg" ist mit
+  // 21 px sogar deutlich kürzer als das deutsche "Schnitt" (39).
+  'Schnitt': 'Avg',
+  'Gespielt': 'Played',
   'DEIN INVESTOR-STIL': 'YOUR INVESTOR STYLE',
   'Dein Stil': 'Your style',
   'Der Zocker': 'The Gambler',
@@ -25,7 +28,6 @@ const Map<String, String> uebersetzungenProfil = {
   'Ordnen & Vergleichen': 'Sorting & comparing',
   '← Wische für dein Münzalbum': '← Swipe for your coin album',
   '🔥 Challenge-Streak: {n} Tage in Folge': '🔥 Challenge streak: {n} days in a row',
-  'Noch keine Serie': 'No streak yet',
   'Rekord': 'Record',
   'Noch nicht gespielt': 'Not played yet',
 };

@@ -49,7 +49,15 @@ class SprachUmschalter extends StatelessWidget {
     return ValueListenableBuilder<String>(
       valueListenable: LocaleService.sprache,
       builder: (context, aktuell, _) {
-        return DecoratedBox(
+        // Container statt DecoratedBox — und das ist hier kein Geschmack,
+        // sondern der Unterschied zwischen sichtbarem und unsichtbarem Rahmen:
+        // DecoratedBox MALT die Umrandung nur, es rückt das Kind nicht nach
+        // innen. Die beiden Felder lagen deshalb bündig auf 0,0 an allen vier
+        // Seiten und deckten den 2 px breiten Rahmen vollständig zu; zu sehen
+        // war er nur dort, wo die abgerundeten Ecken das Kind nicht erreichten
+        // — also als vier lose Bögen statt als geschlossener Rahmen. Container
+        // zieht die Randstärke automatisch als Innenabstand ab.
+        return Container(
           decoration: BoxDecoration(
             color: _kFlaeche,
             borderRadius: BorderRadius.circular(_kRadius),

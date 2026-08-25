@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../l10n/uebersetzungen.dart';
 import '../services/auth_service.dart';
@@ -116,19 +117,23 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
                                 color: Color(0xFF4A9E4A)),
                           )
                         else ...[
-                          _AnmeldeKnopf(
-                            symbol: 'G',
-                            symbolFarbe: const Color(0xFF4285F4),
-                            text: t('Mit Google anmelden'),
+                          _GoogleKnopf(
                             onTap: () =>
                                 _versuche(AuthService.mitGoogleAnmelden),
                           ),
+                          // Nur auf Apple-Plattformen — und dann samt seinem
+                          // Abstand. Beides steht bewusst INNERHALB derselben
+                          // Bedingung: Läge der SizedBox davor, bliebe auf
+                          // Android eine 12 px hohe Lücke unter dem
+                          // Google-Knopf stehen, wo nichts ist.
+                          //
+                          // Ein ausgegrauter Apple-Knopf auf Android wäre die
+                          // Alternative gewesen. Er verwirrt aber mehr, als er
+                          // hilft: Anmelden kann man sich damit dort ohnehin
+                          // nie.
                           if (AuthService.appleVerfuegbar) ...[
                             const SizedBox(height: 12),
-                            _AnmeldeKnopf(
-                              symbol: '',
-                              symbolFarbe: const Color(0xFF1A1A1A),
-                              text: t('Mit Apple anmelden'),
+                            _AppleKnopf(
                               onTap: () =>
                                   _versuche(AuthService.mitAppleAnmelden),
                             ),
@@ -185,20 +190,34 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
   }
 }
 
-/// Anmelde-Knopf im 3D-Muster der App, aber weiss statt farbig: die Marke des
-/// Anbieters soll die Zeile tragen, nicht die Knopffarbe.
-class _AnmeldeKnopf extends StatelessWidget {
-  final String symbol;
-  final Color symbolFarbe;
-  final String text;
-  final VoidCallback onTap;
+// ── Anbieter-Knöpfe ──────────────────────────────────────────────────────────
+//
+// Getrennte Klassen statt eines gemeinsamen Knopfes mit Parametern: Google und
+// Apple geben für ihre Anmeldeknöpfe je eigene, verbindliche Gestaltungsregeln
+// vor. Ein Bauteil, das beide bedient, endet zwangsläufig bei einem Kompromiss,
+// der keine der beiden Vorgaben erfüllt.
 
-  const _AnmeldeKnopf({
-    required this.symbol,
-    required this.symbolFarbe,
-    required this.text,
-    required this.onTap,
-  });
+/// Maße nach Googles Vorgaben für "Sign in with Google".
+///
+/// Weisser Grund, graue Umrandung, Logo links, ein Textabstand von 12 zum Logo
+/// und 12 zum Rand. Das Logo misst 18 dp im Quadrat.
+const _kGoogleHoehe = 48.0;
+const _kGoogleLogo = 18.0;
+const _kGoogleRand = Color(0xFF747775);
+const _kGoogleText = Color(0xFF1F1F1F);
+const _kGoogleRadius = 12.0;
+
+/// "Mit Google anmelden" nach den offiziellen Vorgaben.
+///
+/// Bewusst NICHT im 3D-Muster der übrigen App: Google verlangt für diesen Knopf
+/// den eigenen Aufbau — weisse Fläche, graue 1-px-Umrandung, das unveränderte
+/// vierfarbige Logo links. Der harte schwarze Schatten und der 2,5-px-Rand der
+/// App-Knöpfe würden davon abweichen, und eine Abweichung kann bei der
+/// Store-Prüfung beanstandet werden. Die App-Handschrift trägt hier die
+/// Schriftart und der Radius, nicht Rand und Schatten.
+class _GoogleKnopf extends StatelessWidget {
+  final VoidCallback onTap;
+  const _GoogleKnopf({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -206,44 +225,83 @@ class _AnmeldeKnopf extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+        height: _kGoogleHoehe,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(50),
-          border: Border.all(color: const Color(0xFF1A1A1A), width: 2.5),
-          boxShadow: const [
-            BoxShadow(
-                color: Color(0xFF1A1A1A), offset: Offset(0, 4), blurRadius: 0),
-          ],
+          borderRadius: BorderRadius.circular(_kGoogleRadius),
+          border: Border.all(color: _kGoogleRand),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
-              width: 24,
+            SvgPicture.asset(
+              'assets/icons/google_g.svg',
+              width: _kGoogleLogo,
+              height: _kGoogleLogo,
+            ),
+            const SizedBox(width: 12),
+            Flexible(
               child: Text(
-                symbol,
+                t('Mit Google anmelden'),
                 textAlign: TextAlign.center,
-                // Ohne Skalierung: das Markenzeichen soll neben dem Text
-                // stehen, nicht ihn verdrängen.
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: symbolFarbe,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _kGoogleText,
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Mit Apple anmelden" — schwarze Fläche, weisses Apfelzeichen, wie es Apples
+/// Vorgaben für den dunklen Knopf verlangen.
+///
+/// Wird nur auf iOS und macOS überhaupt gebaut, siehe die Bedingung an der
+/// Aufrufstelle. Das Zeichen kommt aus der Systemschrift; auf Apple-Geräten
+/// ist  das Apfelsymbol, weshalb hier keine Bilddatei nötig ist.
+class _AppleKnopf extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AppleKnopf({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        height: _kGoogleHoehe,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(_kGoogleRadius),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              '',
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(fontSize: 20, color: Colors.white),
             ),
             const SizedBox(width: 10),
             Flexible(
               child: Text(
-                text,
+                t('Mit Apple anmelden'),
                 textAlign: TextAlign.center,
-                maxLines: 2,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A1A1A),
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
                 ),
               ),
             ),

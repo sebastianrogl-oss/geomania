@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/auth_service.dart';
-import '../widgets/maskottchen_animation.dart';
+import '../widgets/gradnetz.dart';
 import '../widgets/sprach_umschalter.dart';
 import '../theme/app_theme.dart';
 
@@ -57,7 +57,9 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kHintergrund,
-      body: SafeArea(
+      body: GradnetzHintergrund(
+        schritt: 1,
+        child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Stack(
@@ -72,31 +74,22 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Platz für den Sprachumschalter darüber. Er liegt im
-                    // Stack und damit ausserhalb dieser Spalte — ohne diese
-                    // Höhe würde das Maskottchen bei mittiger Anordnung auf
-                    // kurzen Bildschirmen darunter verschwinden.
+                    // Stack und damit ausserhalb dieser Spalte.
                     const SizedBox(height: _kUmschalterPlatz),
-                    const MaskottchenAnimation(groesse: 200),
-                    const SizedBox(height: 24),
+                    // Nur noch EINE Zeile über dem Feld. "Willkommen bei
+                    // GeoMania!" stand hier ein zweites Mal — der Name ist
+                    // schon auf dem Anmelde-Screen gefallen, und eine
+                    // Begrüssung, die sich wiederholt, wirkt wie ein Fehler.
                     Text(
-                      t('Willkommen bei GeoMania!'),
+                      t('Wie sollen wir dich nennen?'),
                       style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: Color(0xFF1a1a1a),
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      t('Wie sollen dich andere in der Rangliste sehen?'),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF888888),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -201,6 +194,7 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
             );
           },
         ),
+      ),
       ),
     );
   }

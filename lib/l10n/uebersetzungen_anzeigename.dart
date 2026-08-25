@@ -1,7 +1,9 @@
 // Übersetzungen für anzeigename_screen.dart.
 const Map<String, String> uebersetzungenAnzeigename = {
-  'Willkommen bei GeoMania!': 'Welcome to GeoMania!',
-  'Wie sollen dich andere in der Rangliste sehen?': 'How should others see you on the leaderboard?',
+  // Nur noch EINE Zeile über dem Feld: "Willkommen bei GeoMania!" stand hier
+  // ein zweites Mal, direkt nach dem Anmelde-Screen, und die alte Frage war
+  // fast doppelt so lang wie nötig.
+  'Wie sollen wir dich nennen?': 'What should we call you?',
   'Dein Name': 'Your name',
   'Dieser Name ist schon vergeben — bitte wähle einen anderen.':
       'This name is already taken — please choose another one.',

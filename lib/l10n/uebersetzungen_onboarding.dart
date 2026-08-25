@@ -307,8 +307,9 @@ const Map<String, String> uebersetzungenOnboarding = {
   'Los geht\'s': 'Let\'s go',
 
   // ── Anmeldung ──────────────────────────────────────────────────────────────
-  'Melde dich an, damit dein Fortschritt und dein Platz in der Rangliste erhalten bleiben.':
-      'Sign in so your progress and your place on the leaderboard are kept.',
+  // Ein Satz statt zweier: Der Anmelde-Screen soll den Namen, einen Satz und
+  // die Knöpfe zeigen — sonst nichts.
+  'Erkunde die Welt, Land für Land.': 'Explore the world, country by country.',
   'Mit Google anmelden': 'Sign in with Google',
   'Mit Apple anmelden': 'Sign in with Apple',
   'Die Anmeldung ist noch nicht eingerichtet. Bitte versuch es später noch einmal.':

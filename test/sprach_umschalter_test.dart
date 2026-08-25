@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geomania/screens/anzeigename_screen.dart';
 import 'package:geomania/services/locale_service.dart';
 import 'package:geomania/theme/app_theme.dart';
-import 'package:geomania/widgets/maskottchen_animation.dart';
+
 import 'package:geomania/widgets/sprach_umschalter.dart';
 
 /// Der Sprachumschalter sitzt auf dem allerersten Bildschirm der App — dem
@@ -63,7 +63,7 @@ void main() {
         final vorher = FlutterError.onError;
         FlutterError.onError = fehler.add;
         late Rect umschalter;
-        late Rect maskottchen;
+        late Rect inhalt;
         try {
           await tester.pumpWidget(MediaQuery(
             data: MediaQueryData(
@@ -72,7 +72,7 @@ void main() {
           ));
           await tester.pump(const Duration(milliseconds: 300));
           umschalter = tester.getRect(find.byType(SprachUmschalter));
-          maskottchen = tester.getRect(find.byType(MaskottchenAnimation));
+          inhalt = tester.getRect(find.byType(TextField));
         } finally {
           // Muss vor jedem expect zurückgesetzt sein, sonst verschluckt die
           // eigene Fehlerliste den Fehlschlag.
@@ -84,8 +84,8 @@ void main() {
         expect(umschalter.right,
             lessThanOrEqualTo(eintrag.value.width));
         expect(umschalter.top, greaterThanOrEqualTo(0));
-        expect(umschalter.overlaps(maskottchen), isFalse,
-            reason: 'Der Umschalter liegt über dem Maskottchen');
+        expect(umschalter.overlaps(inhalt), isFalse,
+            reason: 'Der Umschalter liegt über dem Namensfeld');
         // Zugleich die Mindest-Tippfläche.
         expect(umschalter.height, greaterThanOrEqualTo(44));
       });
@@ -103,7 +103,7 @@ void main() {
 
     await tester.pumpWidget(app());
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Willkommen bei GeoMania!'), findsOneWidget);
+    expect(find.text('Wie sollen wir dich nennen?'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'Sebastian');
     await tester.pump();
@@ -112,7 +112,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(LocaleService.sprache.value, 'en');
-    expect(find.text('Welcome to GeoMania!'), findsOneWidget);
+    expect(find.text('What should we call you?'), findsOneWidget);
     // Derselbe Schlüssel wie in den Einstellungen — beide Wege müssen
     // denselben Wert schreiben, sonst widersprechen sie sich.
     final prefs = await SharedPreferences.getInstance();
@@ -126,6 +126,6 @@ void main() {
     await tester.tap(find.text('DE'));
     await tester.pumpAndSettle();
     expect(LocaleService.sprache.value, 'de');
-    expect(find.text('Willkommen bei GeoMania!'), findsOneWidget);
+    expect(find.text('Wie sollen wir dich nennen?'), findsOneWidget);
   });
 }

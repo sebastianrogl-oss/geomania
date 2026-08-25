@@ -5,7 +5,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/maskottchen_animation.dart';
+import '../widgets/gradnetz.dart';
+import '../widgets/wortmarke.dart';
 import '../widgets/sprach_umschalter.dart';
 
 // ── Anmeldung ────────────────────────────────────────────────────────────────
@@ -74,7 +75,9 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kHintergrund,
-      body: SafeArea(
+      body: GradnetzHintergrund(
+        schritt: 0,
+        child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Stack(
@@ -88,28 +91,18 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const SizedBox(height: _kUmschalterPlatz),
-                        const MaskottchenAnimation(groesse: 180),
-                        const SizedBox(height: 20),
+                        const Wortmarke(),
+                        const SizedBox(height: 14),
                         Text(
-                          t('Willkommen bei GeoMania!'),
+                          t('Erkunde die Welt, Land für Land.'),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF1a1a1a),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          t('Melde dich an, damit dein Fortschritt und dein '
-                              'Platz in der Rangliste erhalten bleiben.'),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                             color: Color(0xFF888888),
                           ),
                         ),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 36),
                         if (_laeuft)
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 24),
@@ -185,6 +178,7 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
             );
           },
         ),
+      ),
       ),
     );
   }

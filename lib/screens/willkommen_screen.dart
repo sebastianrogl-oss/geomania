@@ -4,7 +4,7 @@ import '../data/lernpfad_data.dart';
 import '../l10n/uebersetzungen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/flaggen_widget.dart';
-import '../widgets/maskottchen_animation.dart';
+import '../widgets/gradnetz.dart';
 import '../widgets/muenze_widget.dart';
 import '../widgets/lernpfad_station_button.dart';
 import '../widgets/streak_flamme.dart';
@@ -30,11 +30,14 @@ import '../widgets/streak_flamme.dart';
 /// der Screen liefe unten über.
 const double _kBezugsHoehe = 770;
 
-/// Untere Schranke der Skala. Mit 0.72 (dem Wert zur Bezugshöhe 640) blieb
-/// auf einem 320×480-Schirm für Coiny nur noch ein 33-px-Rest übrig, weil
-/// alles andere zu groß gerechnet war und das Maskottchen als einziges
-/// nachgibt. 0.66 verteilt den Mangel: Coiny bekommt dort wieder 59 px.
-const double _kSkalaMin = 0.66;
+/// Untere Schranke der Skala.
+///
+/// Von 0.66 auf 0.58 gesenkt, seit Coiny nicht mehr auf diesem Screen steht:
+/// Die 0.66 waren eigens dafür da, dem Maskottchen auf flachen Bildschirmen
+/// noch einen sichtbaren Rest zu lassen. Ohne ihn hob die Schranke die Skala
+/// auf kurzen Schirmen künstlich AN — auf 320×480 wurde 0.62 auf 0.66
+/// hochgeklemmt, und der Inhalt lief unten heraus.
+const double _kSkalaMin = 0.58;
 const double _kSkalaMax = 1.15;
 
 /// Schrift schrumpft gedämpfter als das Layout: unter dieser Schranke wird
@@ -47,10 +50,6 @@ const double _kTextSkalaMin = 0.88;
 // vorkommen: die Münze wirkt neben Flamme und Button sonst zu klein, der
 // Stationsbutton zu wuchtig. Das gilt NUR für diesen Screen — Profil und
 // Lernpfad bleiben unberührt.
-/// Coiny bekommt den Platz, den die schlankeren Rahmen und der entfallene
-/// Flaggen-Rahmen frei machen. Der Wert ist nur der WUNSCH — auf flachen
-/// Bildschirmen gibt das Flexible darunter nur das her, was übrig bleibt.
-const double _kCoiny = 260; // war 198
 const double _kFlamme = 132; // 110 × 1.2
 const double _kMuenze = 126; // 84 × 1.5
 
@@ -66,27 +65,11 @@ const double _kStationsButton = kStationsButtonGroesse * 0.9;
 /// die Texte daneben bündig stehen.
 const double _kGrafikSpalte = _kMuenze;
 
-// ── Rahmen der Zeilen ────────────────────────────────────────────────────────
-//
-// Fläche und Radius sind die der Statistik-Kacheln im Profil
-// (widgets/statistik_kacheln.dart). Einen Rand haben die dort NICHT — der
-// kommt hier dazu, damit die vier Zeilen sauber voneinander getrennt wirken,
-// bleibt aber eine dünne, stark aufgehellte Linie. Kein harter Schatten wie
-// bei den Knöpfen: das würde die Zeilen zu Schaltflächen machen, die sie
-// nicht sind.
-const Color _kZeilenFlaeche = Color(0xFFEAEAE5);
-const double _kZeilenRadius = 14;
-const double _kZeilenRandStaerke = 1;
-const double _kZeilenRandDeckkraft = 0.12;
-
-/// Innenabstand der Rahmen. Waagerecht bleibt es bei 10; senkrecht ist es
-/// deutlich knapper, weil dort die Höhe knapp ist und der Rahmen die Grafik
-/// nicht zusätzlich einrahmen muss — sie bringt ihren eigenen Rand mit.
+/// Seitlicher Einzug der Zeilen. Ohne Rahmen übernimmt er dessen Aufgabe: Er
+/// hält die Zeilen von den Bildschirmrändern frei, ohne sie einzukasteln.
 const double _kZeilenInnenrandWaagerecht = 10;
-const double _kZeilenInnenrandSenkrecht = 3;
 
 // Abstände bei Skala 1.0.
-const double _kAbstandCoinyTitel = 16;
 const double _kAbstandTitelBand = 18;
 const double _kAbstandBandZeile = 10;
 const double _kAbstandZwischenZeilen = 12;
@@ -127,7 +110,9 @@ class WillkommenScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kHintergrund,
-      body: SafeArea(
+      body: GradnetzHintergrund(
+        schritt: 2,
+        child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             final skala = (constraints.maxHeight / _kBezugsHoehe).clamp(
@@ -145,32 +130,15 @@ class WillkommenScreen extends StatelessWidget {
                 12 * skala,
               ),
               child: Column(
-                // Oben ausgerichtet statt mittig: übrige Höhe sammelt sich
-                // dadurch unten unter dem Knopf, statt sich je zur Hälfte
-                // über und unter den Inhalt zu legen.
-                mainAxisAlignment: MainAxisAlignment.start,
+                // Mittig statt oben: Coiny stand hier als grosser, tanzender
+                // Kreis und füllte den oberen Teil — er erscheint jetzt nur
+                // noch einmal im ganzen Einstieg, klein neben dem Schriftzug
+                // auf dem Anmelde-Screen. Ohne ihn ist der Inhalt so viel
+                // kürzer, dass die übrige Höhe besser gleichmässig oben und
+                // unten liegt als gesammelt an einem Ende.
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Coiny gibt als erstes nach. Auf sehr flachen Bildschirmen
-                  // (320×480) reicht der Platz sonst nicht — und dann soll
-                  // lieber das Maskottchen kleiner werden als dass Text oder
-                  // Knopf gestaucht werden oder ein Überlauf entsteht.
-                  Flexible(
-                    child: LayoutBuilder(
-                      builder: (context, platz) {
-                        final gewuenscht = _kCoiny * skala;
-                        return Center(
-                          child: MaskottchenAnimation(
-                            groesse: gewuenscht > platz.maxHeight
-                                ? platz.maxHeight
-                                : gewuenscht,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  SizedBox(height: _kAbstandCoinyTitel * skala),
-
                   Text(
                     t('Schön, dass du da bist!'),
                     textAlign: TextAlign.center,
@@ -263,6 +231,7 @@ class WillkommenScreen extends StatelessWidget {
             );
           },
         ),
+      ),
       ),
     );
   }
@@ -420,30 +389,13 @@ class _Flagge extends StatelessWidget {
 /// (widgets/statistik_kacheln.dart): #EAEAE5 und Radius 14. Der dünne Rand
 /// kommt hier dazu — die Profil-Kacheln haben keinen, hier trennt er die vier
 /// Zeilen sichtbar voneinander, ohne dass sie wie Knöpfe aussehen.
-class _Rahmen extends StatelessWidget {
-  final Widget child;
-  const _Rahmen({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: _kZeilenInnenrandWaagerecht,
-        vertical: _kZeilenInnenrandSenkrecht,
-      ),
-      decoration: BoxDecoration(
-        color: _kZeilenFlaeche,
-        borderRadius: BorderRadius.circular(_kZeilenRadius),
-        border: Border.all(
-          color: _textDark.withValues(alpha: _kZeilenRandDeckkraft),
-          width: _kZeilenRandStaerke,
-        ),
-      ),
-      child: child,
-    );
-  }
-}
+// Die grauen Rahmen um die Zeilen sind entfallen.
+//
+// Sie waren nötig, solange die Zeilen auf leerer Fläche schwebten. Mit dem
+// Gradnetz dahinter wird daraus ein Kasten im Kasten, und drei graue Blöcke
+// untereinander wirken schwerer statt ruhiger — die Flaggenzeile kam aus
+// genau diesem Grund schon vorher ohne aus. Geordnet wird jetzt über die
+// gemeinsame Flucht der Grafikspalte und mehr Abstand zwischen den Zeilen.
 
 // ── Zeile ────────────────────────────────────────────────────────────────────
 
@@ -469,7 +421,10 @@ class _Zeile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Rahmen(
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: _kZeilenInnenrandWaagerecht,
+      ),
       child: Row(
         children: [
           SizedBox(

@@ -1,10 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:vibration/vibration.dart';
 import '../data/lernpfad_data.dart';
 import '../l10n/uebersetzungen.dart';
-import '../services/einstellungen_service.dart';
+import '../services/haptik_service.dart';
 import '../services/gelernte_fakten_service.dart';
 import '../services/sound_service.dart';
 import '../widgets/ergebnis_video.dart';
@@ -70,16 +69,13 @@ const _kZaehlKurve = Curves.easeOutQuart;
 // Animationen bleibt. Impulsdauern und Amplituden sind haptische
 // Eigenschaften und bleiben unverändert.
 const _kImpulsAbstandMs = 465;
-const _kImpulsDauerMs = 45;
-const _kImpulsStaerkeVon = 50;
-const _kImpulsStaerkeBis = 130;
+// Impulsdauern und Amplituden stehen nicht mehr hier: Die Kette benennt
+// jetzt STÄRKEN (leicht/mittel/stark) und überlässt dem [HaptikService], wie
+// er sie auf der jeweiligen Plattform erzeugt.
 // Kurz bevor der Weiter-Button erscheint.
 const _kAbschlussAbMs = 3860;
-const _kAbschlussDauerMs = 120;
-const _kAbschlussStaerke = 180;
 /// Ohne neue Länder: nur zwei sanfte Impulse und ein schwächerer Abschluss.
 const _kRuhigeImpulse = 2;
-const _kRuhigerAbschlussStaerke = 90;
 
 // ── Aufteilung der Höhe ──────────────────────────────────────────────────────
 //
@@ -181,10 +177,9 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
   /// Umrisse des Kontinents; null solange sie geladen werden.
   LaenderRinge? _ringe;
 
-  // Vorab geladen, damit die Impulse ohne dazwischenliegendes await exakt zu
-  // ihrem Zeitpunkt feuern.
-  bool _vibrationErlaubt = false;
-  bool _hatAmplitude = false;
+  /// Die laufende Haptik-Kette — in dispose() abzubrechen, sonst schlagen die
+  /// Impulse noch los, wenn längst der Lernpfad wieder dasteht.
+  HaptikFolge? _haptik;
 
   /// Verzögerung der Animationen, gerechnet ab dem Erscheinen ihres Blocks —
   /// die Kinder kennen nur ihre eigene Einblendung, nicht die absolute Zeit.
@@ -195,17 +190,7 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
   @override
   void initState() {
     super.initState();
-    _vibrationVorbereiten();
     _ladeFortschritt();
-  }
-
-  Future<void> _vibrationVorbereiten() async {
-    final erlaubt = await EinstellungenService.vibrationAktiv;
-    if (!erlaubt || !mounted) return;
-    final amplitude = await Vibration.hasAmplitudeControl();
-    if (!mounted) return;
-    _vibrationErlaubt = true;
-    _hatAmplitude = amplitude;
   }
 
   /// Klang und Haptik zum Start der Animationen.
@@ -242,35 +227,24 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
         ? ((_kAbschlussAbMs - start) / _kImpulsAbstandMs).floor()
         : _kRuhigeImpulse;
 
-    for (var i = 0; i < anzahl; i++) {
-      // Linear ansteigend, sodass der letzte Impuls vor dem Abschluss am
-      // kräftigsten ist.
-      final anteil = anzahl <= 1 ? 1.0 : i / (anzahl - 1);
-      final staerke = (_kImpulsStaerkeVon +
-              anteil * (_kImpulsStaerkeBis - _kImpulsStaerkeVon))
-          .round();
-      _timer.add(Timer(
-        Duration(milliseconds: start + i * _kImpulsAbstandMs),
-        () => _vibriere(_kImpulsDauerMs, staerke),
-      ));
-    }
-
-    _timer.add(Timer(
-      const Duration(milliseconds: _kAbschlussAbMs),
-      () => _vibriere(
-        _kAbschlussDauerMs,
-        mitNeuen ? _kAbschlussStaerke : _kRuhigerAbschlussStaerke,
+    // Die Kette läuft jetzt über den [HaptikService]: gleiche Zeitpunkte,
+    // gleicher Anstieg — statt einer Amplitude von 50 bis 130 aber eine
+    // benannte Stärke. Die erste Hälfte der Impulse bleibt leicht, die zweite
+    // wird mittel; den Schluss macht der kräftige Stoss.
+    final schritte = <HaptikSchritt>[
+      for (var i = 0; i < anzahl; i++)
+        HaptikSchritt(
+          start + i * _kImpulsAbstandMs,
+          (anzahl <= 1 ? 1.0 : i / (anzahl - 1)) < 0.5
+              ? HaptikArt.leicht
+              : HaptikArt.mittel,
+        ),
+      HaptikSchritt(
+        _kAbschlussAbMs,
+        mitNeuen ? HaptikArt.stark : HaptikArt.mittel,
       ),
-    ));
-  }
-
-  void _vibriere(int dauerMs, int staerke) {
-    if (!_vibrationErlaubt || !mounted) return;
-    if (_hatAmplitude) {
-      Vibration.vibrate(duration: dauerMs, amplitude: staerke);
-    } else {
-      Vibration.vibrate(duration: dauerMs);
-    }
+    ];
+    _haptik = HaptikService.folge(schritte);
   }
 
   final List<Timer> _timer = [];
@@ -280,6 +254,7 @@ class _StationAbschlussScreenState extends State<StationAbschlussScreen> {
     for (final t in _timer) {
       t.cancel();
     }
+    _haptik?.abbrechen();
     super.dispose();
   }
 

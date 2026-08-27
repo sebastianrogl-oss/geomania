@@ -1,10 +1,8 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:vibration/vibration.dart';
 import '../data/abzeichen_data.dart';
 import '../l10n/uebersetzungen.dart';
-import '../services/einstellungen_service.dart';
+import '../services/haptik_service.dart';
 import '../services/sound_service.dart';
 import 'muenze_widget.dart';
 
@@ -70,10 +68,6 @@ const _kMuenzeSichtbar = 0.23;
 const _kAufprall = 0.66;
 const _kAnkunftEnde = 0.74;
 const _kBlitzEnde = 0.89;
-
-// Fall B der Streak-Feier nutzt 255; die Münze schlägt etwas weicher auf.
-const _kVibrationsDauerMs = 150;
-const _kVibrationsStaerke = 220;
 
 // ── Größen ───────────────────────────────────────────────────────────────────
 //
@@ -157,11 +151,6 @@ class _AbzeichenDialogInhaltState extends State<_AbzeichenDialogInhalt>
   bool _sichtbar = true;
   bool _geschlossen = false;
 
-  // Vorab geladen, damit beim Aufprall kein await zwischen Ereignis und
-  // Vibration liegt (gleiches Vorgehen wie in streak_feier_overlay.dart).
-  bool _vibrationErlaubt = false;
-  bool _hatAmplitude = false;
-
   @override
   void initState() {
     super.initState();
@@ -171,8 +160,6 @@ class _AbzeichenDialogInhaltState extends State<_AbzeichenDialogInhalt>
     _welle = CurvedAnimation(parent: _wellenCtrl, curve: Curves.easeOut);
     _hinweisCtrl = AnimationController(vsync: this, duration: _kHinweisEin);
 
-    _vibrationVorbereiten();
-
     // Kein Auto-Dismiss mehr: nach der Animation erscheint nur der Hinweis,
     // geschlossen wird per Tap (siehe _schliessen).
     _ctrl.forward().whenComplete(() {
@@ -180,18 +167,10 @@ class _AbzeichenDialogInhaltState extends State<_AbzeichenDialogInhalt>
     });
   }
 
-  Future<void> _vibrationVorbereiten() async {
-    final erlaubt = await EinstellungenService.vibrationAktiv;
-    if (!erlaubt || !mounted) return;
-    final amplitude = await Vibration.hasAmplitudeControl();
-    if (!mounted) return;
-    _vibrationErlaubt = true;
-    _hatAmplitude = amplitude;
-  }
-
   @override
   void dispose() {
-    if (_vibrationErlaubt) Vibration.cancel();
+    // Kein Abbrechen mehr nötig: Der Aufprall ist EIN Stoss, kein Muster, das
+    // noch minutenlang weiterliefe (siehe [HaptikService]).
     _ctrl.removeListener(_aufBodenkontaktPruefen);
     _ctrl.dispose();
     _wellenCtrl.dispose();
@@ -214,21 +193,7 @@ class _AbzeichenDialogInhaltState extends State<_AbzeichenDialogInhalt>
 
   // Ein einzelner, kräftiger Stoß — die Münze schlägt einmal auf, kein
   // Aufbau wie bei der Streak-Feier.
-  void _vibrieren() {
-    if (!_vibrationErlaubt) return;
-    if (kDebugMode) {
-      debugPrint('[Abzeichen] Aufprall-Vibration ${_kVibrationsDauerMs}ms '
-          '(Amplitude ${_hatAmplitude ? _kVibrationsStaerke : 'n/a'})');
-    }
-    if (_hatAmplitude) {
-      Vibration.vibrate(
-        duration: _kVibrationsDauerMs,
-        amplitude: _kVibrationsStaerke,
-      );
-    } else {
-      Vibration.vibrate(duration: _kVibrationsDauerMs);
-    }
-  }
+  void _vibrieren() => HaptikService.spiele(HaptikArt.stark);
 
   // Gleichmäßig um die Münze verteilt: jeder Punkt bekommt sein eigenes
   // Kreissegment (360° / Anzahl) und darf darin nur leicht streuen. Rein

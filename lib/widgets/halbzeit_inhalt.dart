@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:vibration/vibration.dart';
 import '../data/halbzeit_sprueche.dart';
 import '../l10n/uebersetzungen.dart';
-import '../services/einstellungen_service.dart';
+import '../services/haptik_service.dart';
 import 'ergebnis_video.dart';
 
 // ── Halbzeit-Moment im Lernpfad-Quiz ─────────────────────────────────────────
@@ -42,10 +41,6 @@ const kHalbzeitBildAb = 150;
 const _kSpruchAb = 450;
 /// Ab hier zeigt der Quiz-Screen den Weiter-Button.
 const kHalbzeitButtonAb = 650;
-
-// Dezenter Stups beim Erscheinen des Bildes — der Moment ist zu klein für mehr.
-const _kVibrationsDauerMs = 80;
-const _kVibrationsStaerke = 110;
 
 const _cDunkel = Color(0xFF1A1A1A);
 
@@ -88,19 +83,9 @@ class _HalbzeitInhaltState extends State<HalbzeitInhalt>
     super.dispose();
   }
 
-  Future<void> _vibrieren() async {
-    if (!await EinstellungenService.vibrationAktiv) return;
-    final hatAmplitude = await Vibration.hasAmplitudeControl();
-    if (!mounted) return;
-    if (hatAmplitude) {
-      Vibration.vibrate(
-        duration: _kVibrationsDauerMs,
-        amplitude: _kVibrationsStaerke,
-      );
-    } else {
-      Vibration.vibrate(duration: _kVibrationsDauerMs);
-    }
-  }
+  // Ein mittlerer Stoss zur Halbzeit. Schalter und Plattformweg liegen im
+  // Dienst — hier steht nur noch das Wofür.
+  void _vibrieren() => HaptikService.spiele(HaptikArt.mittel);
 
   @override
   Widget build(BuildContext context) {

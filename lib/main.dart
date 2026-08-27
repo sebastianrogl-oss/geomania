@@ -10,6 +10,7 @@ import 'firebase_options.dart';
 import 'services/ad_service.dart';
 import 'services/auth_service.dart';
 import 'services/benachrichtigungs_service.dart';
+import 'services/haptik_service.dart';
 import 'services/fortschritt_service.dart';
 import 'services/locale_service.dart';
 import 'services/onboarding_service.dart';
@@ -55,6 +56,7 @@ void main() async {
   // Lädt die Klangeffekte vor, damit der erste Ton nicht verzögert kommt.
   // Auf Web ein No-op, siehe SoundService.verfuegbar.
   await SoundService.initialisieren();
+  await HaptikService.initialisieren();
 
   runApp(const GeoManiaApp());
 

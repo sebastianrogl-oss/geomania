@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:vibration/vibration.dart';
 import '../data/countries.dart';
 import '../data/laender_aliase.dart';
 import '../data/lernpfad_data.dart';
@@ -15,7 +14,7 @@ import '../services/locale_service.dart';
 import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
 import '../services/benachrichtigungs_service.dart';
-import '../services/einstellungen_service.dart';
+import '../services/haptik_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/gelernte_fakten_service.dart';
 import '../services/onboarding_service.dart';
@@ -578,17 +577,6 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   void _stopCountdown() => _countdownTimer?.cancel();
 
-  // Kurzes Vibrations-Feedback bei Antwort-Auswertung — kurzer Puls bei
-  // richtig, spürbar längerer bei falsch (inkl. Timer-Ablauf), respektiert
-  // den Vibration-Schalter in den Einstellungen. Nutzt das vibration-Paket
-  // (direkter Vibrator-Zugriff) statt HapticFeedback.*: Flutters
-  // HapticFeedback-API ruft auf Android IMMER View.performHapticFeedback()
-  // auf, was von einer separaten System-Einstellung ("Tipp-/Berührungs-
-  // Feedback") abhängt und bei vielen Geräten (u.a. Samsung One UI) trotz
-  // erteilter VIBRATE-Berechtigung stumm bleibt, wenn diese Einstellung aus
-  // ist — das vibration-Paket spricht den Vibrationsmotor direkt an und
-  // umgeht dieses Problem. Bewusst fire-and-forget (kein await): die Haptik
-  // soll den UI-Fluss nicht verzögern.
   /// Haptik UND Klang zur Antwort.
   ///
   /// Beides an EINER Stelle, weil beides denselben Auslöser hat: die sieben
@@ -598,17 +586,14 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   ///
   /// Hiess vorher _vibriereAntwort — der Name stimmt nicht mehr, seit auch
   /// ein Ton dranhängt.
+  ///
+  /// Warum kein HapticFeedback.* aus Flutter: Das ruft auf Android
+  /// View.performHapticFeedback() auf und hängt damit an einer separaten
+  /// System-Einstellung, die auf vielen Geräten aus ist. Der [HaptikService]
+  /// spricht den Vibrator direkt an — die ganze Begründung steht dort.
   void _antwortRueckmeldung(bool richtig) {
     SoundService.spiele(richtig ? Klang.richtig : Klang.falsch);
-    EinstellungenService.vibrationAktiv.then((aktiv) async {
-      if (!aktiv) return;
-      if (!await Vibration.hasVibrator()) return;
-      if (richtig) {
-        Vibration.vibrate(duration: 40);
-      } else {
-        Vibration.vibrate(duration: 70);
-      }
-    });
+    HaptikService.spiele(richtig ? HaptikArt.erfolg : HaptikArt.fehler);
   }
 
   // Zeigt nur noch das Feedback an — der Übergang zur nächsten Frage
@@ -3919,11 +3904,6 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
   late final AnimationController _fahrt;
   Animation<double>? _fahrtAnim;
 
-  // Vibrations-Einstellungen VORAB laden: zwischen dem Überfahren einer
-  // Skalenmarke und dem Impuls darf kein await liegen, sonst kommt er zu spät.
-  bool _vibrationAn = false;
-  bool _hatAmplitude = false;
-
   /// Letzte Marke, auf der ein Impuls ausgelöst wurde, und wann.
   ///
   /// Der Balken bewegt sich stufenlos — ein Impuls je Rangplatz wären beim
@@ -3948,16 +3928,10 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
     _position = ((_gesamt + 1) / 2).roundToDouble();
     _fahrt = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 900));
-    EinstellungenService.vibrationAktiv.then((aktiv) async {
-      if (!aktiv) return;
-      final amp = await Vibration.hasAmplitudeControl();
-      if (mounted) {
-        setState(() {
-          _vibrationAn = true;
-          _hatAmplitude = amp;
-        });
-      }
-    });
+    // Das Vorabladen der Vibrations-Einstellungen entfällt: Der
+    // [HaptikService] hält den Schalter selbst zwischengespeichert, und genau
+    // dafür war es hier gedacht — zwischen dem Überfahren einer Skalenmarke
+    // und dem Impuls darf kein await liegen.
   }
 
   @override
@@ -3982,9 +3956,13 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
     super.dispose();
   }
 
-  /// Kurzer, sehr dezenter Impuls beim Überfahren einer Skalenmarke.
+  /// Kurze, sehr dezente Rastung beim Überfahren einer Skalenmarke.
+  ///
+  /// Die Marken-Logik und die Mindestpause bleiben unverändert — getauscht
+  /// ist nur, WAS ausgelöst wird: statt 18 ms Motorlauf jetzt die Rastung des
+  /// Systems ([HaptikArt.auswahl]), auf Android ab API 30 ein echtes
+  /// Haptik-Primitiv.
   void _rasten(double neu) {
-    if (!_vibrationAn) return;
     final schritt = _rasterSchritt(_gesamt);
     final marke = ((neu - 1) / schritt).floor();
     if (marke == _letzteMarke) return;
@@ -3992,11 +3970,7 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
     final jetzt = DateTime.now();
     if (jetzt.difference(_letzterImpuls) < _kImpulsPause) return;
     _letzterImpuls = jetzt;
-    if (_hatAmplitude) {
-      Vibration.vibrate(duration: 18, amplitude: 35);
-    } else {
-      Vibration.vibrate(duration: 18);
-    }
+    HaptikService.spiele(HaptikArt.auswahl);
   }
 
   void _ziehen(double neu) {

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:vibration/vibration.dart';
+
 import '../data/lernpfad_data.dart';
 import '../data/modus_kategorien.dart';
-import '../services/einstellungen_service.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
@@ -11,6 +10,7 @@ import '../services/challenge_rekord_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/portfolio_service.dart';
 import '../services/portfolio_spielstil_service.dart';
+import '../services/haptik_service.dart';
 import '../services/profilbild_service.dart';
 import '../services/rangliste_service.dart';
 import '../utils/portfolio_format.dart';
@@ -510,16 +510,9 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
     _waehle(pfad);
   }
 
-  Future<void> _vibriere() async {
-    if (!await EinstellungenService.vibrationAktiv) return;
-    final hatAmplitude = await Vibration.hasAmplitudeControl();
-    if (!mounted) return;
-    if (hatAmplitude) {
-      Vibration.vibrate(duration: 90, amplitude: 130);
-    } else {
-      Vibration.vibrate(duration: 90);
-    }
-  }
+  // Ein mittlerer Stoss zur Bestätigung der Auswahl. Schalter und
+  // Plattformweg liegen im Dienst — hier steht nur noch das Wofür.
+  void _vibriere() => HaptikService.spiele(HaptikArt.mittel);
 
   /// Kurzer Hinweis, wenn die Sterne nicht reichen.
   void _zeigeFehlendeSterne(int fehlend) {

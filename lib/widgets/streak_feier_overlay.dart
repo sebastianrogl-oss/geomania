@@ -4,9 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:lottie/lottie.dart';
-import 'package:vibration/vibration.dart';
 import '../l10n/uebersetzungen.dart';
-import '../services/einstellungen_service.dart';
+import '../services/haptik_service.dart';
 import '../services/fortschritt_service.dart';
 
 /// Erhöht den Tages-Streak und zeigt die Feier, falls er dabei gestiegen ist.
@@ -133,14 +132,15 @@ const _kFarbwechselEnde = _kTiefpunkt + 500 / 1750; // 0.7143
 // Der Zahlenwechsel setzt kurz nach dem Höhepunkt ein.
 const _kZahlNachHoehepunkt = Duration(milliseconds: 150);
 
-// ── Fall A: ansteigendes Vibrationsmuster ────────────────────────────────────
+// ── Fall A: ansteigende Impulskette ──────────────────────────────────────────
 //
-// Echtes Muster über das vibration-Paket statt einer Kette einzelner
-// HapticFeedback-Impulse: fünf immer längere Stöße in immer kürzeren Abständen,
-// abgeschlossen vom kräftigen Höhepunkt.
+// Fünf Stöße in immer kürzeren Abständen, abgeschlossen vom kräftigen
+// Höhepunkt.
 //
-// Das Muster wechselt Pause und Vibration ab:
-//   [Pause, Stoß, Pause, Stoß, …]
+// DIE ZEITPUNKTE STAMMEN AUS DEM FRÜHEREN SYSTEM-MUSTER, das aus Pausen und
+// Dauern bestand und vom Betriebssystem am Stück abgespielt wurde. Seit die
+// Haptik über benannte Primitive läuft (siehe [HaptikService]), plant der
+// Dienst je Stoß einen Zeitpunkt — die Tabelle bleibt die Rechengrundlage:
 //
 //   Pause  Stoß   Stoß beginnt bei   Amplitude
 //     0     40           0ms             60
@@ -156,14 +156,8 @@ const _kZahlNachHoehepunkt = Duration(milliseconds: 150);
 // (0.92) erreicht und der Farbwechsel beginnt (siehe _kTiefpunkt). Die
 // Abstufung — kürzer werdende Abstände, länger und stärker werdende Stöße —
 // bleibt dabei erhalten.
-const _kVibrationsMuster = [0, 40, 146, 45, 119, 55, 93, 65, 66, 75, 46, 200];
-const _kVibrationsStaerken = [0, 60, 0, 85, 0, 115, 0, 150, 0, 190, 0, 255];
 // Zur Kontrolle: Summe aller Werte vor dem letzten Stoß.
 const _kVibrationHoehepunktMs = 750;
-
-// ── Fall B: ein einzelner kräftiger Stoß ─────────────────────────────────────
-const _kImpulsDauerMs = 180;
-const _kImpulsStaerke = 255;
 
 // ── Fall B ───────────────────────────────────────────────────────────────────
 const _kPopWachstum = Duration(milliseconds: 800);
@@ -233,11 +227,10 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
   // Fall B: sorgt dafür, dass die Vibration im Pop-Höhepunkt exakt einmal
   // auslöst und nicht bei jedem Frame danach erneut.
   bool _vibriert = false;
-  // Nutzer-Einstellung, VORAB geladen (siehe _vibrationVorbereiten).
-  bool _vibrationErlaubt = false;
-  // Ob das Gerät die Amplitude steuern kann. Ohne diese Fähigkeit (u.a. iOS,
-  // ältere Android-Geräte) läuft dasselbe Muster ohne Intensitäts-Abstufung.
-  bool _hatAmplitude = false;
+  /// Die laufende Haptik-Kette von Fall A — in dispose() abzubrechen, falls
+  /// die Feier vorzeitig weggetippt wurde. Sonst schlagen die Impulse noch
+  /// los, wenn längst etwas anderes auf dem Schirm steht.
+  HaptikFolge? _haptik;
 
   /// Fall A ("Streak startet neu") vs. Fall B ("Streak wächst").
   ///
@@ -403,29 +396,9 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
 
     _roteTicker = createTicker(_tick)..start();
 
-    _vibrationVorbereiten();
+
 
     _ablaufStarten();
-  }
-
-  // Lädt Nutzer-Einstellung und Geräte-Fähigkeit vorab, damit beim Auslösen
-  // kein await zwischen Animationsstart und Vibration liegt — sonst begänne
-  // das Muster gegenüber der Animation verzögert. Die Ruhephase von 1200ms
-  // reicht dafür weit aus; bis dahin wird nicht vibriert.
-  //
-  // Die Nutzer-Einstellung wird genauso abgefragt wie beim Abzeichen-Popup
-  // (widgets/abzeichen_popup.dart), nur der Impulsgeber ist ein anderer.
-  Future<void> _vibrationVorbereiten() async {
-    final erlaubt = await EinstellungenService.vibrationAktiv;
-    if (!erlaubt || !mounted) return;
-    final amplitude = await Vibration.hasAmplitudeControl();
-    if (!mounted) return;
-    _vibrationErlaubt = true;
-    _hatAmplitude = amplitude;
-    if (kDebugMode) {
-      debugPrint('[StreakFeier] Vibration bereit: '
-          'hasAmplitudeControl=$amplitude');
-    }
   }
 
   // Schiebt die rote Flammen-Loop mit dem aktuellen _tempo weiter und schlägt
@@ -445,49 +418,32 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
   void _pruefePopHoehepunkt() {
     if (_vibriert || _popCtrl.value < _kPopHoehepunktWachstum) return;
     _vibriert = true;
-    if (!_vibrationErlaubt) return;
-    if (kDebugMode) {
-      debugPrint(
-        '[StreakFeier] Vibration Fall B: einzelner Stoß ${_kImpulsDauerMs}ms '
-        '(Amplitude ${_hatAmplitude ? _kImpulsStaerke : 'n/a'}) '
-        'bei Fortschritt $_kPopHoehepunktWachstum',
-      );
-    }
-    if (_hatAmplitude) {
-      Vibration.vibrate(duration: _kImpulsDauerMs, amplitude: _kImpulsStaerke);
-    } else {
-      Vibration.vibrate(duration: _kImpulsDauerMs);
-    }
+    HaptikService.spiele(HaptikArt.stark);
   }
 
-  // Fall A: ein einziges, ansteigendes Vibrationsmuster — es läuft nach dem
-  // Start selbstständig durch und endet mit dem kräftigen Stoß, der zeitlich
-  // auf den Farbwechsel fällt (siehe _kVibrationsMuster).
+  // Fall A: eine ansteigende Kette, die mit dem kräftigen Stoß endet — er
+  // fällt zeitlich auf den Farbwechsel (siehe _kVibrationHoehepunktMs).
   //
-  // Nutzer-Einstellung und Amplituden-Fähigkeit werden VORAB in initState
-  // geladen, damit hier kein await zwischen Animationsstart und Vibration
-  // liegt und beide zeitgleich beginnen.
+  // FRÜHER WAR DAS EIN EINZIGES SYSTEM-MUSTER: eine Liste aus Pausen und
+  // Dauern samt Intensitäten, die das Betriebssystem selbstständig abspielte.
+  // Das ging nur, solange die Haptik in Millisekunden Motorlauf gedacht war.
+  // Ein Haptik-Primitiv hat keine Dauer, es ist ein fertiges Gefühl — also
+  // plant der [HaptikService] jetzt je Stoß einen Zeitpunkt.
+  //
+  // Die ZEITPUNKTE sind aus dem alten Muster übernommen, nicht neu erfunden:
+  // Sie ergeben sich aus dessen Pausen und Dauern aufsummiert, sodass der
+  // Höhepunkt weiterhin exakt bei 750ms liegt. Aus den Amplituden 60/85/115/
+  // 150/190/255 sind die drei benannten Stärken geworden.
   void _vibrationsketteStarten() {
-    if (!_vibrationErlaubt) return;
-    if (kDebugMode) {
-      debugPrint(
-        '[StreakFeier] Vibration Fall A: ansteigendes Muster, '
-        'Amplitudensteuerung=$_hatAmplitude, '
-        'Höhepunkt bei ${_kVibrationHoehepunktMs}ms',
-      );
-    }
-    if (_hatAmplitude) {
-      Vibration.vibrate(
-        pattern: _kVibrationsMuster,
-        intensities: _kVibrationsStaerken,
-      );
-    } else {
-      // Geräte ohne Amplitudensteuerung (u.a. iOS): gleiches Timing, aber
-      // ohne Intensitäts-Abstufung.
-      Vibration.vibrate(pattern: _kVibrationsMuster);
-    }
+    _haptik = HaptikService.folge(const [
+      HaptikSchritt(0, HaptikArt.leicht),
+      HaptikSchritt(186, HaptikArt.leicht),
+      HaptikSchritt(350, HaptikArt.mittel),
+      HaptikSchritt(498, HaptikArt.mittel),
+      HaptikSchritt(629, HaptikArt.mittel),
+      HaptikSchritt(_kVibrationHoehepunktMs, HaptikArt.stark),
+    ]);
   }
-
   Future<void> _ablaufStarten() async {
     _einblendCtrl.forward();
     // Ruhephase: beide Fälle lassen ihre Flamme erst einmal ruhig lodern.
@@ -541,9 +497,9 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
   @override
   void dispose() {
     _roteTicker.dispose();
-    // Ein noch laufendes Vibrationsmuster abbrechen, falls die Feier
-    // vorzeitig weggetippt wurde — es liefe sonst im Hintergrund weiter.
-    if (_vibrationErlaubt) Vibration.cancel();
+    // Eine noch laufende Impulskette abbrechen, falls die Feier vorzeitig
+    // weggetippt wurde — sie liefe sonst im Hintergrund weiter.
+    _haptik?.abbrechen();
     _popCtrl.removeListener(_pruefePopHoehepunkt);
     _einblendCtrl.dispose();
     _zahlCtrl.dispose();

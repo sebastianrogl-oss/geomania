@@ -9,6 +9,7 @@ import '../services/ad_service.dart';
 import '../services/auth_service.dart';
 import '../services/benachrichtigungs_service.dart';
 import '../services/einstellungen_service.dart';
+import '../services/haptik_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/locale_service.dart';
 import '../services/onboarding_service.dart';
@@ -416,6 +417,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleVibration(bool v) async {
     setState(() => _vibration = v);
     await EinstellungenService.setzeVibrationAktiv(v);
+    // Wie beim Ton: Der Dienst hält den Stand zwischengespeichert, damit
+    // zwischen Auslöser und Stoss kein await auf SharedPreferences liegt.
+    HaptikService.setzeAktiv(v);
+    // Sofort spürbar machen, was der Schalter bewirkt.
+    if (v) HaptikService.spiele(HaptikArt.mittel);
   }
 
   // ── Lernfortschritt zurücksetzen ─────────────────────────────────────────

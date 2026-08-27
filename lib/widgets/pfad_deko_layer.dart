@@ -94,16 +94,23 @@ Widget _dekoImage(String datei, double left, double top, double size) => Positio
       top: top,
       width: size,
       height: size,
-      child: Image.asset(
-        'assets/icons/deko/$datei',
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        errorBuilder: (ctx, err, stack) {
-          // ignore: avoid_print
-          print('ICON FEHLER: $err');
-          return const SizedBox.shrink();
-        },
+      // Wie bei den Figuren: Deko fängt keine Tipps ab. Die Wahrzeichen liegen
+      // im Pfad zwar UNTER den Stationsbuttons und haben deshalb nie etwas
+      // verdeckt — aber das ist eine Eigenschaft der Stapelreihenfolge, nicht
+      // des Bauteils. Wer die Reihenfolge einmal ändert, soll sich nicht
+      // denselben Fehler einhandeln (siehe pfad_maskottchen.dart).
+      child: IgnorePointer(
+        child: Image.asset(
+          'assets/icons/deko/$datei',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (ctx, err, stack) {
+            // ignore: avoid_print
+            print('ICON FEHLER: $err');
+            return const SizedBox.shrink();
+          },
+        ),
       ),
     );
 

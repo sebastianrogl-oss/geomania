@@ -46,16 +46,36 @@ List<Widget> _maskottchenOverlays({
       top: a.pos.dy - size / 2,
       width: size,
       height: size,
-      child: Image.asset(
-        'assets/icons/deko/$variant.png',
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        errorBuilder: (ctx, err, stack) {
-          // ignore: avoid_print
-          print('$fehlerLabel FEHLER: $err');
-          return const SizedBox.shrink();
-        },
+      // KEINE TIPPS ABFANGEN — sonst frisst die Figur die Stationsbuttons.
+      //
+      // Der Kasten ist quadratisch und so gross wie die längste Kante der
+      // Datei (677x369, die Figur darin nur 238x273) — der grösste Teil davon
+      // ist durchsichtiger Rand. Diese Overlays hängt der Lernpfad ZULETZT in
+      // seinen Stack, und zuletzt gezeichnet heisst in Flutter: zuerst
+      // getroffen. RenderImage.hitTestSelf liefert dabei auch für vollständig
+      // durchsichtige Pixel true.
+      //
+      // Zusammen ergab das eine unsichtbare tote Zone über den Nachbarn des
+      // Ankers: Am Gerät gemessen war die untere rechte Ecke des
+      // Stationsbuttons eine Position über der Figur nicht mehr antippbar,
+      // rund 40 % seiner Fläche. Das las sich als "der Button reagiert oft
+      // erst beim zweiten Tippen" — wer oben links traf, kam durch.
+      //
+      // Die Figuren sind reine Dekoration und haben keinen eigenen Tipp-Zweck,
+      // deshalb fallen Tipps hier einfach durch. Siehe den Test in
+      // test/pfad_deko_tippdurchlass_test.dart.
+      child: IgnorePointer(
+        child: Image.asset(
+          'assets/icons/deko/$variant.png',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (ctx, err, stack) {
+            // ignore: avoid_print
+            print('$fehlerLabel FEHLER: $err');
+            return const SizedBox.shrink();
+          },
+        ),
       ),
     ));
   }

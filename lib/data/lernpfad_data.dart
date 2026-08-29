@@ -299,12 +299,24 @@ const List<LernModus> _modiMeister = [
 ///   Block. Karibikinseln haben keine Landgrenze, in Ozeanien hat genau ein
 ///   Land eine — dort scheitert der Modus auf JEDER Fragenzahl.
 /// - flaechenVergleich braucht Laenderpaare mit Groessenverhaeltnis 2 bis
-///   100. In Europa sind sich die Laender dafuer zu aehnlich, in den kleinen
-///   Welten fehlen die Paare ganz.
-/// - wasGehoertNichtDazu braucht Merkmale, die INNERHALB des Quartetts
-///   trennen. In einem Kontinent-Block sind Kontinent und Halbkugel fuer
-///   alle gleich, damit bleibt fast nie genau ein begruendbarer Aussenseiter
-///   uebrig.
+///   100. In den kleinen Welten fehlen die Paare ganz. Fuer Europa gilt die
+///   Sperre nur noch den BLOECKEN: ueber alle 46 Laender hinweg traegt der
+///   Modus (nachgemessen 7 von 7 Fragen in 50 von 50 Durchlaeufen), der
+///   Meister-Abschnitt bekommt ihn deshalb ueber [erzeugeModusSequenz]s
+///   `freigabe` zurueck.
+/// - wasGehoertNichtDazu scheitert NICHT an fehlenden Merkmalen — Waehrung,
+///   EU-Mitgliedschaft, Binnenstaat und Wirtschaftssektor trennen innerhalb
+///   Europas gut. Es scheitert an der Eindeutigkeit: Der Generator verlangt,
+///   dass ueber ALLE Merkmale hinweg genau EIN Aussenseiter begruendbar ist
+///   (_aussenseiterKandidaten in station_session_service.dart), und verwirft
+///   jedes Quartett mit mehreren gueltigen Begruendungen. Innerhalb eines
+///   Kontinents ist das der Normalfall: Nachgemessen liefert Europa bei
+///   6 geforderten Fragen verlaesslich nur 4, gelegentlich 3 — auf allen
+///   46 Laendern, nicht nur auf einem Block.
+///
+///   DESHALB WUERDEN MEHR MERKMALE NICHT HELFEN, sondern schaden: Jedes
+///   weitere Merkmal ist eine weitere moegliche Zweitbegruendung und laesst
+///   noch mehr Quartette durchfallen. Die Sperre bleibt fuer ganz Europa.
 /// grenzkettenRaetsel steht zusaetzlich in Suedamerika und Ozeanien: dort gibt
 /// es KEINE kuratierten Raetsel (laender_grenzketten.dart fuehrt nur Europa,
 /// Afrika, Asien und Nordamerika), der Generator wiche also sofort auf das
@@ -494,6 +506,36 @@ List<LernModus> erzeugeModusSequenz(
   /// (genutzt von Tests und Debug-Werkzeugen).
   String? weltId,
 
+  /// Modi, die fuer DIESEN Abschnitt trotz Welt-Sperre erlaubt sind.
+  ///
+  /// Das Gegenstueck zu [kModusSperrenProWelt], und es braucht beides: Die
+  /// Sperren haengen an der Datenlage, und die haengt am Laenderpool — der
+  /// aber wechselt INNERHALB einer Welt. Europas Abschnitte 1 bis 3 arbeiten
+  /// mit je 15 bis 16 Laendern eines Blocks, der Meister-Abschnitt mit allen
+  /// 46. Der Flaechen-Vergleich braucht Paare im Groessenverhaeltnis 2 bis
+  /// 100: In einem einzelnen Block sind sie sich dafuer zu aehnlich, ueber
+  /// alle 46 hinweg gibt es sie reichlich (nachgemessen: 7 von 7 Fragen in
+  /// 50 von 50 Durchlaeufen).
+  ///
+  /// Eine Freigabe gilt deshalb bewusst je ABSCHNITT und nicht je Welt — sonst
+  /// bekaemen die Bloecke 1 bis 3 den Modus mit, fuer den ihre Pools zu duenn
+  /// sind.
+  Set<LernModus> freigabe = const {},
+
+  /// Gewicht je Einsatz, das den Standard aus [_gewicht] fuer DIESEN
+  /// Abschnitt ersetzt. Kleiner heisst: kommt oefter dran.
+  ///
+  /// Der Round-Robin vergibt jede Station an den Modus mit dem niedrigsten
+  /// gewichteten Zaehler — ein Spiel-Modus zaehlt je Einsatz 0.5, ein
+  /// Abfrage-Modus 1.0. Wer einen Modus haeufiger will, ohne ihn an feste
+  /// Plaetze zu nageln, senkt sein Gewicht: Bei 0.25 steht er nach zwei
+  /// Einsaetzen bei 0.5 und bekommt die naechsten freien Plaetze noch vor
+  /// den Abfrage-Modi, die nach einem Einsatz schon bei 1.0 stehen.
+  ///
+  /// Die HAEUFIGKEIT wird damit gesteuert, die POSITION nicht — verteilt
+  /// wird weiterhin vom Verfahren selbst.
+  Map<LernModus, double> gewichtProEinsatz = const {},
+
   /// Wie viele Abfrage-Stationen unmittelbar VOR diesem Abschnitt lagen.
   /// Sorgt dafuer, dass die Vierer-Regel ueber Abschnittsgrenzen hinweg
   /// greift statt bei jedem Abschnitt neu zu zaehlen.
@@ -510,7 +552,8 @@ List<LernModus> erzeugeModusSequenz(
 }) {
   final gesperrt = weltId == null
       ? const <LernModus>{}
-      : (kModusSperrenProWelt[weltId] ?? const <LernModus>{});
+      : (kModusSperrenProWelt[weltId] ?? const <LernModus>{})
+          .difference(freigabe);
   final gefiltert =
       modiFuerLevel(abschnittLevel).where((m) => !gesperrt.contains(m)).toList();
   // Rotation um den Weltversatz — siehe kPoolVersatzProWelt.
@@ -590,7 +633,8 @@ List<LernModus> erzeugeModusSequenz(
     // bevorzugen. Ein Spiel-Modus zaehlt pro Einsatz nur halb, steht nach
     // einem Einsatz also gleichauf mit einem Abfrage-Modus, der noch gar
     // nicht dran war.
-    double last(LernModus m) => (zaehler[m] ?? 0) * _gewicht(m);
+    double last(LernModus m) =>
+        (zaehler[m] ?? 0) * (gewichtProEinsatz[m] ?? _gewicht(m));
     kandidaten.sort((a, b) => last(a).compareTo(last(b)));
 
     // Bei Gleichstand: bevorzugt die noch nicht genutzte Variante eines
@@ -742,6 +786,13 @@ List<LernStation> _baueAbschnitt(
   bool istErsterAbschnittDerWelt = false,
   int fragenProStation = 8,
   int? modusPoolLevel,
+
+  /// Modi, die trotz Welt-Sperre in DIESEM Abschnitt erlaubt sind — siehe
+  /// [erzeugeModusSequenz].
+  Set<LernModus> freigabe = const {},
+
+  /// Abweichendes Gewicht je Einsatz — siehe [erzeugeModusSequenz].
+  Map<LernModus, double> gewichtProEinsatz = const {},
 }) {
   final polster = anzahl == 0 ? 0 : ((1 - anzahl) % 4 + 4) % 4;
   final gesamt = anzahl + polster;
@@ -750,7 +801,9 @@ List<LernStation> _baueAbschnitt(
       weltId: wid,
       ketteVorher: _laufendeKette,
       ketteNachher: (k) => _laufendeKette = k,
-      istErsterAbschnittDerWelt: istErsterAbschnittDerWelt);
+      istErsterAbschnittDerWelt: istErsterAbschnittDerWelt,
+      freigabe: freigabe,
+      gewichtProEinsatz: gewichtProEinsatz);
   return [
     for (int i = 0; i < gesamt; i++)
       _st(wid, stufe, i + 1, modi[i], laender, fragenProStation),
@@ -779,14 +832,20 @@ Map<String, List<LernStation>> _baueAlleAbschnitte() {
 
   final weltenGesehen = <String>{};
   void bau(String wid, int stufe, List<String> laender, int anzahl,
-      {bool erster = false, int fragen = 8, int? poolLevel}) {
+      {bool erster = false,
+      int fragen = 8,
+      int? poolLevel,
+      Set<LernModus> freigabe = const {},
+      Map<LernModus, double> gewichtProEinsatz = const {}}) {
     // Der erste Aufruf je Welt ist deren Einstiegs-Abschnitt.
     final ersterDerWelt = weltenGesehen.add(wid);
     r['${wid}_$stufe'] = _baueAbschnitt(wid, stufe, laender, anzahl,
         istAllerErsterAbschnitt: erster,
         istErsterAbschnittDerWelt: ersterDerWelt,
         fragenProStation: fragen,
-        modusPoolLevel: poolLevel);
+        modusPoolLevel: poolLevel,
+        freigabe: freigabe,
+        gewichtProEinsatz: gewichtProEinsatz);
   }
 
   bau('europa', 1, _europaBlockA, 21, erster: true);

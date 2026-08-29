@@ -25,7 +25,9 @@ void main() {
     // Reine Absicherung der Rechengrundlage: Ändert sie sich, sollen die
     // Anteils-Prüfungen unten nicht stillschweigend gegen eine andere Basis
     // laufen.
-    expect(kErreichbareSterne, 3988,
+    // 3988 vor der Europa-Erweiterung: Der Meister-Abschnitt wuchs von 25 auf
+    // 29 Stationen und brachte 26 Sterne mit.
+    expect(kErreichbareSterne, 4014,
         reason: 'Die erreichbaren Sterne haben sich geändert — Preise prüfen');
   });
 

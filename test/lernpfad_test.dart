@@ -10,7 +10,10 @@ import 'package:geomania/services/station_session_service.dart';
 // Zickzack-Pfad mittig vor dem Checkpoint endet — mit echten, spielbaren
 // Stationen statt der früheren rein dekorativen Füll-Punkte.
 const erwarteteAnzahl = {
-  'europa_1': 21, 'europa_2': 25, 'europa_3': 25, 'europa_4': 25,
+  // europa_4 stand auf 25 und wurde um vier Stationen erweitert — der Pfad
+  // bekommt dort eine zusätzliche Kurve. 29 erfüllt die Vierer-Polsterung
+  // genau wie 25, es kommt also kein weiteres Polster dazu.
+  'europa_1': 21, 'europa_2': 25, 'europa_3': 25, 'europa_4': 29,
   'suedamerika_1': 13, 'suedamerika_2': 13, 'suedamerika_3': 17,
   'nordamerika_1': 13, 'nordamerika_2': 17, 'nordamerika_3': 21, 'nordamerika_4': 21,
   'afrika_1': 21, 'afrika_2': 25, 'afrika_3': 29, 'afrika_4': 33,
@@ -36,6 +39,35 @@ void main() {
         expect(a.stationen.length, erwarteteAnzahl[a.id],
             reason: 'Abschnitt ${a.id}');
       }
+    }
+  });
+
+  /// Die Erweiterung von europa_4 steht auf zwei indirekten Reglern: einer
+  /// Freigabe (Flächen-Vergleich trotz Welt-Sperre) und einem gesenkten
+  /// Gewicht (Zwei Wahrheiten kommt öfter dran). Beide steuern die HÄUFIGKEIT
+  /// über den Round-Robin, nicht über feste Plätze — die Zusammensetzung
+  /// könnte also bei jeder Änderung am Modus-Pool verrutschen, ohne dass es
+  /// jemand merkt. Deshalb steht sie hier als Zahl.
+  test('1b) europa_4 trägt die vier zusätzlichen Stationen', () {
+    final europa = lernwelten.firstWhere((w) => w.id == 'europa');
+    final vier = europa.abschnitte.firstWhere((a) => a.id == 'europa_4');
+    int wieOft(LernAbschnitt a, LernModus m) =>
+        a.stationen.where((s) => s.modus == m).length;
+
+    expect(wieOft(vier, LernModus.flaechenVergleich), 2,
+        reason: 'Flächen-Vergleich im Meister-Abschnitt');
+    expect(wieOft(vier, LernModus.zweiWahrheiten), 4,
+        reason: 'Zwei Wahrheiten — zwei davon sind die neuen Plätze');
+
+    // Die Freigabe gilt NUR für den Meister-Abschnitt: Die Blöcke 1 bis 3
+    // haben je 15 bis 16 Länder, und dafür ist der Flächen-Vergleich zu dünn.
+    for (final a in europa.abschnitte.where((a) => a.id != 'europa_4')) {
+      expect(wieOft(a, LernModus.flaechenVergleich), 0, reason: a.id);
+    }
+    // "Was gehört nicht dazu" bleibt in ganz Europa gesperrt — siehe die
+    // Begründung bei kModusSperrenProWelt.
+    for (final a in europa.abschnitte) {
+      expect(wieOft(a, LernModus.wasGehoertNichtDazu), 0, reason: a.id);
     }
   });
 
@@ -118,6 +150,19 @@ void main() {
     }
   });
 
+  /// Abschnitte, in denen EIN Modus bewusst über der Schwelle liegt.
+  ///
+  /// Der Regelfall bleibt die Gleichverteilung. Wer hier etwas einträgt, hat
+  /// in lernpfad_data.dart ein `gewichtProEinsatz` gesetzt und damit gesagt:
+  /// Dieser Modus soll in diesem Abschnitt öfter kommen. Die Zahl steht
+  /// deshalb hier, nicht als aufgeweichte Schwelle für alle.
+  const bewusstHaeufiger = <String, Map<LernModus, int>>{
+    // Die zwei neuen Plätze des erweiterten Meister-Abschnitts gehen an Zwei
+    // Wahrheiten (Wissen & Rätsel), damit die Fortschrittsbalken durch die
+    // Erweiterung nicht kippen — siehe Test 1b.
+    'europa_4': {LernModus.zweiWahrheiten: 4},
+  };
+
   test('2e) Gleichmäßige Verteilung: kein Modus dominiert einen Abschnitt', () {
     for (final welt in lernwelten) {
       for (final a in welt.abschnitte) {
@@ -128,9 +173,10 @@ void main() {
         final anzahlModi = modiFuerLevel(_poolLevelFuer(welt, a)).length;
         final erwarteterMax = (a.stationen.length / anzahlModi).ceil() + 1;
         for (final entry in zaehler.entries) {
-          expect(entry.value <= erwarteterMax, true,
+          final erlaubt = bewusstHaeufiger[a.id]?[entry.key] ?? erwarteterMax;
+          expect(entry.value <= erlaubt, true,
               reason: '${a.id}: ${entry.key.name} kommt ${entry.value}x vor '
-                  '(erwartet max. $erwarteterMax bei ${a.stationen.length} Stationen / $anzahlModi Modi)');
+                  '(erlaubt max. $erlaubt bei ${a.stationen.length} Stationen / $anzahlModi Modi)');
         }
       }
     }

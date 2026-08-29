@@ -851,7 +851,19 @@ Map<String, List<LernStation>> _baueAlleAbschnitte() {
   bau('europa', 1, _europaBlockA, 21, erster: true);
   bau('europa', 2, _europaBlockB, 22);
   bau('europa', 3, _europaBlockC, 22);
-  bau('europa', 4, _europaAll, 25);
+  // Der Meister-Abschnitt ist um vier Stationen laenger als die uebrigen drei
+  // und bekommt als einziger Europa-Abschnitt den Flaechen-Vergleich dazu:
+  // Er arbeitet mit allen 46 Laendern, und erst dieser Pool traegt den Modus
+  // (siehe freigabe in erzeugeModusSequenz). 29 erfuellt die Vierer-Polsterung
+  // wie zuvor 25 — es kommt kein Polster dazu.
+  // Die zwei uebrigen neuen Plaetze gehen an Zwei Wahrheiten statt an weitere
+  // Abfrage-Stationen: derselbe Fortschrittsbalken wie "Was gehoert nicht
+  // dazu" (Wissen & Raetsel), das hier gesperrt bleibt — so kippt die Balance
+  // der Balken durch die Erweiterung nicht. Nachgemessen liefert der Modus im
+  // 46-Laender-Pool 6 von 6 Fragen in 50 von 50 Durchlaeufen.
+  bau('europa', 4, _europaAll, 29,
+      freigabe: {LernModus.flaechenVergleich},
+      gewichtProEinsatz: {LernModus.zweiWahrheiten: 0.2});
 
   bau('suedamerika', 1, _suedamBlockA, 10, fragen: 6);
   bau('suedamerika', 2, _suedamBlockB, 12, fragen: 6);

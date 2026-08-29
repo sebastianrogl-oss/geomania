@@ -611,8 +611,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 /// dass die Fläche über den Rand hinausragt.
 const double _kTippflaeche = 44;
 
-/// Seitenrand der grünen Kopfleiste — und zugleich der Abstand, der Flamme
-/// und Stern in ihrer Mitte zum Paar zusammenfasst.
+/// Seitenrand der grünen Kopfleiste, links wie rechts.
 const double _kLeisteRand = 16;
 
 /// Das Schloss für alles Gesperrte im Lernpfad — Abschnitts-Bänder wie
@@ -724,29 +723,20 @@ class _GreenHeaderState extends State<_GreenHeader> {
       padding: const EdgeInsets.symmetric(horizontal: _kLeisteRand),
       child: Row(
         children: [
-          // ── Aussen je ein Zeichen, in der Mitte das Paar ─────────────────
+          // ── Vier Zeichen, drei gleiche Lücken ───────────────────────────
           //
-          // Flamme und Stern gehören zusammen: beides ist Fortschritt, beides
-          // wächst beim Spielen, und beide öffnen beim Tippen ihre Erklärung.
-          // Vorher standen alle vier Zeichen gleichmäßig verteilt, und die
-          // beiden lasen sich dadurch als Einzelposten zwischen Welt-Emoji
-          // und Profilbild. Jetzt stehen sie als Paar mittig, aussen je ein
-          // Zeichen.
+          // Welt-Emoji, Flamme, Stern und Profilbild stehen wieder in
+          // gleichem Abstand: Der Sprung vom Emoji zur Flamme ist so gross
+          // wie der von der Flamme zum Stern. Zwischenzeitlich standen Flamme
+          // und Stern eng als Paar in der Mitte — auf dem Gerät wirkten sie
+          // dadurch zusammengedrängt, während links und rechts Luft blieb.
           //
-          // GLEICH BREITE AUSSENFLÄCHEN, damit das Paar wirklich in der Mitte
-          // der Leiste sitzt und nicht nur in der Mitte des Restplatzes: Das
-          // Profilbild belegt eine volle Tippfläche, das Emoji von sich aus
-          // nur seine gut 22 px — ohne den Kasten sässe das Paar um die halbe
-          // Differenz nach links versetzt. Das Emoji bleibt darin linksbündig
-          // und behält damit seinen Platz am Rand.
-          SizedBox(
-            width: _kTippflaeche,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child:
-                  Text(widget.weltEmoji, style: const TextStyle(fontSize: 22)),
-            ),
-          ),
+          // Verteilt wird über drei [Spacer]. Das Emoji steht dabei OHNE die
+          // 44er Fläche, die das Paar-Layout brauchte: Die Fläche wäre gut
+          // 22 px breiter als das Emoji selbst, und dieser Leerraum käme zur
+          // Lücke dahinter dazu — die erste Lücke sähe damit doppelt so gross
+          // aus wie die anderen, obwohl gleich viel Platz verteilt wurde.
+          Text(widget.weltEmoji, style: const TextStyle(fontSize: 22)),
           const Spacer(),
           // Deutlich größer als das frühere Emoji (18): die Flamme trägt die
           // Streak-Anzeige optisch. Die Kopfzeile ist 56px hoch, 45px passen
@@ -786,22 +776,36 @@ class _GreenHeaderState extends State<_GreenHeader> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    '${widget.streak}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
+                  // Zehn Pixel näher an die Flamme, rein optisch.
+                  //
+                  // Der Abstand im Layout sind 4 px wie beim Stern nebenan —
+                  // gemessen aber vom RAND der Flammen-Box, und die ist zu
+                  // gut einem Drittel durchsichtiger Rand (siehe
+                  // _kFlammeSichtbar in statistik_kacheln.dart, dieselbe
+                  // Grafik). Sichtbar klaffte deshalb eine deutlich grössere
+                  // Lücke als beim Stern, der genau so breit ist wie sein
+                  // Zeichen.
+                  //
+                  // Transform.translate statt eines kleineren SizedBox:
+                  // Der Platzbedarf in der Row bleibt unverändert, die Zahl
+                  // rutscht nur in den durchsichtigen Rand der Flamme hinein
+                  // — mit einem negativen Abstand ginge das gar nicht.
+                  Transform.translate(
+                    offset: const Offset(-10, 0),
+                    child: Text(
+                      '${widget.streak}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          // Fester Abstand statt [Spacer] — genau der macht aus den beiden
-          // ein Paar. So breit wie der Seitenrand der Leiste, damit sich das
-          // Mass nicht neu erfindet.
-          const SizedBox(width: _kLeisteRand),
+          const Spacer(),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => zeigeSterneErklaerung(context, kErreichbareSterne),

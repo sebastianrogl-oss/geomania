@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/challenge_panel_signal.dart';
-import '../services/sound_service.dart';
+import '../services/knopf_rueckmeldung.dart';
 
 /// Einheitlicher Abschluss-Button für alle Tages-Challenge-Ergebnis-Screens
 /// — Stil und Text ("Fertig") vom Portfolio-Auflösungs-Screen übernommen,
@@ -19,7 +19,7 @@ class ChallengeFertigButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        SoundService.spiele(Klang.knopf);
+        knopfRueckmeldung();
         if (onTap != null) {
           onTap!();
         } else {

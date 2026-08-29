@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -161,4 +162,45 @@ void main() {
     await baue(tester, const Size(320, 568));
     expect(tester.takeException(), isNull);
   });
+
+  /// Die HÖHE wuchs mit der Systemschrift, die BREITE der Kachel nicht — und
+  /// "Stationen" wie "Abzeichen" standen bei Skala 1.3 schon breiter da, als
+  /// die Kachel ist. Abgeschnitten wurde stillschweigend: `maxLines: 1` ohne
+  /// `overflow` schneidet hart ab, ohne Überlauf-Streifen und ohne Meldung im
+  /// Log. Auf dem Gerät stand dort "Stationei".
+  ///
+  /// Geprüft wird deshalb nicht auf eine Fehlermeldung, sondern nachgemessen:
+  /// Was der Text bräuchte, gegen das, was er bekommen hat.
+  for (final skala in [1.0, 1.3, 1.5, 2.0]) {
+    for (final breite in [320.0, 360.0, 412.0]) {
+      testWidgets(
+          'keine Beschriftung wird abgeschnitten — '
+          '${breite.toInt()} px, Skala $skala', (tester) async {
+        await tester.binding.setSurfaceSize(Size(breite, 640));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.pumpWidget(MaterialApp(
+          builder: (kontext, kind) => MediaQuery(
+            data: MediaQuery.of(kontext)
+                .copyWith(textScaler: TextScaler.linear(skala)),
+            child: kind!,
+          ),
+          home: const Scaffold(
+            body: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child:
+                  StatistikKacheln(streak: 7, stationen: 128, abzeichen: 12),
+            ),
+          ),
+        ));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        for (final label in ['Streak', 'Stationen', 'Abzeichen']) {
+          final absatz = tester.renderObject<RenderParagraph>(find.text(label));
+          expect(absatz.getMaxIntrinsicWidth(double.infinity),
+              lessThanOrEqualTo(absatz.size.width + 0.5),
+              reason: '"$label" wird abgeschnitten');
+        }
+      });
+    }
+  }
 }

@@ -1,7 +1,7 @@
 // Übersetzungen für portfolio_screen.dart (Depot-Überblick) + die
 // portfolio/-Unterscreens.
 const Map<String, String> uebersetzungenPortfolio = {
-  '💼 Weltportfolio': '💼 World Portfolio',
+  'Weltportfolio': 'World Portfolio',
   'DEIN KAPITAL': 'YOUR CAPITAL',
   '🔥 {n} Tage in Folge': '🔥 {n} days in a row',
   '🏆 Rekord: {v}': '🏆 Record: {v}',

@@ -10,9 +10,8 @@ import '../services/daily_challenge.dart';
 import '../services/fortschritt_service.dart';
 import '../services/portfolio_service.dart';
 import '../services/profilbild_service.dart';
-import '../services/sound_service.dart';
+import '../services/knopf_rueckmeldung.dart';
 import '../services/station_session_service.dart';
-import '../utils/responsive.dart';
 import '../widgets/kontinent_hintergrund.dart';
 import '../widgets/level_skip_button.dart';
 import '../widgets/pfad_deko_layer.dart';
@@ -28,6 +27,7 @@ import 'ranking_game_screen.dart';
 import 'station_quiz_screen.dart';
 import '../widgets/lernpfad_station_button.dart';
 import '../theme/app_theme.dart';
+import '../widgets/challenge_kachel.dart';
 
 
 class _Anims {
@@ -80,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // nach Abschluss einer Station) — nur EINMAL pro Welt auslösen: beim
   // ersten Erscheinen dieser Welt (App-Start) oder beim Kontinent-Wechsel.
   String? _zuletztGescrollteWeltId;
+
   late final AnimationController _rippleCtrl;
   late final AnimationController _panelCtrl;
   late final Animation<Offset> _panelSlide;
@@ -420,7 +421,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         modus: tatsaechlicherModus,
         abgeschlossen: details.istAbgeschlossen,
         onStart: () async {
-          SoundService.spiele(Klang.knopf);
+          knopfRueckmeldung();
           Navigator.pop(context);
           await Navigator.push(
             context,
@@ -610,10 +611,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 /// dass die Fläche über den Rand hinausragt.
 const double _kTippflaeche = 44;
 
-const double _kKopfFlaggeAbstand = 16;
+/// Seitenrand der grünen Kopfleiste — und zugleich der Abstand, der Flamme
+/// und Stern in ihrer Mitte zum Paar zusammenfasst.
+const double _kLeisteRand = 16;
 
-/// Um wie viel dieser Block gemeinsam nach links rückt.
-const double _kKopfBlockVersatz = 15;
+/// Das Schloss für alles Gesperrte im Lernpfad — Abschnitts-Bänder wie
+/// Welten-Übersicht.
+///
+/// EIN Bauteil für beide Stellen, nicht zweimal ähnlich gebaut. In der
+/// Welten-Übersicht stand zuvor ein Emoji-Schloss: Das kommt aus der
+/// System-Schriftart, sieht auf jedem Hersteller-Gerät anders aus und war
+/// bunt, während das Schloss am Abschnitts-Band grau ist. Zwei Schlösser für
+/// dieselbe Aussage, in zwei Optiken.
+///
+/// Nur das Symbol, ohne Tippfläche: Am Abschnitts-Band sitzt es in einem
+/// eigenen [_kTippflaeche]-Kasten, in der Welten-Übersicht ist die ganze
+/// Zeile antippbar. Wer eine Tippfläche braucht, wickelt sie darum.
+class _Schloss extends StatelessWidget {
+  const _Schloss();
+
+  /// Warmes Grau, abgestimmt auf den Hintergrund des Lernpfads.
+  static const Color farbe = Color(0xFF9E9C96);
+  static const double groesse = 18;
+
+  @override
+  Widget build(BuildContext context) =>
+      const Icon(Icons.lock_rounded, size: groesse, color: farbe);
+}
 
 class _GreenHeader extends StatefulWidget {
   final String weltEmoji;
@@ -697,25 +721,46 @@ class _GreenHeaderState extends State<_GreenHeader> {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: _kLeisteRand),
       child: Row(
         children: [
-          Text(widget.weltEmoji, style: const TextStyle(fontSize: 22)),
-          // Flamme+Zahl und Stern+Zahl rücken als Block näher an die Flagge.
-          // Der Versatz steckt bewusst in DIESEM Abstand und nicht in einem
-          // Transform an den beiden Blöcken: so wandern beide zwangsläufig
-          // gleich weit, ihr Abstand zueinander bleibt unberührt, die
-          // Tippflächen wandern mit — und das Profilbild rechts bleibt durch
-          // den Spacer, wo es ist.
-          const SizedBox(width: _kKopfFlaggeAbstand - _kKopfBlockVersatz),
+          // ── Aussen je ein Zeichen, in der Mitte das Paar ─────────────────
+          //
+          // Flamme und Stern gehören zusammen: beides ist Fortschritt, beides
+          // wächst beim Spielen, und beide öffnen beim Tippen ihre Erklärung.
+          // Vorher standen alle vier Zeichen gleichmäßig verteilt, und die
+          // beiden lasen sich dadurch als Einzelposten zwischen Welt-Emoji
+          // und Profilbild. Jetzt stehen sie als Paar mittig, aussen je ein
+          // Zeichen.
+          //
+          // GLEICH BREITE AUSSENFLÄCHEN, damit das Paar wirklich in der Mitte
+          // der Leiste sitzt und nicht nur in der Mitte des Restplatzes: Das
+          // Profilbild belegt eine volle Tippfläche, das Emoji von sich aus
+          // nur seine gut 22 px — ohne den Kasten sässe das Paar um die halbe
+          // Differenz nach links versetzt. Das Emoji bleibt darin linksbündig
+          // und behält damit seinen Platz am Rand.
+          SizedBox(
+            width: _kTippflaeche,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child:
+                  Text(widget.weltEmoji, style: const TextStyle(fontSize: 22)),
+            ),
+          ),
+          const Spacer(),
           // Deutlich größer als das frühere Emoji (18): die Flamme trägt die
           // Streak-Anzeige optisch. Die Kopfzeile ist 56px hoch, 45px passen
           // dort hinein, und die Row zentriert ihre Kinder vertikal — der
           // Zahlentext daneben bleibt dadurch auf Höhe.
           //
-          // Der Versatz korrigiert die optische Lage: Transform.translate
-          // wirkt rein visuell, der Platzbedarf in der Row bleibt unverändert
-          // und der Zahlentext daneben rutscht dadurch nicht mit.
+          // Der Versatz hebt die Flamme optisch an: Transform.translate wirkt
+          // rein visuell, der Platzbedarf in der Row bleibt unverändert und
+          // der Zahlentext daneben rutscht dadurch nicht mit.
+          //
+          // Nur noch nach OBEN. Die früheren 5 px nach rechts stammen aus der
+          // Zeit, als zwischen Flagge und Flamme ein einziger Pixel lag und
+          // die Flamme Luft brauchte; mit den gleichen Lücken ist der Abstand
+          // von selbst da, und ein Versatz würde ihn wieder ungleich machen.
           // Flamme UND Zahl liegen in einem gemeinsamen GestureDetector: eine
           // einzelne Ziffer ist ein zu kleines Ziel für einen Finger, und
           // beide gehören ohnehin zusammen. HitTestBehavior.opaque nimmt auch
@@ -731,7 +776,7 @@ class _GreenHeaderState extends State<_GreenHeader> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Transform.translate(
-                    offset: const Offset(5, -5),
+                    offset: const Offset(0, -5),
                     // Die Zahl steht hier daneben statt in der Flamme, deshalb
                     // muss der erloschene Zustand ausdrücklich mitgegeben
                     // werden.
@@ -753,7 +798,10 @@ class _GreenHeaderState extends State<_GreenHeader> {
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          // Fester Abstand statt [Spacer] — genau der macht aus den beiden
+          // ein Paar. So breit wie der Seitenrand der Leiste, damit sich das
+          // Mass nicht neu erfindet.
+          const SizedBox(width: _kLeisteRand),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => zeigeSterneErklaerung(context, kErreichbareSterne),
@@ -935,6 +983,24 @@ class _WeltBanner extends StatelessWidget {
 
 // ── Pfad ──────────────────────────────────────────────────────────────────────
 
+/// Radius des aktiven Stationsknopfs — er reicht so weit über die
+/// Stationsmitte hinaus.
+const double _kAktivRadius = 45.0;
+
+/// Oberkante der START-Blase, gemessen ab der Mitte der ersten Station.
+const double _kBlaseUeberStation = 106.0;
+
+/// Was die START-Blase über dem Stationsknopf beansprucht — genau dieser
+/// Betrag fällt weg, sobald sie verschwindet.
+const double _kBlasenPlatz = _kBlaseUeberStation - _kAktivRadius;
+
+/// Luft über dem obersten Element des Pfades, ohne Blase.
+///
+/// Zusammen mit [_kBlasenPlatz] ergibt sich der bisherige Wert von 120: Mit
+/// Blase sieht der Pfad also unverändert aus, ohne sie rückt er um deren Höhe
+/// nach oben.
+const double _kTopPadOhneBlase = 59.0;
+
 class _Pfad extends StatelessWidget {
   final LernWelt welt;
   final LernpfadSnapshot snap;
@@ -983,15 +1049,52 @@ class _Pfad extends StatelessWidget {
     // Mitte → HalbR(60%) → Rechts(65%) → HalbR → Mitte → HalbL(40%) → Links(35%) → HalbL
     const xPat = [0.50, 0.60, 0.65, 0.60, 0.50, 0.40, 0.35, 0.40];
     const vGap = 130.0;
-    const topPad = 120.0;
-    const bannerBeforeGap = 50.0;
+    // Das Abschnitts-Band sitzt 55 px höher als ursprünglich (50 -> 25 -> -5).
+    //
+    // DER PFAD DARUNTER BLEIBT, WO ER WAR: Die 55 px wandern in
+    // [bannerAfterGap], der Gesamtabstand von der letzten Station des
+    // vorherigen Abschnitts bis zur ersten des nächsten bleibt also
+    // unverändert. Verschoben wird nur das Band innerhalb dieser Lücke.
+    //
+    // NEGATIV IST GEWOLLT: Der Wert zählt ab dem Wegpunkt hinter dem
+    // Checkpoint, und das Band liegt inzwischen knapp darüber. Es überlappt
+    // trotzdem nichts — der Checkpoint sitzt einen vollen [vGap] höher, seine
+    // Unterkante liegt also 89 px über dem Wegpunkt und seine Beschriftung
+    // rund 25 px darunter. Bis zur Bandoberkante bleiben damit gut 55 px
+    // Luft. Wer das Band weiter nach oben schiebt, muss diese Grenze kennen.
+    const bannerBeforeGap = -5.0;
+
+    // ── Der obere Rand hängt an der START-Blase ───────────────────────────
+    //
+    // Über der ersten Station der Welt steht eine Sprechblase, solange diese
+    // Station noch nicht abgeschlossen ist. War sie weg, blieb ihr Platz als
+    // Lücke stehen und der Pfad begann mit einem leeren Streifen.
+    //
+    // [topPad] seedet y und geht damit in JEDEN Wegpunkt ein: Stationen,
+    // Abschnitts-Bänder, Checkpoints, Wahrzeichen-Deko, Coiny und Globus
+    // rechnen alle aus demselben y weiter — sie wandern also geschlossen mit.
+    // Eine verbindende Linie, die dabei auseinanderlaufen könnte, gibt es
+    // nicht: Der Lernpfad zeichnet keine, die Stationen stehen frei auf der
+    // gekachelten Fläche.
+    final ersteStationId = welt.abschnitte.isNotEmpty &&
+            welt.abschnitte.first.stationen.isNotEmpty
+        ? welt.abschnitte.first.stationen.first.id
+        : null;
+    final zeigtStartblase =
+        ersteStationId != null && ersteStationId == aktuelleStationId;
+    final topPad =
+        _kTopPadOhneBlase + (zeigtStartblase ? _kBlasenPlatz : 0.0);
     // Das Band trägt zwei Textzeilen, und der Untertitel bricht um. Bei einer
     // eingestellten Systemschrift von 1.5 lief es deshalb um bis zu 39 px
     // über. Die Höhe wächst jetzt mit der Schrift mit — das darf sie, weil
     // sie hier berechnet wird und damit in die Wegpunkte des Pfades eingeht.
     // Bei Skala 1.0 bleibt es bei den bisherigen 56.
     final bannerH = 56.0 * textSkala.clamp(1.0, 1.7);
-    const bannerAfterGap = 55.0; // > 41px Radius → keine Station auf dem Banner
+    // 110 statt der ursprünglichen 55: die 55 px, die das Band nach oben
+    // gerückt ist (siehe [bannerBeforeGap]), kommen hier wieder dazu.
+    // Weiterhin deutlich mehr als der 41-px-Radius einer Station — keine
+    // Station steht auf dem Band.
+    const bannerAfterGap = 110.0;
 
     final overlays = <Widget>[];
     double y = topPad;
@@ -1063,7 +1166,7 @@ class _Pfad extends StatelessWidget {
             overlays.add(
               Positioned(
                 left: cx - 55,
-                top: y - 106,
+                top: y - _kBlaseUeberStation,
                 width: 110,
                 child: _StartSprechblase(istGestartet: details.istGestartet),
               ),
@@ -1071,8 +1174,8 @@ class _Pfad extends StatelessWidget {
           }
           overlays.add(
             Positioned(
-              left: cx - 45,
-              top: y - 45,
+              left: cx - _kAktivRadius,
+              top: y - _kAktivRadius,
               child: _ActiveBtn(
                 modus: angezeigterModus,
                 anims: anims,
@@ -1669,16 +1772,10 @@ class _AbschnittTrenner extends StatelessWidget {
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onGesperrtTippen,
-              child: SizedBox(
+              child: const SizedBox(
                 width: _kTippflaeche,
                 height: _kTippflaeche,
-                child: const Center(
-                  child: Icon(
-                    Icons.lock_rounded,
-                    size: 18,
-                    color: Color(0xFF9E9C96),
-                  ),
-                ),
+                child: Center(child: _Schloss()),
               ),
             )
           else
@@ -1814,7 +1911,7 @@ class _StationSheetState extends State<_StationSheet> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                t('Bereits abgeschlossen ✅'),
+                t('Bereits abgeschlossen'),
                 style: const TextStyle(
                   color: Color(0xFF4A9E4A),
                   fontWeight: FontWeight.w700,
@@ -2104,7 +2201,7 @@ class _ChallengePanelState extends State<_ChallengePanel> {
                   childAspectRatio: (zellBreite / zellHoehe).clamp(0.4, 2.5),
                   children: [
                     for (final k in _karten)
-                      _GrossKarte(
+                      ChallengeKachel(
                         id: k.id,
                         asset: k.asset,
                         emoji: k.emoji,
@@ -2124,157 +2221,6 @@ class _ChallengePanelState extends State<_ChallengePanel> {
   }
 }
 
-// ── Große Challenge-Karte ─────────────────────────────────────────────────────
-
-class _GrossKarte extends StatefulWidget {
-  final String id, asset, emoji, title;
-  final Color bg;
-  final bool isDone;
-  final VoidCallback onTap;
-  const _GrossKarte({
-    required this.id,
-    required this.asset,
-    required this.emoji,
-    required this.title,
-    required this.bg,
-    required this.isDone,
-    required this.onTap,
-  });
-
-  @override
-  State<_GrossKarte> createState() => _GrossKarteState();
-}
-
-class _GrossKarteState extends State<_GrossKarte>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _shakeCtrl;
-  late final Animation<double> _shakeAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _shakeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _shakeAnim = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: -8.0), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: -8.0, end: 8.0), weight: 2),
-      TweenSequenceItem(tween: Tween(begin: 8.0, end: -5.0), weight: 2),
-      TweenSequenceItem(tween: Tween(begin: -5.0, end: 5.0), weight: 2),
-      TweenSequenceItem(tween: Tween(begin: 5.0, end: 0.0), weight: 1),
-    ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.linear));
-  }
-
-  @override
-  void dispose() {
-    _shakeCtrl.dispose();
-    super.dispose();
-  }
-
-  void _handleTap() {
-    // Öffnet immer den ChallengeStartScreen — der entscheidet selbst anhand
-    // des Tagesstatus, ob "Spielen" oder "Ergebnis ansehen" angezeigt wird.
-    widget.onTap();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _shakeAnim,
-      builder: (_, child) => Transform.translate(
-        offset: Offset(_shakeAnim.value, 0),
-        child: child,
-      ),
-      child: GestureDetector(
-        onTap: _handleTap,
-        child: Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: widget.bg,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              padding: EdgeInsets.all(14.rpx(context)),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Logo groß, kein weißlicher Hintergrund
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.asset(
-                        widget.asset,
-                        fit: BoxFit.contain,
-                        errorBuilder: (ctx, err, st) => Center(
-                          child: Text(
-                            widget.emoji,
-                            style: TextStyle(fontSize: 52.rsp(context)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 10.rpx(context)),
-                  // Titel unten — feste Höhe für exakt 2 Zeilen reserviert,
-                  // damit der Icon-Bereich (Expanded oben) bei 1-zeiligen
-                  // Titeln (z.B. "Ranking Quiz") nicht mehr Höhe bekommt als
-                  // bei 2-zeiligen (z.B. "Portfolio des Tages") — sonst
-                  // wirken die Icons trotz gleich großer Kacheln
-                  // unterschiedlich groß. Skaliert mit rpx() (nicht rsp()),
-                  // da sie zur Schriftgröße passen muss, die selbst mit
-                  // rsp() wächst — beide zusammen halten das Verhältnis.
-                  SizedBox(
-                    height: 42.rpx(context),
-                    child: Align(
-                      alignment: Alignment.center,
-                      child: Text(
-                        widget.title,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13.rsp(context),
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (widget.isDone)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 22.rpx(context),
-                  height: 22.rpx(context),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.check_rounded,
-                    color: const Color(0xFF4A9E4A),
-                    size: 16.rpx(context),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ── Challenge-Button (oben rechts, fixed) ────────────────────────────────────
 
@@ -2633,16 +2579,19 @@ class _WeltUebersichtSheetState extends State<_WeltUebersichtSheet> {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          Text(
-                            frei ? '${(fortschritt * 100).round()}%' : '🔒',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: frei
-                                  ? const Color(0xFF4A9E4A)
-                                  : const Color(0xFFBBBBBB),
-                            ),
-                          ),
+                          // Dasselbe graue Schloss wie am Abschnitts-Band —
+                          // vorher stand hier ein Emoji.
+                          if (frei)
+                            Text(
+                              '${(fortschritt * 100).round()}%',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: Color(0xFF4A9E4A),
+                              ),
+                            )
+                          else
+                            const _Schloss(),
                         ],
                       ),
                     ),

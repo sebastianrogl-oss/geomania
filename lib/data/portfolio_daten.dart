@@ -1054,21 +1054,13 @@ RangFortschritt rangFuerKapital(double kapital) {
   return (titel: aktuell.titel, naechsteSchwelle: naechste.schwelle, fortschritt: fortschritt);
 }
 
-int _rangIndexFuerKapital(double kapital) {
-  var idx = 0;
-  for (var i = 0; i < rangTitel.length; i++) {
-    if (kapital >= rangTitel[i].schwelle) idx = i;
-  }
-  return idx;
-}
-
-/// Gibt den neu erreichten Rang-Titel zurück, wenn [neuesKapital] gegenüber
-/// [altesKapital] eine höhere Rang-Stufe erreicht hat — sonst null.
-String? neuerRangBeiAufstieg(double altesKapital, double neuesKapital) {
-  final alterIndex = _rangIndexFuerKapital(altesKapital);
-  final neuerIndex = _rangIndexFuerKapital(neuesKapital);
-  return neuerIndex > alterIndex ? rangTitel[neuerIndex].titel : null;
-}
+// HIER STAND neuerRangBeiAufstieg().
+//
+// Die Funktion meldete, wenn das neue Kapital eine Rang-Schwelle überschritten
+// hatte — Grundlage für die Aufstiegs-Feier auf dem Auflösungs-Screen. Beides
+// ist ersatzlos weg: Ein Aufstieg wird NICHT angekündigt, nicht gefeiert und
+// nicht gemeldet. Der Rang steht im Depot ("Dein Rang", portfolio_screen.dart)
+// und wächst dort still mit dem Kapital — mehr passiert nicht.
 
 const List<MakroTrend> trendPool = [
   MakroTrend(

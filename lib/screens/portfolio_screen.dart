@@ -165,7 +165,10 @@ class _PortfolioScreenState extends State<PortfolioScreen>
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(t('💼 Weltportfolio'),
+          // Ohne Emoji: Die übrigen Challenge-Kopfzeilen tragen auch keins,
+          // und der Aktenkoffer stand als einziges buntes Zeichen in einer
+          // sonst ruhigen Leiste.
+          child: Text(t('Weltportfolio'),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800,
                   color: Color(0xFF1A1A1A))),
         ),
@@ -209,37 +212,27 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                   color: Colors.white),
             ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (status.streak > 0) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                      t('🔥 {n} Tage in Folge', {'n': '${status.streak}'}),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                          color: Colors.white)),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9A825).withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                    t('🏆 Rekord: {v}', {'v': fmtKapital(status.rekordKapital)}),
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                        color: Color(0xFFF9A825))),
+          // Die Rekord-Marke stand hier neben der Serie und ist raus: Wer bei
+          // 1000 $ startet, las dort "Rekord: 1000 $" — den eigenen
+          // Startbetrag als Bestleistung. Aussagekraft bekommt sie erst weit
+          // später, und bis dahin verdoppelt sie nur die Zahl darüber.
+          if (status.streak > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
               ),
-            ],
-          ),
+              child: Text(
+                  t('🔥 {n} Tage in Folge', {'n': '${status.streak}'}),
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white)),
+            ),
+          ],
         ],
       ),
     );

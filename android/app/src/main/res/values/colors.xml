@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Die Hintergrundfarbe der App, identisch mit kHintergrund in
+        lib/theme/app_theme.dart (0xFFF4F5EE).
+
+        Sie steht hier, weil das Android-FENSTER eine eigene Hintergrundfarbe
+        hat, die Flutter nichts angeht: Alles, was das Betriebssystem hinter
+        der Flutter-Fläche zeichnet, nimmt diese Farbe. Sichtbar wird das
+        beim Start (Splash) und in dem Moment, in dem sich die Fläche neu
+        einpasst — etwa wenn die Tastatur aufgeht.
+
+        Voreingestellt war dort Weiss (@android:color/white bzw.
+        ?android:colorBackground). Wer diese Datei ändert, sollte den Wert
+        mit kHintergrund gleich halten, sonst blitzt wieder eine fremde
+        Farbe durch.
+    -->
+    <color name="geomania_hintergrund">#F4F5EE</color>
+</resources>

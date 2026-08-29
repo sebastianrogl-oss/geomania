@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../data/countries.dart';
 import '../data/laender_aliase.dart';
 import '../data/lernpfad_data.dart';
@@ -14,23 +15,31 @@ import '../services/locale_service.dart';
 import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
 import '../services/benachrichtigungs_service.dart';
-import '../services/haptik_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/gelernte_fakten_service.dart';
 import '../services/onboarding_service.dart';
 import '../services/skala_service.dart';
+import '../services/haptik_service.dart';
+import '../services/regler_rastung.dart';
+import '../services/knopf_rueckmeldung.dart';
 import '../services/sound_service.dart';
 import '../services/station_session_service.dart';
+import '../services/streak_ziel_service.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/erinnerung_dialog.dart';
 import '../widgets/flaggen_widget.dart';
 import '../widgets/halbzeit_inhalt.dart';
 import '../widgets/level_skip_button.dart';
 import '../widgets/kennzahl_erklaerung.dart';
+import '../widgets/muenze_widget.dart';
 import '../widgets/station_emoji.dart';
 import '../widgets/streak_feier_overlay.dart';
 import 'station_abschluss_screen.dart';
+import 'streak_ziel_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/antwort_button.dart';
+import '../widgets/wackeln.dart';
+import '../widgets/schaetz_balken.dart';
 
 // ── Maße der Reiz-Medien ──────────────────────────────────────────────────────
 //
@@ -577,6 +586,17 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   void _stopCountdown() => _countdownTimer?.cancel();
 
+  // Kurzes Vibrations-Feedback bei Antwort-Auswertung — kurzer Puls bei
+  // richtig, spürbar längerer bei falsch (inkl. Timer-Ablauf), respektiert
+  // den Vibration-Schalter in den Einstellungen. Nutzt das vibration-Paket
+  // (direkter Vibrator-Zugriff) statt HapticFeedback.*: Flutters
+  // HapticFeedback-API ruft auf Android IMMER View.performHapticFeedback()
+  // auf, was von einer separaten System-Einstellung ("Tipp-/Berührungs-
+  // Feedback") abhängt und bei vielen Geräten (u.a. Samsung One UI) trotz
+  // erteilter VIBRATE-Berechtigung stumm bleibt, wenn diese Einstellung aus
+  // ist — das vibration-Paket spricht den Vibrationsmotor direkt an und
+  // umgeht dieses Problem. Bewusst fire-and-forget (kein await): die Haptik
+  // soll den UI-Fluss nicht verzögern.
   /// Haptik UND Klang zur Antwort.
   ///
   /// Beides an EINER Stelle, weil beides denselben Auslöser hat: die sieben
@@ -586,11 +606,6 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   ///
   /// Hiess vorher _vibriereAntwort — der Name stimmt nicht mehr, seit auch
   /// ein Ton dranhängt.
-  ///
-  /// Warum kein HapticFeedback.* aus Flutter: Das ruft auf Android
-  /// View.performHapticFeedback() auf und hängt damit an einer separaten
-  /// System-Einstellung, die auf vielen Geräten aus ist. Der [HaptikService]
-  /// spricht den Vibrator direkt an — die ganze Begründung steht dort.
   void _antwortRueckmeldung(bool richtig) {
     SoundService.spiele(richtig ? Klang.richtig : Klang.falsch);
     HaptikService.spiele(richtig ? HaptikArt.erfolg : HaptikArt.fehler);
@@ -672,6 +687,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   void _sortierWeiter() {
     if (_session == null) return;
+    knopfRueckmeldung();
     if (_feedbackRichtig) {
       _faktErfassen();
       _session!.richtigeAntwortVerarbeiten();
@@ -728,6 +744,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   void _ketteWeiter() {
     if (_session == null) return;
+    knopfRueckmeldung();
     if (_feedbackRichtig) {
       _faktErfassen();
       _session!.richtigeAntwortVerarbeiten();
@@ -767,6 +784,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   void _rankingWeiter() {
     if (_session == null) return;
+    knopfRueckmeldung();
     if (_feedbackRichtig) {
       _faktErfassen();
       _session!.richtigeAntwortVerarbeiten();
@@ -782,6 +800,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
 
   void _preisWeiter() {
     if (_session == null) return;
+    knopfRueckmeldung();
     if (_feedbackRichtig) {
       _faktErfassen();
       _session!.richtigeAntwortVerarbeiten();
@@ -803,9 +822,10 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   void _weiterTippen() {
     if (_session == null) return;
     // Der Weiter-Knopf ist der einzige Knopf, den der Spieler in einer
-    // Station immer wieder drückt — deshalb sitzt der Knopfton hier und
-    // nicht in den einzelnen Modus-Oberflächen.
-    SoundService.spiele(Klang.knopf);
+    // Station immer wieder drückt — deshalb sitzt die Rückmeldung hier und
+    // nicht in den einzelnen Modus-Oberflächen. Klick oder Ton entscheidet
+    // [knopfRueckmeldung].
+    knopfRueckmeldung();
     if (_feedbackRichtig) {
       _faktErfassen();
       _session!.richtigeAntwortVerarbeiten();
@@ -950,11 +970,6 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
   }
 
   Future<void> _stationFertig() async {
-    // DEBUG (Bug 2 — Stationsbutton-Bug nach Level 5): jeden Schritt dieses
-    // Ablaufs protokollieren, um zu sehen, ob/wo der Ablauf nach der 5.
-    // Station hängen bleibt (Verdacht: await auf den Interstitial-Trigger).
-    // ignore: avoid_print
-    print('[StationFertig] gestartet für Station ${widget.station?.id}');
     _stopCountdown();
     setState(() => _showFeedback = false);
 
@@ -969,10 +984,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     //
     // Derselbe Aufruf steckt hinter dem Debug-Button in den Einstellungen
     // (siehe streakErhoehenUndFeiern) — es gibt nur diesen einen Pfad.
-    final (alterStreak, neuerStreak) = await streakErhoehenUndFeiern(context);
-    // ignore: avoid_print
-    print('[StationFertig] streakErhoehenUndFeiern() fertig: '
-        '$alterStreak -> $neuerStreak');
+    await streakErhoehenUndFeiern(context);
 
     // Hält die Uhrzeit für die "übliche Spielzeit" fest und plant die
     // Erinnerungen neu — dadurch entfällt die heutige Erinnerung von selbst.
@@ -984,12 +996,11 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // Bewusst nicht hinter `if (!mounted)`: die Buchführung hängt nicht daran,
     // ob der Bildschirm noch steht.
     await BenachrichtigungsService.stationAbgeschlossen();
+    await StreakZielService.stationAbgeschlossen();
 
     if (!mounted) return;
 
     if (widget.istWiederholungsrunde) {
-      // ignore: avoid_print
-      print('[StationFertig] Zweig: istWiederholungsrunde -> wiederholungAbschliessen');
       await FortschrittService.wiederholungAbschliessen(
           widget.wiederholungsAbschnittId!);
       if (!mounted) return;
@@ -1007,10 +1018,8 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
       _session!.richtigeAntworten,
       _session!.falscheAntworten,
       falscheFragenJson: _session!.falscheFragenAlsJson(),
+      sterneBasis: _session!.sterneBasis,
     );
-    // ignore: avoid_print
-    print('[StationFertig] stationAbschliessen() fertig, '
-        'vergebeneSterne=$vergebeneSterne');
 
     // Schluss-Ansicht: Ergebnis, Kennzahlen und Kontinent-Fortschritt. Läuft
     // VOR Abzeichen-Popup und Interstitial, damit der Spieler zuerst sein
@@ -1036,13 +1045,8 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // an Tages-Challenges -> hier prüfen, statt erst beim nächsten Challenge-
     // Abschluss (sonst würde ein neues Abzeichen erst viel später auffallen).
     final neueAbzeichen = await AbzeichenService.pruefeNachLernpfadFortschritt();
-    // ignore: avoid_print
-    print('[StationFertig] pruefeNachLernpfadFortschritt() fertig, '
-        'neueAbzeichen=${neueAbzeichen.length}, mounted=$mounted');
     if (mounted && neueAbzeichen.isNotEmpty) {
       await AbzeichenPopup.zeigen(context, neueAbzeichen);
-      // ignore: avoid_print
-      print('[StationFertig] AbzeichenPopup.zeigen() fertig');
     }
     if (!mounted) return;
 
@@ -1051,9 +1055,36 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // Ergebnis und Abzeichen (der Spieler hat gerade etwas geschafft) und noch
     // VOR dem Interstitial, denn eine Vollbild-Werbung würde den Dialog
     // verdecken.
+    var erlaubnisGefragt = false;
     if (await BenachrichtigungsService.sollDialogZeigen()) {
       if (!mounted) return;
+      erlaubnisGefragt = true;
       await ErinnerungDialog.zeigen(context);
+    }
+    if (!mounted) return;
+
+    // Streak-Ziel wählen — nach der zweiten abgeschlossenen Station.
+    //
+    // Steht bewusst NACH der Erlaubnis-Abfrage und noch VOR dem Interstitial:
+    // dieselbe Begründung wie eine Ebene höher, eine Vollbild-Werbung würde
+    // den Screen verdecken.
+    //
+    // Beide Abfragen laufen unabhängig voneinander — eigene Zähler, eigener
+    // Zustand (siehe [StreakZielService]). Die Schwellen sind so gelegt, dass
+    // sie sich im Normalfall nicht begegnen: Erlaubnis bei 1 und 5, Ziel bei
+    // 2 und 6.
+    //
+    // ZUSAMMENFALLEN KÖNNEN SIE TROTZDEM, wenn die Erlaubnis-Abfrage ihren
+    // Moment verpasst hat — wer die App nach der ersten Station schliesst,
+    // bevor der Dialog kam, bekommt ihn wegen des >= erst beim zweiten
+    // Abschluss, und dort wartet schon das Streak-Ziel. Zwei Vollbild-Fragen
+    // hintereinander nach derselben Station wären genau die Zumutung, wegen
+    // der die Schwellen überhaupt auseinanderliegen. Deshalb tritt das Ziel
+    // in diesem Fall einen Abschluss zurück; sein >= holt es beim nächsten
+    // Mal von selbst nach.
+    if (!erlaubnisGefragt && await StreakZielService.sollScreenZeigen()) {
+      if (!mounted) return;
+      await StreakZielScreen.zeigen(context);
     }
     if (!mounted) return;
 
@@ -1066,13 +1097,9 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // pruefeUndZeigeInterstitial()/zeigeInterstitialFallsBereit() fangen
     // etwaige Fehler intern ab, ein nicht awaiteter Fehler dort führt daher
     // nicht zu einer unbehandelten Exception.
-    // ignore: avoid_print
-    print('[StationFertig] triggere AdService.pruefeUndZeigeInterstitial() (nicht awaited)');
     unawaited(AdService.pruefeUndZeigeInterstitial());
 
     final letzteStation = FortschrittService.istLetzteStationImAbschnitt(widget.station!.id);
-    // ignore: avoid_print
-    print('[StationFertig] istLetzteStationImAbschnitt=$letzteStation');
     if (!letzteStation) {
       if (mounted) Navigator.pop(context);
       return;
@@ -1082,8 +1109,6 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     final abschnittId = _abschnittId();
     final wdhNoetig =
         await FortschrittService.wiederholungNoetig(abschnittId);
-    // ignore: avoid_print
-    print('[StationFertig] letzte Station im Abschnitt $abschnittId, wdhNoetig=$wdhNoetig');
 
     if (!wdhNoetig) {
       await FortschrittService.wiederholungAbschliessen(abschnittId);
@@ -1104,9 +1129,6 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
     // Lernpfad (siehe home_screen.dart _MeilensteinBtn /
     // _HomeScreenState._wiederholungTippen). Einfach normal zum Lernpfad
     // zurückkehren, wie nach jeder anderen Station auch.
-    // ignore: avoid_print
-    print('[StationFertig] Wiederholung nötig für $abschnittId — kehre normal zum Lernpfad '
-        'zurück, Start jetzt über die Geschenk-Kachel statt automatisch');
     if (mounted) Navigator.pop(context);
   }
 
@@ -1630,27 +1652,6 @@ class _LandHeader extends StatelessWidget {
   }
 }
 
-// Dauer des Wackelns bei falscher Antwort. Vorher 150ms — das war der Grund,
-// warum auf dem Gerät praktisch nichts zu sehen war: bei 60fps sind 150ms nur
-// 9 Frames, und da die Amplitude zusätzlich mit exp(-5t) abklang, war schon
-// ab Frame 3 alles vorbei (siehe wackelOffset). Übrig blieb ein Ausschlag von
-// ~3px über 2 Frames — technisch lief die Animation, sichtbar war sie nicht.
-const kWackelDauer = Duration(milliseconds: 400);
-
-// Gedämpftes Wackeln für eine falsch angetippte Antwort — 3 Ausschläge über
-// die volle Animationsdauer, Amplitude klingt exponentiell ab. [t] läuft von
-// 0.0 bis 1.0.
-//
-// Amplitude (6→11px) und Dämpfung (exp(-5t)→exp(-2.5t)) wurden zusammen mit
-// kWackelDauer angehoben, damit die Bewegung tatsächlich wahrnehmbar ist: mit
-// diesen Werten liegt der erste Ausschlag bei ~9px und auch der dritte noch
-// bei ~4px, statt wie zuvor nach zwei Frames unter die Sichtbarkeitsschwelle
-// zu fallen. Der abschließende Wert bei t=1.0 bleibt praktisch 0, der Button
-// kehrt also exakt an seine Position zurück.
-double wackelOffset(double t) {
-  final gedaempft = exp(-t * 2.5);
-  return sin(t * pi * 6) * 11 * gedaempft;
-}
 
 // Leichtgewichtige Wiederverwendung des Wackel-Effekts (siehe wackelOffset)
 // für die Bild-Kachel-Modi (Flaggen/Umriss Multiple), die ihre eigene
@@ -1707,141 +1708,6 @@ class _WackelTileState extends State<_WackelTile>
   }
 }
 
-class _AntwortButton extends StatefulWidget {
-  final String text;
-  final Widget? leading;
-  final bool showFeedback;
-  final bool istRichtig;
-  final bool istGewaehlt;
-  final bool feedbackRichtig;
-  final VoidCallback? onTap;
-
-  const _AntwortButton({
-    required this.text,
-    this.leading,
-    required this.showFeedback,
-    required this.istRichtig,
-    required this.istGewaehlt,
-    required this.feedbackRichtig,
-    this.onTap,
-  });
-
-  @override
-  State<_AntwortButton> createState() => _AntwortButtonState();
-}
-
-class _AntwortButtonState extends State<_AntwortButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _wackelCtrl;
-
-  bool get _istFalschGewaehlt =>
-      widget.showFeedback && widget.istGewaehlt && !widget.feedbackRichtig;
-
-  @override
-  void initState() {
-    super.initState();
-    _wackelCtrl = AnimationController(vsync: this, duration: kWackelDauer);
-  }
-
-  bool _warFalschGewaehlt(_AntwortButton w) =>
-      w.showFeedback && w.istGewaehlt && !w.feedbackRichtig;
-
-  @override
-  void didUpdateWidget(covariant _AntwortButton old) {
-    super.didUpdateWidget(old);
-    // Wackeln nur EINMAL auslösen: exakt beim Übergang zu "dieser Button
-    // wurde falsch gewählt" — nicht bei jedem Rebuild (verhindert
-    // Doppel-Animation bei schnellem Durchklicken).
-    //
-    // Der Übergang wird über den vorherigen Wert von _istFalschGewaehlt
-    // selbst geprüft, nicht mehr über old.showFeedback: Letzteres traf nur zu,
-    // wenn showFeedback im SELBEN Rebuild von false auf true kippte, und ging
-    // damit leer aus, sobald der Screen zwischendurch noch einmal baute (z.B.
-    // durch den Countdown-Tick) oder das Feedback bereits stand, als die Wahl
-    // gesetzt wurde.
-    if (!_warFalschGewaehlt(old) && _istFalschGewaehlt) {
-      if (kDebugMode) {
-        debugPrint('[Wackel/Button] Start "${widget.text}" — forward(from: 0)');
-      }
-      _wackelCtrl.forward(from: 0);
-    } else if (!widget.showFeedback && old.showFeedback) {
-      _wackelCtrl.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _wackelCtrl.dispose();
-    super.dispose();
-  }
-
-  Color get _bgColor {
-    if (!widget.showFeedback) return const Color(0xFFEAEAE5);
-    if (widget.istRichtig) return const Color(0xFF4A9E4A);
-    if (_istFalschGewaehlt) return const Color(0xFFE53935);
-    return const Color(0xFFEAEAE5);
-  }
-
-  Color get _textColor {
-    if (!widget.showFeedback) return const Color(0xFF1a1a1a);
-    if (widget.istRichtig) return Colors.white;
-    if (_istFalschGewaehlt) return Colors.white;
-    return const Color(0xFF888888);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Die richtige Antwort blendet sanft grün ein (300ms, kein Wackeln) —
-    // der falsch gewählte Button reagiert schneller (150ms) UND wackelt.
-    final faerbDauer = widget.istRichtig && !widget.istGewaehlt
-        ? const Duration(milliseconds: 300)
-        : const Duration(milliseconds: 150);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedBuilder(
-          animation: _wackelCtrl,
-          builder: (context, child) {
-            final dx =
-                _istFalschGewaehlt ? wackelOffset(_wackelCtrl.value) : 0.0;
-            return Transform.translate(offset: Offset(dx, 0), child: child);
-          },
-          child: AnimatedContainer(
-            duration: faerbDauer,
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: _bgColor,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (widget.leading != null) ...[
-                  widget.leading!,
-                  const SizedBox(width: 10),
-                ],
-                Flexible(
-                  child: Text(
-                    widget.text,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: _textColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ── Weiter-Button ──────────────────────────────────────────────────────────────
 //
@@ -1922,7 +1788,7 @@ class _FlagBildUI extends StatelessWidget {
           );
         }),
         const SizedBox(height: 28),
-        ...frage.antwortOptionen.map((opt) => _AntwortButton(
+        ...frage.antwortOptionen.map((opt) => AntwortButton(
               text: opt,
               showFeedback: showFeedback,
               istRichtig: opt == frage.richtigeAntwort,
@@ -2003,7 +1869,7 @@ class _GrenzkettenUI extends StatelessWidget {
         const SizedBox(height: 20),
         ...frage.antwortOptionen.map((iso2) {
           final land = _countryByIso2(iso2);
-          return _AntwortButton(
+          return AntwortButton(
             text: land?.name ?? iso2,
             leading: FlaggenWidget(
                 countryCode: iso2, width: 32, height: 21, borderRadius: 4),
@@ -2202,10 +2068,19 @@ class _GenericMCUI extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Der Schlüssel entscheidet, nicht sein Inhalt: Ist er da, gehört eine
+    // Münze über die Frage. Ist er leer, hat die Währung kein echtes Zeichen
+    // und die Münze bleibt blank — besser eine leere Prägung als eine
+    // hingeschriebene Abkürzung.
+    final zeigtMuenze = frage.meta.containsKey('symbol');
     return Column(
       children: [
         if (frage.laenderCode.isNotEmpty) ...[
           _LandHeader(iso2: frage.laenderCode),
+          const SizedBox(height: 16),
+        ],
+        if (zeigtMuenze) ...[
+          _WaehrungMuenze(symbol: frage.meta['symbol'] as String? ?? ''),
           const SizedBox(height: 16),
         ],
         Text(
@@ -2214,7 +2089,7 @@ class _GenericMCUI extends StatelessWidget {
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 24),
-        ...frage.antwortOptionen.map((opt) => _AntwortButton(
+        ...frage.antwortOptionen.map((opt) => AntwortButton(
               text: _labelFor(opt),
               showFeedback: showFeedback,
               istRichtig: opt == frage.richtigeAntwort,
@@ -2223,6 +2098,76 @@ class _GenericMCUI extends StatelessWidget {
               onTap: showFeedback ? null : () => onAntwort(opt),
             )),
       ],
+    );
+  }
+}
+
+// ── Währungszeichen auf der Münze ────────────────────────────────────────────
+
+/// Das Währungszeichen in der Münze der App — über der Frage bei
+/// „Welches Land nutzt …?".
+///
+/// DIESELBE MÜNZE WIE IM ABZEICHEN-ALBUM, nicht eine nachgebaute:
+/// [MuenzGrundlage] ist genau dafür aus dem Abzeichen-Widget herausgelöst
+/// worden, „eine Quelle für die Optik statt zweier, die auseinanderlaufen"
+/// (siehe muenze_widget.dart). Hier kommt sie zum zweiten Mal zum Einsatz.
+///
+/// Die [FittedBox] ist nötig, weil die Zeichen unterschiedlich breit sind:
+/// „€" ist ein Zeichen, „NT$" drei und „ر.ع." vier. Ohne sie stünden die
+/// arabischen Zeichen über den Münzrand hinaus. Verkleinert wird nur, wenn
+/// es eng wird — scaleDown vergrössert nie.
+class _WaehrungMuenze extends StatelessWidget {
+  final String symbol;
+
+  /// Durchmesser — doppelt so gross wie im ersten Entwurf (96).
+  ///
+  /// Die Münze IST hier der Reiz, so wie anderswo die Flagge oder der
+  /// Länderumriss. Klein war sie ein Symbol neben der Frage, gross ist sie
+  /// das, worauf man schaut.
+  static const double _kGroesse = 192;
+
+  /// Anteil des Durchmessers, den der Rand ringsum freihält.
+  ///
+  /// 0,30 statt 0,26: Das Zeichen sitzt damit schmaler in der Prägefläche.
+  /// Mit dem gleichen Anteil wäre es beim doppelten Durchmesser auch doppelt
+  /// so breit geworden und hätte die Münze ausgefüllt wie ein Aufkleber —
+  /// die Prägung soll auf der inneren Fläche sitzen, mit Luft zum
+  /// geriffelten Rand.
+  static const double _kRandAnteil = 0.30;
+
+  /// Wie weit die Münze über ihren Layout-Platz hinaus nach oben rückt.
+  ///
+  /// Als Transform und nicht über die Abstände: So sitzt sie exakt 20 px
+  /// höher, ohne dass Frage und Antwortknöpfe darunter mitwandern. Über den
+  /// Abstand geregelt hätte sich der Versatz auf beide Seiten verteilt, weil
+  /// die Spalte mittig steht — die Münze wäre nur 10 px gestiegen und die
+  /// Frage 10 px gesunken.
+  static const double _kHoeher = 20;
+
+  const _WaehrungMuenze({required this.symbol});
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.translate(
+      offset: const Offset(0, -_kHoeher),
+      child: MuenzGrundlage(
+        groesse: _kGroesse,
+        inhalt: Padding(
+          padding: const EdgeInsets.all(_kGroesse * _kRandAnteil),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              symbol,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 64,
+                fontWeight: FontWeight.w900,
+                color: kMuenzInhaltFarbe,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2349,8 +2294,8 @@ class _EingabeUI extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             feedbackRichtig
-                ? t('✅ Richtig!')
-                : t('❌ Richtig war: {a}', {'a': frage.richtigeAntwort}),
+                ? t('Richtig!')
+                : t('Richtig war: {a}', {'a': frage.richtigeAntwort}),
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -2360,24 +2305,38 @@ class _EingabeUI extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: bestaetigt ? null : onBestaetigen,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A9E4A),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              disabledBackgroundColor: const Color(0xFFCCCCCC),
+        // NACH DER BEWERTUNG GANZ WEG, nicht nur ausgegraut.
+        //
+        // Vorher blieb er als grauer Klotz stehen (disabledBackgroundColor)
+        // und stand damit gleichzeitig mit dem Weiter-Knopf am Bildschirmfuß
+        // da — zwei Knöpfe, von denen einer nichts tut. Das gilt für richtige
+        // wie für falsche Antworten gleichermaßen: Beide setzen dasselbe
+        // [bestaetigt], die Eingabe ist in beiden Fällen abgeschlossen.
+        //
+        // Mit ihm geht auch sein Abstand — sonst bliebe genau die Lücke
+        // zurück, die der Knopf gefüllt hat. Der Inhalt der Spalte ist
+        // zentriert (siehe build() im Screen), er rückt also nach dem Wegfall
+        // um die halbe Knopfhöhe nach unten; die Rückmeldezeile darüber
+        // kommt im selben Moment dazu und fängt gut die Hälfte davon auf.
+        if (!bestaetigt) ...[
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: onBestaetigen,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A9E4A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text(t('Bestätigen'),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700)),
             ),
-            child: Text(t('Bestätigen'),
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -2636,14 +2595,15 @@ class _ErgebnisZeile extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF555555)),
             ),
-          const SizedBox(width: 8),
-          Icon(
-            warRichtig ? Icons.check_circle_rounded : Icons.cancel_rounded,
-            color: warRichtig ? const Color(0xFF4A9E4A) : const Color(0xFFD94040),
-            size: 20,
-          ),
+          // HAKEN UND KREUZ SIND RAUS. Die Zeile ist ohnehin ganzflächig grün
+          // oder rot hinterlegt — das Symbol daneben sagte dasselbe ein
+          // zweites Mal und drängte sich vor den Wert. Dieselbe Entscheidung
+          // wie bei der Auflösung in Higher or Lower.
+          //
+          // Der Hinweis auf den tatsächlich getippten Platz bleibt: Er trägt
+          // eine Auskunft, die die Farbe nicht gibt.
           if (!warRichtig) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: 8),
             Text(t('(Platz {n})', {'n': '$nutzerPlatz'}),
                 style: const TextStyle(fontSize: 10, color: Color(0xFF888888))),
           ],
@@ -2907,7 +2867,7 @@ class _UmrissBildUI extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: 20),
-        ...frage.antwortOptionen.map((opt) => _AntwortButton(
+        ...frage.antwortOptionen.map((opt) => AntwortButton(
               text: opt,
               showFeedback: showFeedback,
               istRichtig: opt == frage.richtigeAntwort,
@@ -3394,7 +3354,7 @@ class _FlaechenVergleichUI extends StatelessWidget {
               : const Center(child: CircularProgressIndicator()),
         ),
         const SizedBox(height: 20),
-        ...frage.antwortOptionen.map((opt) => _AntwortButton(
+        ...frage.antwortOptionen.map((opt) => AntwortButton(
               text: opt,
               showFeedback: showFeedback,
               istRichtig: opt == frage.richtigeAntwort,
@@ -3615,54 +3575,14 @@ class _WasGehoertNichtDazuUI extends StatelessWidget {
 // ohnehin nur schätzen kann. Für eine Position in einer Reihe ist ein Balken
 // die passendere Geste: man zeigt hin, statt eine Zahl zu buchstabieren.
 //
-// Leitgröße ist die Höhe der Griffscheibe; Spurhöhe, Skalenstriche und
-// Abstände sind Anteile davon.
-
-/// Leitgröße: Durchmesser des Griffs. Zugleich die Mindest-Tippfläche in der
-/// Höhe — gezogen wird ohnehin auf der ganzen Balkenbreite.
-const _kGriffGroesse = 30.0;
-
-/// Höhe der Spur, auf der der Griff läuft.
-const _kSpurHoehe = _kGriffGroesse * 0.33;
-
-/// Gesamthöhe des Balkenbereichs: Griff plus Platz für die Skalenstriche
-/// darunter.
-const _kBalkenHoehe = _kGriffGroesse * 1.6;
-
-/// Länge der Skalenstriche, kurz und lang.
-const _kStrichKurz = _kGriffGroesse * 0.17;
-const _kStrichLang = _kGriffGroesse * 0.32;
-
-const _kGriffRand = 2.5;
+//
+// DER BALKEN SELBST steht in widgets/schaetz_balken.dart — er wird beim
+// grossen Schätzen mit derselben Auflösungs-Animation gebraucht, und zwei
+// Fassungen derselben Mechanik liefen früher oder später auseinander.
 
 /// Höchster überhaupt vergebener Rangplatz — Rückfallwert, wenn eine Frage
 /// die Feldgröße nicht mitliefert.
 const _kMaxRang = 197;
-
-const _cRangRahmen = Color(0xFF1A1A1A);
-const _cRangSpur = Color(0xFFDDDCD5);
-const _cRangStrich = Color(0xFFBFBEB6);
-const _cRangGewaehlt = Color(0xFF4A9E4A);
-const _cRangEcht = Color(0xFFF9A825);
-const _cRangAbstand = Color(0xFFD94040);
-
-/// Rasterschritt der Skalenstriche.
-///
-/// KEINE Länderdichte: Auf einer Rang-Achse liegt hinter jedem Platz genau ein
-/// Land, die Verteilung ist also per Definition gleichmässig. Ein Strich je
-/// Land ergäbe bei 197 Ländern auf einem 320-px-Schirm einen Abstand von
-/// 1,4 px — eine graue Fläche ohne Aussage. Die Striche sind deshalb eine
-/// SKALA zur Orientierung, kein Dichtebild: alle [_rasterSchritt] Plätze ein
-/// kurzer, alle fünf davon ein langer.
-///
-/// Der Schritt wächst mit der Feldgrösse, damit nie mehr als rund 40 Striche
-/// entstehen — darunter verschwimmen sie.
-int _rasterSchritt(int gesamt) {
-  for (final s in [1, 2, 5, 10, 20, 25]) {
-    if (gesamt / s <= 40) return s;
-  }
-  return 50;
-}
 
 /// Toleranz in Rangplätzen, bis zu der die Antwort als richtig zählt.
 ///
@@ -3682,196 +3602,6 @@ int rankingPunkte(int abweichung) {
   return (100 * exp(-(abweichung - 5) / 21)).round().clamp(0, 100);
 }
 
-/// Der Rang-Balken: eine Spur von Platz 1 bis zum letzten Platz, ein Griff.
-///
-/// Zeichnet drei Dinge übereinander:
-///  * die Skala (Striche zur Orientierung, siehe [_rasterSchritt]),
-///  * nach dem Bestätigen die Strecke zwischen Schätzung und Wahrheit,
-///  * die Markierungen selbst.
-///
-/// Der Griff wird über [wert] von aussen gesetzt, nicht intern gehalten: nach
-/// dem Bestätigen fährt eine Animation ihn auf den echten Platz, und dieselbe
-/// Eigenschaft muss dann die Position bestimmen wie vorher der Finger.
-class _RangBalken extends StatelessWidget {
-  /// Zahl der gewerteten Länder — der letzte Platz.
-  final int gesamt;
-
-  /// Aktuelle Position des Griffs. Als double, damit die Animation nach dem
-  /// Bestätigen weich läuft statt in Rangschritten zu springen.
-  final double wert;
-
-  /// Der abgegebene Tipp. Null, solange nicht bestätigt wurde.
-  final int? geraten;
-
-  /// Der echte Platz. Null, solange nicht bestätigt wurde.
-  final int? echt;
-
-  /// Null sperrt die Bedienung (nach dem Bestätigen).
-  final ValueChanged<double>? onZiehen;
-
-  const _RangBalken({
-    required this.gesamt,
-    required this.wert,
-    required this.onZiehen,
-    this.geraten,
-    this.echt,
-  });
-
-  /// Rangplatz an einer Berührungsstelle.
-  ///
-  /// Die Breite kommt aus dem eigenen RenderBox statt aus einem LayoutBuilder:
-  /// Der gesamte Fragen-Inhalt steckt in einem IntrinsicHeight (siehe build()
-  /// des Screens), und ein LayoutBuilder kann dort keine intrinsische Höhe
-  /// melden — er wirft "LayoutBuilder does not support returning intrinsic
-  /// dimensions". Zum Zeitpunkt einer Berührung ist das Layout ohnehin fertig,
-  /// die Grösse steht also fest.
-  double _ausX(BuildContext context, double x) {
-    final breite = (context.findRenderObject() as RenderBox?)?.size.width ?? 0;
-    final rand = _kGriffGroesse / 2;
-    final nutz = (breite - 2 * rand).clamp(1.0, double.infinity);
-    final anteil = ((x - rand) / nutz).clamp(0.0, 1.0);
-    return 1 + anteil * (gesamt - 1);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      // Antippen springt hin, Ziehen folgt dem Finger. Beides über dieselbe
-      // Umrechnung, damit ein Tipp und ein Zug an derselben Stelle denselben
-      // Platz ergeben.
-      onTapDown:
-          onZiehen == null ? null : (d) => onZiehen!(_ausX(context, d.localPosition.dx)),
-      onHorizontalDragUpdate:
-          onZiehen == null ? null : (d) => onZiehen!(_ausX(context, d.localPosition.dx)),
-      child: SizedBox(
-        height: _kBalkenHoehe,
-        width: double.infinity,
-        child: CustomPaint(
-          painter: _RangBalkenMaler(
-            gesamt: gesamt,
-            wert: wert,
-            geraten: geraten,
-            echt: echt,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RangBalkenMaler extends CustomPainter {
-  final int gesamt;
-  final double wert;
-  final int? geraten;
-  final int? echt;
-
-  _RangBalkenMaler({
-    required this.gesamt,
-    required this.wert,
-    required this.geraten,
-    required this.echt,
-  });
-
-  /// Bildpunkt eines Rangplatzes. Die Spur lässt links und rechts je einen
-  /// halben Griff Rand, damit der Griff an den Enden nicht abgeschnitten wird.
-  double _zuX(double rang, double breite) {
-    final rand = _kGriffGroesse / 2;
-    final anteil = gesamt <= 1 ? 0.0 : (rang - 1) / (gesamt - 1);
-    return rand + anteil.clamp(0.0, 1.0) * (breite - 2 * rand);
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final mitteY = _kGriffGroesse / 2;
-    double zuX(double r) => _zuX(r, size.width);
-    final links = zuX(1);
-    final rechts = zuX(gesamt.toDouble());
-
-    // ── Spur ────────────────────────────────────────────────────────────
-    final spur = Rect.fromLTRB(
-      links, mitteY - _kSpurHoehe / 2, rechts, mitteY + _kSpurHoehe / 2);
-    final radius = Radius.circular(_kSpurHoehe / 2);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(spur, radius),
-      Paint()..color = _cRangSpur,
-    );
-
-    // ── Skala ───────────────────────────────────────────────────────────
-    final schritt = _rasterSchritt(gesamt);
-    final strich = Paint()
-      ..color = _cRangStrich
-      ..strokeWidth = 1
-      ..strokeCap = StrokeCap.round;
-    for (var r = 1; r <= gesamt; r += schritt) {
-      final x = zuX(r.toDouble());
-      // Jeder fünfte Strich länger — dieselbe Gliederung wie auf einem Lineal.
-      final lang = ((r - 1) ~/ schritt) % 5 == 0;
-      final laenge = lang ? _kStrichLang : _kStrichKurz;
-      canvas.drawLine(
-        Offset(x, mitteY + _kSpurHoehe / 2 + 3),
-        Offset(x, mitteY + _kSpurHoehe / 2 + 3 + laenge),
-        strich,
-      );
-    }
-
-    // ── Strecke zwischen Tipp und Wahrheit ──────────────────────────────
-    if (geraten != null && echt != null) {
-      final a = zuX(geraten!.toDouble());
-      final b = zuX(echt!.toDouble());
-      final von = a < b ? a : b;
-      final bis = a < b ? b : a;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(von, mitteY - _kSpurHoehe / 2, bis,
-              mitteY + _kSpurHoehe / 2),
-          radius,
-        ),
-        Paint()..color = _cRangAbstand.withValues(alpha: 0.85),
-      );
-      // Der abgegebene Tipp bleibt als flacher Pflock stehen, während der
-      // Griff weiterwandert — sonst wäre nach der Animation nicht mehr zu
-      // sehen, worauf man getippt hatte.
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-              center: Offset(a, mitteY),
-              width: _kGriffRand * 2,
-              height: _kGriffGroesse * 0.7),
-          const Radius.circular(2),
-        ),
-        Paint()..color = _cRangGewaehlt,
-      );
-    }
-
-    // ── Griff ───────────────────────────────────────────────────────────
-    final gx = zuX(wert);
-    final gefuellt = echt == null ? _cRangGewaehlt : _cRangEcht;
-    // Harter Schatten ohne Weichzeichnung, wie bei allen Knöpfen der App.
-    canvas.drawCircle(
-      Offset(gx, mitteY + 3),
-      _kGriffGroesse / 2,
-      Paint()..color = _cRangRahmen,
-    );
-    canvas.drawCircle(
-      Offset(gx, mitteY),
-      _kGriffGroesse / 2,
-      Paint()..color = _cRangRahmen,
-    );
-    canvas.drawCircle(
-      Offset(gx, mitteY),
-      _kGriffGroesse / 2 - _kGriffRand,
-      Paint()..color = gefuellt,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_RangBalkenMaler alt) =>
-      alt.wert != wert ||
-      alt.geraten != geraten ||
-      alt.echt != echt ||
-      alt.gesamt != gesamt;
-}
 
 class _LaenderRankingUI extends StatefulWidget {
   final Frage frage;
@@ -3904,21 +3634,23 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
   late final AnimationController _fahrt;
   Animation<double>? _fahrtAnim;
 
-  /// Letzte Marke, auf der ein Impuls ausgelöst wurde, und wann.
+  /// Klick und Stoss beim Überfahren einer Skalenmarke.
   ///
-  /// Der Balken bewegt sich stufenlos — ein Impuls je Rangplatz wären beim
-  /// Durchziehen über 197 Plätze 197 Stösse. Gekoppelt ist die Haptik
-  /// stattdessen an die SICHTBARE Skala: ein Impuls, sobald der Griff eine
-  /// Skalenmarke überfährt. Dazu eine Mindestpause, damit ein schneller Wisch
-  /// nicht doch zum Dauerbrummen wird.
-  int? _letzteMarke;
-  DateTime _letzterImpuls = DateTime.fromMillisecondsSinceEpoch(0);
-  static const _kImpulsPause = Duration(milliseconds: 55);
+  /// Die Marken-Logik, die Mindestpause und die Tempo-Abstufung liegen in
+  /// [ReglerRastung] — hier bleibt nur die Umrechnung vom Rangplatz auf die
+  /// Markennummer, das Einzige, was diesen Regler vom Schätz-Regler
+  /// unterscheidet.
+  final _rastung = ReglerRastung();
 
   int get _gesamt =>
       (widget.frage.meta['gesamt'] as num?)?.toInt() ?? _kMaxRang;
 
   int get _eingabe => _position.round().clamp(1, _gesamt);
+
+  /// Rangplatz als Anteil von 0 bis 1 — die Einheit, in der der geteilte
+  /// [SchaetzBalken] rechnet.
+  double _anteil(double rang) =>
+      _gesamt <= 1 ? 0.0 : ((rang - 1) / (_gesamt - 1)).clamp(0.0, 1.0);
 
   @override
   void initState() {
@@ -3926,8 +3658,7 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
     // Startpunkt in der Mitte: von dort ist es in beide Richtungen gleich
     // weit, und es setzt keinen falschen Hinweis auf die Antwort.
     _position = ((_gesamt + 1) / 2).roundToDouble();
-    _fahrt = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900));
+    _fahrt = AnimationController(vsync: this, duration: kFahrtDauer);
     // Das Vorabladen der Vibrations-Einstellungen entfällt: Der
     // [HaptikService] hält den Schalter selbst zwischengespeichert, und genau
     // dafür war es hier gedacht — zwischen dem Überfahren einer Skalenmarke
@@ -3946,7 +3677,7 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
       _fahrt.stop();
       _fahrtAnim = null;
       _position = ((_gesamt + 1) / 2).roundToDouble();
-      _letzteMarke = null;
+      _rastung.ruecksetzen();
     }
   }
 
@@ -3956,22 +3687,14 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
     super.dispose();
   }
 
-  /// Kurze, sehr dezente Rastung beim Überfahren einer Skalenmarke.
+  /// Rastung beim Ziehen: Klick und Stoss, beides lauter und kräftiger, je
+  /// schneller der Finger zieht.
   ///
-  /// Die Marken-Logik und die Mindestpause bleiben unverändert — getauscht
-  /// ist nur, WAS ausgelöst wird: statt 18 ms Motorlauf jetzt die Rastung des
-  /// Systems ([HaptikArt.auswahl]), auf Android ab API 30 ein echtes
-  /// Haptik-Primitiv.
-  void _rasten(double neu) {
-    final schritt = _rasterSchritt(_gesamt);
-    final marke = ((neu - 1) / schritt).floor();
-    if (marke == _letzteMarke) return;
-    _letzteMarke = marke;
-    final jetzt = DateTime.now();
-    if (jetzt.difference(_letzterImpuls) < _kImpulsPause) return;
-    _letzterImpuls = jetzt;
-    HaptikService.spiele(HaptikArt.auswahl);
-  }
+  /// Übergeben wird nur die Position auf dem ganzen Balken. Wo die Rastpunkte
+  /// liegen, entscheidet [ReglerRastung] — früher hing das an den
+  /// gezeichneten Strichen dieses Modus, was den Rang-Balken anders rasten
+  /// liess als den Schätz-Regler.
+  void _rasten(double neu) => _rastung.ziehen(anteil: _anteil(neu));
 
   void _ziehen(double neu) {
     if (widget.bestaetigt) return;
@@ -3984,7 +3707,7 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
         .clamp(1, _gesamt)
         .toDouble();
     _fahrtAnim = Tween<double>(begin: _position, end: rang).animate(
-      CurvedAnimation(parent: _fahrt, curve: Curves.easeOutBack),
+      CurvedAnimation(parent: _fahrt, curve: kFahrtKurve),
     )..addListener(() {
         if (mounted) setState(() => _position = _fahrtAnim!.value);
       });
@@ -4048,17 +3771,21 @@ class _LaenderRankingUIState extends State<_LaenderRankingUI>
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
                 color:
-                    widget.bestaetigt ? _cRangEcht : const Color(0xFF1A1A1A),
+                    widget.bestaetigt ? kBalkenEcht : const Color(0xFF1A1A1A),
               ),
             ),
           ),
         ),
-        _RangBalken(
-          gesamt: feld,
-          wert: _position,
-          geraten: widget.bestaetigt ? widget.eingabe : null,
-          echt: widget.bestaetigt ? rang : null,
-          onZiehen: widget.bestaetigt ? null : _ziehen,
+        // Der Balken rechnet in Anteilen von 0 bis 1, dieser Modus in
+        // Rangplätzen — umgerechnet wird hier, an der einzigen Nahtstelle.
+        SchaetzBalken(
+          anteil: _anteil(_position),
+          marken: markenFuerRaenge(feld),
+          geraten: widget.bestaetigt ? _anteil(widget.eingabe.toDouble()) : null,
+          echt: widget.bestaetigt ? _anteil(rang.toDouble()) : null,
+          onZiehen: widget.bestaetigt
+              ? null
+              : (a) => _ziehen(1 + a * (feld - 1)),
         ),
         const SizedBox(height: 4),
         Row(

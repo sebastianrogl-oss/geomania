@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/locale_service.dart';
 import '../services/profilbild_service.dart';
+import '../services/knopf_rueckmeldung.dart';
 import '../services/rangliste_service.dart';
 import '../utils/portfolio_format.dart';
 import '../theme/app_theme.dart';
@@ -92,6 +93,7 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
 
   void _wechsleChallenge(_Challenge c) {
     if (_challenge == c) return;
+    knopfRueckmeldung();
     setState(() {
       _challenge = c;
       _angezeigterTag = _heuteDatum;
@@ -101,6 +103,7 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
 
   void _wechslePortfolioSubTab(int i) {
     if (_portfolioSubTab == i) return;
+    knopfRueckmeldung();
     setState(() {
       _portfolioSubTab = i;
       _angezeigterTag = _heuteDatum;
@@ -414,7 +417,7 @@ class _EigenerPlatzZeile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F8F0),
+        color: _kEigeneZeile,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFF4A9E4A), width: 2.0),
       ),
@@ -437,6 +440,15 @@ class _EigenerPlatzZeile extends StatelessWidget {
 }
 
 // ── Ranglisten-Zeile ─────────────────────────────────────────────────────────
+
+/// Fläche der eigenen Zeile in der Rangliste.
+///
+/// Bisher stand hier 0xFFF0F8F0 — bei 240/248/240 acht Stufen von Weiß
+/// entfernt und damit auf einem Handy-Display praktisch unsichtbar. Jetzt der
+/// helle Erfolgston der App (dieselbe Fläche, die eine richtige Antwort im
+/// Quiz hinterlegt): deutlich genug, um die eigene Zeile beim Überfliegen zu
+/// finden, und immer noch so blass, dass die Liste nicht zerreißt.
+const Color _kEigeneZeile = Color(0xFFE8F5E9);
 
 class _RangZeile extends StatelessWidget {
   final RanglistenEintrag eintrag;
@@ -469,7 +481,7 @@ class _RangZeile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: hervorgehoben ? const Color(0xFFF0F8F0) : Colors.white,
+        color: hervorgehoben ? _kEigeneZeile : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: hervorgehoben
@@ -562,12 +574,26 @@ class _RangZeile extends StatelessWidget {
 /// Die Zeile hat keine feste Höhe — sie richtet sich nach ihrem höchsten
 /// Kind, und das ist genau dieses Bild. Ein größerer Wert macht die Zeile
 /// also von selbst höher; Name und Wert daneben rücken entsprechend zusammen.
-const double _kProfilbildGroesse = 42;
+///
+/// 46,2 statt der bisherigen 42 — Faktor 1,1.
+const double _kProfilbildGroesse = 46.2;
 
 /// Ersatz-Symbol und Innenabstand als Anteil des Durchmessers, damit beides
 /// bei einer Größenänderung nicht einzeln nachgezogen werden muss.
 const double _kPlatzhalterAnteil = 0.64;
 const double _kBildInnenrand = 0.107;
+
+/// Feiner Ring um das Profilbild.
+///
+/// Er trennt das Bild von der weißen Zeile — ohne ihn verschwimmt ein helles
+/// Profilbild mit dem Hintergrund. Bewusst eine Haarlinie in demselben hellen
+/// Grau, das die App für ruhige Kanten benutzt, und KEIN dunkler Rahmen: Die
+/// Zeile hat bereits einen, ein zweiter darin wirkte verschachtelt.
+///
+/// Als foregroundDecoration, nicht als decoration: Eine Hintergrund-
+/// Umrandung läge unter dem Bild und das ClipOval schnitte sie weg.
+const double _kRingBreite = 1.5;
+const Color _kRingFarbe = Color(0xFFD0D0CB);
 
 class _ProfilbildIcon extends StatelessWidget {
   final String? pfad;
@@ -587,6 +613,10 @@ class _ProfilbildIcon extends StatelessWidget {
         shape: BoxShape.circle,
         color: Colors.white,
       ),
+      foregroundDecoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: _kRingFarbe, width: _kRingBreite),
+      ),
       child: pfad == null
           ? _platzhalter
           : ClipOval(
@@ -595,7 +625,7 @@ class _ProfilbildIcon extends StatelessWidget {
                   // "winken" die Hand ab, contain+Skalierung zeigt sie
                   // vollständig.
                   ? Transform.scale(
-                      scale: 1.25,
+                      scale: ProfilbildService.kWeitformatFaktor,
                       child: Image.asset(pfad,
                           fit: BoxFit.contain,
                           errorBuilder: (c, e, s) => _platzhalter),

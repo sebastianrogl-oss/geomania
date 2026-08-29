@@ -13,23 +13,46 @@ import 'portfolio_flagge.dart';
 
 class PortfolioLandKarte extends StatelessWidget {
   final PortfolioLandBeitrag beitrag;
-  const PortfolioLandKarte({super.key, required this.beitrag});
+
+  /// Ohne eigenen Rahmen — für den Fall, dass die Karte schon in einem
+  /// Rahmen steckt.
+  ///
+  /// In der Auflösung liegt sie seit dem Umbau auf wischbare Karten in einer
+  /// [WischKarte], und die bringt Fläche, Rand und Rundung selbst mit. Zwei
+  /// Rahmen ineinander sahen aus wie ein Fehler, nicht wie Absicht.
+  ///
+  /// Der Beispiel-Screen zeigt sie weiterhin frei auf dem Hintergrund und
+  /// braucht den Rahmen — deshalb ein Schalter und kein Entfernen.
+  final bool ohneRahmen;
+
+  const PortfolioLandKarte({
+    super.key,
+    required this.beitrag,
+    this.ohneRahmen = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final b = beitrag;
     final positiv = b.beitragProzent >= 0;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFEAEAE5)),
-        boxShadow: const [
-          BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 3), blurRadius: 0),
-        ],
-      ),
+      margin: EdgeInsets.only(bottom: ohneRahmen ? 0 : 10),
+      padding: ohneRahmen
+          ? const EdgeInsets.symmetric(vertical: 6)
+          : const EdgeInsets.all(14),
+      decoration: ohneRahmen
+          ? null
+          : BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFEAEAE5)),
+              boxShadow: const [
+                BoxShadow(
+                    color: Color(0xFF1A1A1A),
+                    offset: Offset(0, 3),
+                    blurRadius: 0),
+              ],
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -6,6 +6,7 @@ import '../../services/challenge_ergebnis_service.dart';
 import '../../services/challenge_panel_signal.dart';
 import '../../services/challenge_rekord_service.dart';
 import '../../services/daily_resume_service.dart';
+import '../../services/knopf_rueckmeldung.dart';
 import '../../services/portfolio_engine.dart';
 import '../../services/portfolio_markt_service.dart';
 import '../../services/portfolio_rendite_service.dart';
@@ -13,7 +14,6 @@ import '../../services/portfolio_service.dart';
 import '../../services/tages_seed_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/rangliste_service.dart';
-import '../../services/sound_service.dart';
 import '../../utils/responsive.dart';
 import '../../widgets/abzeichen_popup.dart';
 import '../../widgets/flaggen_widget.dart' show zeigeFlagge;
@@ -144,7 +144,7 @@ class _PortfolioInvestierenScreenState
 
   void _weiterZurGewichtung() {
     if (_gewaehlt.length != _kAuswahlAnzahl) return;
-    SoundService.spiele(Klang.knopf);
+    knopfRueckmeldung();
     setState(() => _gewichtungPhase = true);
     _zwischenstandSpeichern();
   }
@@ -234,8 +234,10 @@ class _PortfolioInvestierenScreenState
     if (_wirdAbgeschlossen) return;
     // Knopf und Abschluss fallen hier zusammen: mit diesem Tipp ist die
     // Portfolio-Challenge des Tages vorbei.
-    SoundService.spiele(Klang.knopf);
-    SoundService.spiele(Klang.sieg);
+    knopfRueckmeldung();
+    // Der Sieg-Klang kommt erst unten, hinter dem Abzeichen-Popup und
+    // zusammen mit dem Sprung in die Auflösung: Sonst liefe er hinter der
+    // Abzeichen-Animation ab, und beim Ergebnis selbst waere es still.
     setState(() => _wirdAbgeschlossen = true);
 
     final tagesSeed = TagesSeedService.seedFuer('portfolio');
@@ -397,23 +399,26 @@ class _PortfolioInvestierenScreenState
                   color: Color(0xFF1A1A1A), size: 18),
             ),
           ),
-          const SizedBox(width: 10),
+          // KEIN TITEL in der Leiste — dieselbe Entscheidung wie in den drei
+          // anderen Challenges. Was zählt, ist der Zähler, und der steht
+          // jetzt mittig statt am rechten Rand.
+          //
+          // Rechts bleibt ein Platzhalter in der Breite des Zurück-Knopfs,
+          // damit die Mitte auch wirklich die Mitte ist.
           Expanded(
-            child: Text(
-              _gewichtungPhase
-                  ? t('Kapital verteilen')
-                  : t('Wähle {n} Länder', {'n': '$_kAuswahlAnzahl'}),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A1A1A)),
+            child: Center(
+              child: _gewichtungPhase
+                  ? const SizedBox.shrink()
+                  : Text('${_gewaehlt.length} / $_kAuswahlAnzahl',
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: _gewaehlt.length == _kAuswahlAnzahl
+                              ? const Color(0xFF4A9E4A)
+                              : const Color(0xFF888888))),
             ),
           ),
-          if (!_gewichtungPhase)
-            Text('${_gewaehlt.length} / $_kAuswahlAnzahl',
-                style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w700,
-                    color: _gewaehlt.length == _kAuswahlAnzahl
-                        ? const Color(0xFF4A9E4A)
-                        : const Color(0xFF888888))),
+          const SizedBox(width: 34),
         ],
       ),
     );

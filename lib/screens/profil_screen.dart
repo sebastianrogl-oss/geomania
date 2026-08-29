@@ -11,6 +11,7 @@ import '../services/fortschritt_service.dart';
 import '../services/portfolio_service.dart';
 import '../services/portfolio_spielstil_service.dart';
 import '../services/haptik_service.dart';
+import '../services/knopf_rueckmeldung.dart';
 import '../services/profilbild_service.dart';
 import '../services/rangliste_service.dart';
 import '../utils/portfolio_format.dart';
@@ -165,11 +166,24 @@ class _ProfilScreenState extends State<ProfilScreen> {
                         fontSize: 22,
                         fontWeight: FontWeight.w800)),
                 GestureDetector(
-                  onTap: () => Navigator.push(
-                      context, MaterialPageRoute(builder: (_) => const SettingsScreen()))
-                      .then((_) {
-                    if (mounted) setState(() {});
-                  }),
+                  // Nach der Rückkehr NEU LADEN, nicht nur neu bauen.
+                  //
+                  // Vorher stand hier ein blosses setState: Das zeichnet die
+                  // Oberfläche neu, lässt aber jedes Feld auf dem Stand, den
+                  // es beim Öffnen des Profils hatte. In den Einstellungen
+                  // lässt sich der Spielstand aber verändern — die Ehrenmünze
+                  // "Urgestein" verleihen, Sterne gutschreiben, den
+                  // Fortschritt zurücksetzen. Nichts davon kam an: Die
+                  // frisch verliehene Münze blieb im Album als leeres Fach
+                  // stehen, bis die App neu gestartet wurde.
+                  onTap: () {
+                    knopfRueckmeldung();
+                    Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const SettingsScreen()))
+                        .then((_) {
+                      if (mounted) _load();
+                    });
+                  },
                   child: Container(
                     width: 36,
                     height: 36,
@@ -190,7 +204,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
               child: Column(
                 children: [
                   GestureDetector(
-                    onTap: _openProfilbildDialog,
+                    onTap: () {
+                      knopfRueckmeldung();
+                      _openProfilbildDialog();
+                    },
                     child: Stack(
                       children: [
                         Container(
@@ -211,7 +228,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
                                 // (weiter unten) BoxFit.contain + Skalierung, das
                                 // zeigt den kompletten Bildinhalt unbeschnitten.
                                 ? Transform.scale(
-                                    scale: 1.25,
+                                    scale: ProfilbildService.kWeitformatFaktor,
                                     child: Image.asset(_profilbild, fit: BoxFit.contain),
                                   )
                                 : Padding(
@@ -755,7 +772,7 @@ class _ProfilbildDialogState extends State<_ProfilbildDialog> {
                                     // bei ~1.59 — 1.25 bleibt auch dort deutlich
                                     // darunter).
                                     ? Transform.scale(
-                                        scale: 1.25,
+                                        scale: ProfilbildService.kWeitformatFaktor,
                                         child: Image.asset(pfad, fit: BoxFit.contain),
                                       )
                                     : Padding(

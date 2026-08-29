@@ -13,6 +13,7 @@ import 'uebersetzungen_gdpquiz.dart';
 import 'uebersetzungen_higherlower.dart';
 import 'uebersetzungen_lernen.dart';
 import 'uebersetzungen_quiz.dart';
+import 'uebersetzungen_streakziel.dart';
 import 'laender_fakten_en.dart';
 import 'laender_gebaeude_en.dart';
 import 'laender_grenzketten_en.dart';
@@ -68,6 +69,7 @@ final Map<String, String> uebersetzungen = {
   ...uebersetzungenGdpQuiz,
   ...uebersetzungenLernen,
   ...uebersetzungenQuiz,
+  ...uebersetzungenStreakZiel,
   ...uebersetzungenSettings,
   ...uebersetzungenLernpfad,
   ...uebersetzungenLernwelten,

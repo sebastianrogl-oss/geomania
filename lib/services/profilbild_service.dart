@@ -56,6 +56,28 @@ class ProfilbildService {
   static bool istWeitformat(String pfad) =>
       pfad.contains('/globus_') || pfad.contains('/coin_');
 
+  /// Wie stark eine Weitformat-Illustration in ihrem Kreis vergrössert wird.
+  ///
+  /// Unter BoxFit.contain füllt ein 677x369-Bild in einem Quadrat nur einen
+  /// mittleren Streifen von 55 % der Höhe — Coiny und Globus wirkten dadurch
+  /// deutlich kleiner als die quadratischen Tier-Icons daneben. Der Faktor
+  /// holt das zurück.
+  ///
+  /// EIN Wert für alle drei Anzeigestellen (grosses Profilbild, Auswahlraster,
+  /// Ranglisten-Zeile): Sie zeigen dasselbe Bild, und es soll überall gleich
+  /// gross im Kreis sitzen.
+  ///
+  /// 1,375 statt der bisherigen 1,25 — Faktor 1,1.
+  ///
+  /// ANGESCHNITTEN WIRD NICHTS, aber viel Luft ist nicht mehr: Ausgemessen
+  /// bleibt die Figur bei coin_normal bis Faktor 2,06 im Kreis, beim
+  /// engsten Fall globus_winken nur bis 1,49 — die ausgestreckte Hand reicht
+  /// dort am weitesten nach aussen. Wer hier weiter erhöhen will, muss diese
+  /// Grenze kennen; test/profilbild_groesse_test.dart misst sie für alle acht
+  /// Posen aus den Dateien nach und schlägt fehl, sobald der Faktor sie
+  /// überschreitet.
+  static const double kWeitformatFaktor = 1.375;
+
   // ── Werbe-Freischaltung ────────────────────────────────────────────────────
   //
   // Coin/Globus bleiben immer kostenlos (Standard-Auswahl + einfachster
@@ -84,32 +106,37 @@ class ProfilbildService {
   // freigeschaltet — für diese vier entfällt der Rewarded-Ad-Weg damit.
   // Alle übrigen Icons bleiben unverändert per Werbung erhältlich.
   //
-  // Zur Einordnung der Preise: im gesamten Lernpfad sind 4480 Sterne
+  // Zur Einordnung der Preise: im gesamten Lernpfad sind 3988 Sterne
   // erreichbar (ausgezählt über alle 594 Stationen, ein Stern je erstmalig
   // richtiger Frage).
   //
   // Verlauf: 5151 vor der Modus-Umstellung, 5095 danach, 4605 nach der
   // Kürzung der Welt-Welt auf 8 Fragen, 4480 seit der Rhythmus-Umstellung —
-  // dort kommt sortierSpiel häufiger vor, und das hat immer nur 3 Fragen.
+  // dort kommt sortierSpiel häufiger vor, und das hat immer nur 3 Fragen —,
+  // 3988 seit die Spiel-Modi eigene Obergrenzen haben (Kette 4, Ranking und
+  // Schätzen 5, Rätsel/Zwei Wahrheiten/Was gehört nicht dazu 6). Die
+  // Stationszahl blieb dabei unverändert: gekürzt wurden Fragen INNERHALB
+  // der Stationen, keine Station ist weggefallen.
   //
   // Grundlage sind fragenProStation je Welt, kFragenObergrenze je Modus und
   // die Modus-Verteilung selbst, alle in lernpfad_data.dart. Wer dort etwas
   // ändert, sollte die Zahl hier nachrechnen.
   //
-  // Die Preise wurden gegen 4605 nachkalibriert (vorher 150/500/1200/2500
-  // gegen 5151). Sie treffen die urspruenglich gewollten Anteile weiterhin:
-  // das teuerste Bild kostet 49 % aller erreichbaren Sterne, alle vier
-  // zusammen 85 %.
+  // Die Preise wurden gegen 3988 nachkalibriert (vorher 150/450/1000/2200
+  // gegen 4480, davor 150/500/1200/2500 gegen 5151). Sie treffen die
+  // urspruenglich gewollten Anteile weiterhin: das teuerste Bild kostet 49 %
+  // aller erreichbaren Sterne, alle vier zusammen 85 %.
   //
   // ACHTUNG: Diese Anteile sind der eigentliche Massstab, nicht die absoluten
   // Zahlen. Sinkt die Gesamtzahl erneut — etwa weil eine Welt weniger Fragen
   // pro Station bekommt — werden die Preise still teurer, ohne dass jemand
   // sie anfasst. Genau so ist die Staffel zwischenmal auf 94 % gerutscht.
+  // Seit test/sterne_preise_test.dart faellt das auf, bevor es jemand merkt.
   static const sternePreise = <String, int>{
-    'assets/icons/deko/afrika_elefant.png': 150,
-    'assets/icons/deko/afrika_giraffe.png': 450,
-    'assets/icons/deko/afrika_nashorn.png': 1000,
-    'assets/icons/deko/asien_panda.png': 2200,
+    'assets/icons/deko/afrika_elefant.png': 130,
+    'assets/icons/deko/afrika_giraffe.png': 400,
+    'assets/icons/deko/afrika_nashorn.png': 890,
+    'assets/icons/deko/asien_panda.png': 1950,
   };
 
   /// Bereits ausgegebene Sterne. Der Gesamtstand (lp_gesamt_richtig in

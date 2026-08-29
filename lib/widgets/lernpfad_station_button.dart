@@ -1,6 +1,32 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/lernpfad_data.dart';
+import '../services/knopf_rueckmeldung.dart';
+
+// ── Timing der Druck-Bewegung ────────────────────────────────────────────────
+//
+// Vorher sank der Kreis in 50 ms und federte in 100 ms zurück — beides
+// gemessen ab dem Zustandswechsel. Bei einem kurzen Tipp liegen Aufsetzen und
+// Loslassen aber nur rund 60 ms auseinander: Die Abwärtsbewegung bekam den
+// Rückweg zugewiesen, bevor sie unten ankam, und der Kreis wackelte nur.
+//
+// Zwei Änderungen zusammen lösen das. Erstens sinkt er schneller. Zweitens
+// bleibt er eine Mindestzeit unten, auch wenn der Finger längst weg ist —
+// sonst hilft keine noch so kurze Dauer, weil das Ziel schon wieder wechselt.
+
+/// Wie schnell der Kreis auf den Sockel sinkt.
+const Duration kSinken = Duration(milliseconds: 40);
+
+/// Wie schnell er zurückfedert.
+const Duration kSteigen = Duration(milliseconds: 90);
+
+/// Wie lange er nach dem Aufsetzen mindestens unten bleibt.
+///
+/// Etwas mehr als [kSinken], damit die Endlage kurz zu sehen ist und nicht
+/// nur die Bewegung dorthin.
+const Duration kMindestensUnten = Duration(milliseconds: 60);
 
 /// Symbol eines Modus auf dem Stationsbutton des Lernpfads.
 ///
@@ -125,6 +151,34 @@ class Druckbar3DButton extends StatefulWidget {
 class _Druckbar3DButtonState extends State<Druckbar3DButton> {
   bool _gedrueckt = false;
 
+  /// Wann der Finger aufgesetzt hat — Grundlage für [kMindestensUnten].
+  DateTime? _seit;
+
+  /// Bringt den Kreis nach der Mindestzeit zurück nach oben.
+  Timer? _zurueck;
+
+  @override
+  void dispose() {
+    _zurueck?.cancel();
+    super.dispose();
+  }
+
+  void _loslassen() {
+    _zurueck?.cancel();
+    final seit = _seit;
+    final schon = seit == null
+        ? kMindestensUnten
+        : DateTime.now().difference(seit);
+    final rest = kMindestensUnten - schon;
+    if (rest <= Duration.zero) {
+      if (mounted) setState(() => _gedrueckt = false);
+      return;
+    }
+    _zurueck = Timer(rest, () {
+      if (mounted) setState(() => _gedrueckt = false);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final g = widget.kreisGroesse;
@@ -132,15 +186,28 @@ class _Druckbar3DButtonState extends State<Druckbar3DButton> {
 
     return GestureDetector(
       onTapDown: widget.onTap != null
-          ? (_) => setState(() => _gedrueckt = true)
+          ? (_) {
+              _zurueck?.cancel();
+              _seit = DateTime.now();
+              setState(() => _gedrueckt = true);
+            }
           : null,
       onTapUp: widget.onTap != null
           ? (_) {
-              setState(() => _gedrueckt = false);
+              // Die Aktion läuft SOFORT los, nicht erst nach der Animation —
+              // der Kreis federt währenddessen zurück. Ein Sheet, das 100 ms
+              // später aufginge, fühlte sich träge an.
+              knopfRueckmeldung();
               widget.onTap!();
+              _loslassen();
             }
           : null,
-      onTapCancel: () => setState(() => _gedrueckt = false),
+      // Abgebrochene Geste: sofort zurück. Hier wurde nichts ausgelöst, also
+      // gibt es auch nichts zu zeigen.
+      onTapCancel: () {
+        _zurueck?.cancel();
+        if (mounted) setState(() => _gedrueckt = false);
+      },
       child: SizedBox(
         width: g,
         height: g + s,
@@ -164,7 +231,7 @@ class _Druckbar3DButtonState extends State<Druckbar3DButton> {
             ),
             // Haupt-Kreis (sinkt beim Drücken)
             AnimatedPositioned(
-              duration: Duration(milliseconds: _gedrueckt ? 50 : 100),
+              duration: _gedrueckt ? kSinken : kSteigen,
               curve: Curves.easeOut,
               top: _gedrueckt ? s : 0,
               left: 0,

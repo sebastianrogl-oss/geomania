@@ -25,6 +25,8 @@ const Map<String, String> uebersetzungenSettings = {
   'Nur {welt}': 'Only {welt}',
   'Alles zurücksetzen': 'Reset everything',
   'der gesamte Fortschritt': 'all progress',
+  'Der gesamte Fortschritt wird zurückgesetzt.':
+      'All progress will be reset.',
   'Bist du sicher?': 'Are you sure?',
   'Das setzt deinen Lernpfad-Fortschritt zurück (Stationen, Kontinente). Deine Tages-Challenge-Ergebnisse und Ranglisten bleiben davon unberührt.':
       'This resets your learning path progress (stations, continents). Your daily challenge results and leaderboards remain unaffected.',

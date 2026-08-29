@@ -200,7 +200,7 @@ const Map<String, String> uebersetzungenLernpfad = {
   'Checkpoint': 'Checkpoint',
   'Wiederholung starten': 'Start review',
 
-  'Bereits abgeschlossen ✅': 'Already completed ✅',
+  'Bereits abgeschlossen': 'Already completed',
   'Nochmal spielen': 'Play again',
   'START': 'START',
   // 'Abbrechen' ist bereits in uebersetzungen_settings.dart definiert.

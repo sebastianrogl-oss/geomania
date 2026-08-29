@@ -36,6 +36,7 @@ const Map<String, String> uebersetzungenSchaetzen = {
   'Deine Schätzung': 'Your estimate',
   'Bestätigen': 'Confirm',
   'Richtiger Wert': 'Correct value',
+  'Richtiger Wert: {v}': 'Correct value: {v}',
   'Abweichung: {n} Prozentpunkte': 'Deviation: {n} percentage points',
   'Abweichung: {n} % der Skala': 'Deviation: {n}% of the scale',
   'Ergebnis anzeigen': 'Show result',

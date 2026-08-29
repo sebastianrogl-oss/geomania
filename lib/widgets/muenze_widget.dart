@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/abzeichen_data.dart';
+import 'grabstein_widget.dart';
 
 /// Dunkles Braun der Münz-Outline — Farbe für alles, was IN der Münze steht.
 const kMuenzInhaltFarbe = Color(0xFF4E342E);
@@ -96,19 +97,40 @@ class MuenzenWidget extends StatelessWidget {
   final double groesse;
   final bool erreicht;
 
+  /// Farbe des gestrichelten Umrisses einer noch gesperrten Münze.
+  ///
+  /// Voreinstellung ist das Weiss des Albums, das auf dunklem Leder liegt.
+  /// Wer die Münzen auf hellem Grund zeigt — etwa die Willkommens-Karte —
+  /// muss hier einen dunkleren Ton übergeben, sonst ist der Umriss unsichtbar.
+  final Color? umrissFarbe;
+
   const MuenzenWidget({
     super.key,
     required this.abzeichen,
     required this.groesse,
     required this.erreicht,
+    this.umrissFarbe,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Ehrungen sind keine Münzen. Sie werden verliehen statt gesammelt und
+    // bekommen deshalb eine eigene Form — die Weiche steht hier, damit JEDE
+    // Stelle, die ein Abzeichen zeigt (Album, Freischalt-Popup), sie
+    // automatisch mitnimmt.
+    if (abzeichen.kategorie == AbzeichenKategorie.ehrung) {
+      return GrabsteinWidget(
+        groesse: groesse,
+        erreicht: erreicht,
+        umrissFarbe: umrissFarbe,
+      );
+    }
+
     if (!erreicht) {
       return CustomPaint(
         size: Size(groesse, groesse),
-        painter: DashedCirclePainter(color: Colors.white.withValues(alpha: 0.25)),
+        painter: DashedCirclePainter(
+            color: umrissFarbe ?? Colors.white.withValues(alpha: 0.25)),
       );
     }
 

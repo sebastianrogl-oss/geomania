@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../data/portfolio_daten.dart';
 import '../../l10n/uebersetzungen.dart';
@@ -8,6 +7,7 @@ import '../../services/portfolio_service.dart';
 import '../../utils/portfolio_format.dart';
 import '../../widgets/challenge_ergebnis_header.dart';
 import '../../widgets/challenge_fertig_button.dart';
+import '../../widgets/ergebnis_karten.dart';
 import '../../widgets/portfolio_land_karte.dart';
 import '../../widgets/rangliste_ergebnis_karte.dart';
 import '../../theme/app_theme.dart';
@@ -19,6 +19,7 @@ import '../../theme/app_theme.dart';
 class PortfolioAufloesungScreen extends StatefulWidget {
   final PortfolioTagesErgebnis ergebnis;
   final PortfolioStatus status;
+
   /// Wenn true: wird direkt aus dem Start-Screen ("Ergebnisse ansehen")
   /// geöffnet, ohne den normalen Marktbriefing/Investieren-Stack darunter —
   /// "Depot ansehen" muss dann nur diesen einen Screen schließen.
@@ -32,79 +33,26 @@ class PortfolioAufloesungScreen extends StatefulWidget {
   });
 
   @override
-  State<PortfolioAufloesungScreen> createState() => _PortfolioAufloesungScreenState();
+  State<PortfolioAufloesungScreen> createState() =>
+      _PortfolioAufloesungScreenState();
 }
 
 class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
   PortfolioTagesErgebnis get ergebnis => widget.ergebnis;
   PortfolioStatus get status => widget.status;
 
-  @override
-  void initState() {
-    super.initState();
-    final neuerTitel =
-        neuerRangBeiAufstieg(ergebnis.altesKapital, ergebnis.neuesKapital);
-    if (neuerTitel != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _zeigeMeilenstein(neuerTitel);
-      });
-    }
-  }
-
-  void _zeigeMeilenstein(String titel) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black45,
-      builder: (ctx) => Stack(
-        children: [
-          const Positioned.fill(child: IgnorePointer(child: _Konfetti())),
-          Center(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 32),
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF1A1A1A), width: 2.5),
-                boxShadow: const [
-                  BoxShadow(color: Color(0xFF1A1A1A), offset: Offset(0, 4)),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('🎉', style: TextStyle(fontSize: 40)),
-                  const SizedBox(height: 12),
-                  Text(t('Neuer Rang erreicht!'),
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF888888),
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Text(titel,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
-                          color: Color(0xFF1A1A1A))),
-                  const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(ctx),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A1A1A),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(t('Weiter'),
-                          style: const TextStyle(color: Colors.white,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // HIER STAND DIE AUFSTIEGS-ANIMATION.
+  //
+  // Beim Überschreiten einer Kapitalschwelle sprang ein Dialog samt Konfetti
+  // auf ("Neuer Rang erreicht! — Sparbuch-Anfänger"), noch bevor die
+  // Auflösung des Tages zu sehen war. Sie ist ersatzlos entfernt: Der
+  // Auflösungs-Screen ist der Moment für das Tagesergebnis, und ein zweiter
+  // Feier-Moment davor nahm ihm die Aufmerksamkeit.
+  //
+  // DIE RÄNGE SELBST BLEIBEN. Sie stehen weiterhin in [rangTitel] und werden
+  // im Depot als Karte "Dein Rang" mit Fortschrittsbalken angezeigt
+  // (portfolio_screen.dart). Entfallen ist allein die Feier beim Aufstieg;
+  // [neuerRangBeiAufstieg] wird dadurch nirgends mehr gebraucht.
 
   void _zurueckZumDepot(BuildContext context) {
     // Springt IMMER direkt zurück zum Challenge-Panel (statt einer festen
@@ -151,9 +99,10 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
                     punkteAnzeige: Text(
                       fmtKapital(gewinnAbsolut, mitVorzeichen: true),
                       style: const TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1A1A1A)),
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1A1A1A),
+                      ),
                     ),
                   ),
                 ],
@@ -165,50 +114,71 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
               child: Divider(color: Color(0xFFD0CEC8)),
             ),
             const SizedBox(height: 4),
+            // Die Aufschlüsselung als wischbarer Kartenstapel statt als
+            // Scrollliste — dieselbe Bauform wie bei den anderen drei
+            // Tages-Challenges und beim Willkommens-Screen (siehe
+            // ergebnis_karten.dart). Kopf, Kapital-Anzeige und Fertig-Knopf
+            // bleiben, wo sie waren.
+            //
+            // AUFTEILUNG: erst die Länder, dann die Abrechnung (Boni und
+            // Gesamtzeile). Die Abrechnung hängt sich an die letzte
+            // Länderkarte, wenn dort noch Platz ist — sonst bekommt sie eine
+            // eigene. Dieselbe Regel wie beim Fehler in Higher or Lower.
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ...ergebnis.beitraege
-                        .map((b) => PortfolioLandKarte(beitrag: b)),
-                    if (ergebnis.kontinentsBonus > 0) ...[
-                      const SizedBox(height: 4),
-                      _buildBonusZeile(
-                          t('Kontinents-Synergie'), ergebnis.kontinentsBonus.toDouble()),
-                      const SizedBox(height: 4),
-                    ],
-                    // Allianz-Bonus: eigener, vom Kontinents-Bonus oben
-                    // unabhängiger Mechanismus — eine Zeile pro tatsächlich
-                    // erfüllter Allianz-News (mehrere können sich addieren).
-                    for (final allianz in ergebnis.erfuellteAllianzen) ...[
-                      const SizedBox(height: 4),
-                      _buildBonusZeile(
-                          t('Allianz-Bonus ({k})', {
-                            'k': allianz.allianzKontinente!.map(kontinentNameFuerId).join("+")
-                          }),
-                          allianz.allianzBonus!),
-                      const SizedBox(height: 4),
-                    ],
-                    // Sektor-Kombi-Bonus: ebenfalls eigenständig, wirkt wenn
-                    // tatsächlich in beide genannten Sektoren investiert wurde.
-                    for (final kombo in ergebnis.erfuellteSektorKombos) ...[
-                      const SizedBox(height: 4),
-                      _buildBonusZeile(
-                          t('Sektor-Kombi-Bonus ({s})', {
-                            's': kombo.sektorKombo!
-                                .map((s) => t(portfolioSektoren.firstWhere((p) => p.id == s).name))
-                                .join("+")
-                          }),
-                          kombo.sektorKomboBonus!),
-                      const SizedBox(height: 4),
-                    ],
-                    const Divider(height: 24),
-                    _buildGesamtZeile(positiv),
+              child: Builder(builder: (context) {
+                final laender = ergebnis.beitraege;
+                // Eine Länderkarte ist rund 130 hoch: Innenrand, Flaggenzeile
+                // und zwei bis vier Komponentenzeilen.
+                // Über dem Stapel steht hier mehr als bei den anderen drei:
+                // Kapital-Anzeige UND Ranglisten-Einordnung. Deshalb 360
+                // Abzug, und mindestens 1 statt 2 — eine Länderkarte je
+                // Wischkarte ist hier die richtige Portionierung, kein
+                // Notbehelf.
+                final proKarte = wischZeilenProKarte(context,
+                    zeilenHoehe: 130,
+                    abzugOben: 360,
+                    mindestens: 1,
+                    hoechstens: 3);
+                final gruppen = <List<PortfolioLandBeitrag>>[];
+                for (var i = 0; i < laender.length; i += proKarte) {
+                  gruppen.add(laender.sublist(
+                      i,
+                      i + proKarte > laender.length
+                          ? laender.length
+                          : i + proKarte));
+                }
+                // Die Abrechnung ist rund zwei Länderkarten hoch.
+                const abrechnungZeilen = 2;
+                final abrechnungAufLetzter = gruppen.isNotEmpty &&
+                    gruppen.last.length + abrechnungZeilen <= proKarte;
+                return WischKartenStapel(
+                  karten: [
+                    for (var g = 0; g < gruppen.length; g++)
+                      (context, hoehe) => WischKarte(
+                            innenrand: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                            notfallScrollen: true,
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  for (final b in gruppen[g])
+                                    PortfolioLandKarte(
+                                        beitrag: b, ohneRahmen: true),
+                                  if (abrechnungAufLetzter &&
+                                      g == gruppen.length - 1)
+                                    _buildAbrechnung(positiv),
+                                ],
+                              ),
+                          ),
+                    if (!abrechnungAufLetzter)
+                      (context, hoehe) => WischKarte(
+                            innenrand:
+                                const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                            notfallScrollen: true,
+                            child: _buildAbrechnung(positiv),
+                          ),
                   ],
-                ),
-              ),
+                );
+              }),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -217,11 +187,82 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
               // identisch zum etablierten Navigationsverhalten der anderen
               // 3 Challenges.
               child: ChallengeFertigButton(
-                  onTap: () => _zurueckZumDepot(context)),
+                onTap: () => _zurueckZumDepot(context),
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// Boni und Gesamtzeile — die Abrechnung unter den Länderbeiträgen.
+  ///
+  /// Die Überschrift steht in derselben Form wie „Runden 1–5" bei den anderen
+  /// Challenges: klein, fett, linksbündig am oberen Kartenrand. Sie sagt, was
+  /// auf dieser Karte steht — ohne sie beginnt die Karte mitten in einer
+  /// Rechnung.
+  Widget _buildAbrechnung(bool positiv) {
+    return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        t('Bonus'),
+                        style: const TextStyle(
+                          color: Color(0xFF1A1A1A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (ergebnis.kontinentsBonus > 0) ...[
+                      const SizedBox(height: 4),
+                      _buildBonusZeile(
+                        t('Kontinents-Synergie'),
+                        ergebnis.kontinentsBonus.toDouble(),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    // Allianz-Bonus: eigener, vom Kontinents-Bonus oben
+                    // unabhängiger Mechanismus — eine Zeile pro tatsächlich
+                    // erfüllter Allianz-News (mehrere können sich addieren).
+                    for (final allianz in ergebnis.erfuellteAllianzen) ...[
+                      const SizedBox(height: 4),
+                      _buildBonusZeile(
+                        t('Allianz-Bonus ({k})', {
+                          'k': allianz.allianzKontinente!
+                              .map(kontinentNameFuerId)
+                              .join("+"),
+                        }),
+                        allianz.allianzBonus!,
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    // Sektor-Kombi-Bonus: ebenfalls eigenständig, wirkt wenn
+                    // tatsächlich in beide genannten Sektoren investiert wurde.
+                    for (final kombo in ergebnis.erfuellteSektorKombos) ...[
+                      const SizedBox(height: 4),
+                      _buildBonusZeile(
+                        t('Sektor-Kombi-Bonus ({s})', {
+                          's': kombo.sektorKombo!
+                              .map(
+                                (s) => t(
+                                  portfolioSektoren
+                                      .firstWhere((p) => p.id == s)
+                                      .name,
+                                ),
+                              )
+                              .join("+"),
+                        }),
+                        kombo.sektorKomboBonus!,
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    const Divider(height: 24),
+                    _buildGesamtZeile(positiv),
+                  ],
     );
   }
 
@@ -238,21 +279,31 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
       child: Column(
         children: [
           TweenAnimationBuilder<double>(
-            tween: Tween(begin: ergebnis.altesKapital, end: ergebnis.neuesKapital),
+            tween: Tween(
+              begin: ergebnis.altesKapital,
+              end: ergebnis.neuesKapital,
+            ),
             duration: const Duration(milliseconds: 1200),
             curve: Curves.easeOutCubic,
             builder: (context, wert, child) => Text(
               '${fmtKapital(ergebnis.altesKapital)} → ${fmtKapital(wert)}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
-                  color: Colors.white70),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white70,
+              ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
             fmtProzent(ergebnis.depotRenditeGesamt),
             style: TextStyle(
-                fontSize: 40, fontWeight: FontWeight.w900,
-                color: positiv ? const Color(0xFF4A9E4A) : const Color(0xFFE53935)),
+              fontSize: 40,
+              fontWeight: FontWeight.w900,
+              color: positiv
+                  ? const Color(0xFF4A9E4A)
+                  : const Color(0xFFE53935),
+            ),
           ),
         ],
       ),
@@ -267,7 +318,9 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFE8F5E9),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF4A9E4A).withValues(alpha: 0.4)),
+        border: Border.all(
+          color: const Color(0xFF4A9E4A).withValues(alpha: 0.4),
+        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -278,22 +331,38 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
           // (RenderFlex-Overflow), da die äußere Row die Prozentzahl daneben
           // nicht mehr unterbringen konnte.
           Expanded(
-            child: Row(children: [
-              const Icon(Icons.add_circle_outline, color: Color(0xFF4A9E4A), size: 14),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(label,
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.add_circle_outline,
+                  color: Color(0xFF4A9E4A),
+                  size: 14,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                        color: Color(0xFF2E7D32))),
-              ),
-            ]),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF2E7D32),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 8),
-          Text(fmtProzent(wert),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800,
-                  color: Color(0xFF4A9E4A))),
+          Text(
+            fmtProzent(wert),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF4A9E4A),
+            ),
+          ),
         ],
       ),
     );
@@ -304,112 +373,23 @@ class _PortfolioAufloesungScreenState extends State<PortfolioAufloesungScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
-          child: Text(t('Depot-Rendite gesamt'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+          child: Text(
+            t('Depot-Rendite gesamt'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          ),
         ),
         const SizedBox(width: 8),
-        Text(fmtProzent(ergebnis.depotRenditeGesamt),
-            style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.w900,
-                color: positiv ? const Color(0xFF4A9E4A) : const Color(0xFFE53935))),
+        Text(
+          fmtProzent(ergebnis.depotRenditeGesamt),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: positiv ? const Color(0xFF4A9E4A) : const Color(0xFFE53935),
+          ),
+        ),
       ],
     );
   }
-}
-
-// ── Konfetti (leichtgewichtig, ohne externe Abhängigkeit) ───────────────────
-
-class _Konfetti extends StatefulWidget {
-  const _Konfetti();
-
-  @override
-  State<_Konfetti> createState() => _KonfettiState();
-}
-
-class _KonfettiState extends State<_Konfetti> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final List<_KonfettiPartikel> _partikel;
-
-  static const _farben = [
-    Color(0xFF4A9E4A), Color(0xFFF9A825), Color(0xFFE53935),
-    Color(0xFF4A90D9), Color(0xFF7C3AED),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
-      ..forward();
-    final rng = Random();
-    _partikel = List.generate(36, (_) => _KonfettiPartikel(
-      x: rng.nextDouble(),
-      startDelay: rng.nextDouble() * 0.3,
-      farbe: _farben[rng.nextInt(_farben.length)],
-      groesse: 6 + rng.nextDouble() * 6,
-      drift: (rng.nextDouble() - 0.5) * 0.4,
-      rotationSpeed: (rng.nextDouble() - 0.5) * 10,
-    ));
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, child) => CustomPaint(
-        size: Size.infinite,
-        painter: _KonfettiPainter(_partikel, _ctrl.value),
-      ),
-    );
-  }
-}
-
-class _KonfettiPartikel {
-  final double x, startDelay, groesse, drift, rotationSpeed;
-  final Color farbe;
-  const _KonfettiPartikel({
-    required this.x,
-    required this.startDelay,
-    required this.farbe,
-    required this.groesse,
-    required this.drift,
-    required this.rotationSpeed,
-  });
-}
-
-class _KonfettiPainter extends CustomPainter {
-  final List<_KonfettiPartikel> partikel;
-  final double t;
-  _KonfettiPainter(this.partikel, this.t);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (final p in partikel) {
-      final localT = ((t - p.startDelay) / (1 - p.startDelay)).clamp(0.0, 1.0);
-      if (localT <= 0) continue;
-      final y = localT * (size.height + 40) - 20;
-      final x = p.x * size.width + p.drift * size.width * localT;
-      final rotation = p.rotationSpeed * localT * pi;
-      final opacity = (1 - localT).clamp(0.0, 1.0);
-
-      canvas.save();
-      canvas.translate(x, y);
-      canvas.rotate(rotation);
-      final paint = Paint()..color = p.farbe.withValues(alpha: opacity);
-      canvas.drawRect(
-          Rect.fromCenter(center: Offset.zero, width: p.groesse, height: p.groesse * 0.6),
-          paint);
-      canvas.restore();
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _KonfettiPainter oldDelegate) => true;
 }

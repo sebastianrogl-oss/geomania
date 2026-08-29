@@ -22,8 +22,8 @@ const Map<String, String> uebersetzungenStationQuiz = {
   'Land eingeben…': 'Enter country…',
   'Hauptstadt eingeben…': 'Enter capital…',
 
-  '✅ Richtig!': '✅ Correct!',
-  '❌ Richtig war: {a}': '❌ Correct answer: {a}',
+  'Richtig!': 'Correct!',
+  'Richtig war: {a}': 'Correct answer: {a}',
   'Bestätigen': 'Confirm',
   'Reihenfolge prüfen': 'Check order',
   'Weiter': 'Next',

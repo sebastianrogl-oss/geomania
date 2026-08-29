@@ -12,12 +12,14 @@ import '../services/daily_resume_service.dart';
 import '../services/tages_seed_service.dart';
 import '../services/skala_service.dart';
 import '../services/rangliste_service.dart';
-import '../services/sound_service.dart';
+import '../services/regler_rastung.dart';
+import '../services/knopf_rueckmeldung.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/challenge_fertig_button.dart';
+import '../widgets/ergebnis_karten.dart';
 import '../widgets/flaggen_widget.dart' show zeigeFlagge;
 import '../widgets/rangliste_ergebnis_karte.dart';
-import '../widgets/rekord_badge.dart';
+import '../widgets/schaetz_balken.dart';
 import '../widgets/spiel_erklaerung.dart';
 import '../theme/app_theme.dart';
 
@@ -52,22 +54,22 @@ class _SchaetzErgebnis {
   });
 
   Map<String, dynamic> toJson() => {
-        'landIso': landIso,
-        'landName': landName,
-        'kategorieLabel': kategorieLabel,
-        'istProzentKategorie': istProzentKategorie,
-        'abweichung': abweichung,
-        'punkte': punkte,
-      };
+    'landIso': landIso,
+    'landName': landName,
+    'kategorieLabel': kategorieLabel,
+    'istProzentKategorie': istProzentKategorie,
+    'abweichung': abweichung,
+    'punkte': punkte,
+  };
 
   static _SchaetzErgebnis fromJson(Map<String, dynamic> j) => _SchaetzErgebnis(
-        landIso: j['landIso'] as String,
-        landName: j['landName'] as String,
-        kategorieLabel: j['kategorieLabel'] as String,
-        istProzentKategorie: j['istProzentKategorie'] as bool,
-        abweichung: (j['abweichung'] as num).toDouble(),
-        punkte: j['punkte'] as int,
-      );
+    landIso: j['landIso'] as String,
+    landName: j['landName'] as String,
+    kategorieLabel: j['kategorieLabel'] as String,
+    istProzentKategorie: j['istProzentKategorie'] as bool,
+    abweichung: (j['abweichung'] as num).toDouble(),
+    punkte: j['punkte'] as int,
+  );
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -82,7 +84,7 @@ class PreisSchaetzenScreen extends StatefulWidget {
 }
 
 class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// Fragen je Tagesrunde. Von 8 auf 5 gekürzt.
   ///
   /// Alles andere im Screen rechnet mit `_fragen.length` und zieht damit von
@@ -99,11 +101,24 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   static const _kMaxPts = _kFragen * _kMaxPtsProFrage;
   static const _kId = 'preis';
 
+  /// Skalenstriche unter dem Balken: zehn Abschnitte, also elf Striche.
+  ///
+  /// Hinter dieser Achse stehen keine abzählbaren Stufen wie beim Ranking,
+  /// sondern ein stufenloser Wertebereich — die Striche sind reine
+  /// Orientierung.
+  static const _kSkalenAbschnitte = 10;
+
   late final RankingCategory _heutigeKat;
   List<_Frage> _fragen = [];
   int _idx = 0;
   SkalaErgebnis? _skala;
   double _sliderVal = 50;
+
+  /// Klick und Stoss beim Überfahren einer Skalenmarke — derselbe Baustein
+  /// wie beim Rang-Balken im Länder-Ranking, damit sich beide Regler gleich
+  /// anfühlen. Bisher rastete dieser hier gar nicht.
+  final _rastung = ReglerRastung();
+
   bool _beantwortet = false;
   bool _fertig = false;
   int _gesamt = 0;
@@ -112,30 +127,39 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   int? _rekord;
   bool _neuerRekord = false;
 
-  /// Der Rekord für die Anzeige, gedeckelt auf die heutige Höchstpunktzahl.
-  ///
-  /// Rekorde aus der Zeit mit 8 Fragen können bis 800 gehen. Ungedeckelt
-  /// stünde in der Anzeige "740 / 500", was wie ein Fehler aussieht. Der
-  /// GESPEICHERTE Wert bleibt unangetastet — er entscheidet weiter über die
-  /// Abzeichen, und dort ist ein alter Rekord echt verdient.
-  int? get _rekordAnzeige =>
-      _rekord == null ? null : (_rekord! > _kMaxPts ? _kMaxPts : _rekord!);
+  // Eine gedeckelte Rekord-Anzeige gibt es nicht mehr: Der Bestwert wird
+  // nirgends mehr gezeigt. Der GESPEICHERTE Wert bleibt unangetastet — er
+  // entscheidet weiter über die Abzeichen.
   final List<_SchaetzErgebnis> _alleErgebnisse = [];
 
   late final AnimationController _ptsCtrl;
   late Animation<double> _ptsAnim;
 
+  /// Fährt die Markierung nach dem Bestätigen auf den echten Wert — siehe
+  /// [_fahreZurAntwort].
+  late final AnimationController _fahrt;
+  Animation<double>? _fahrtAnim;
+
+  /// Aktuelle Position der Markierung, 0 bis 1 auf der Rundenskala.
+  double _fahrtAnteil = 0;
+
   @override
   void initState() {
     super.initState();
     // Tägliche Kategorie seed-basiert bestimmen (gleich den ganzen Tag)
-    final katIdx = Random(TagesSeedService.seedFuer(_kId) + 999)
-        .nextInt(rankingCategories.length);
+    final katIdx = Random(
+      TagesSeedService.seedFuer(_kId) + 999,
+    ).nextInt(rankingCategories.length);
     _heutigeKat = rankingCategories[katIdx];
     _ptsCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 600));
-    _ptsAnim = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _ptsCtrl, curve: Curves.elasticOut));
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _ptsAnim = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _ptsCtrl, curve: Curves.elasticOut));
+    _fahrt = AnimationController(vsync: this, duration: kFahrtDauer);
     if (widget.nurAnsicht) {
       _ladeHeutigesErgebnis();
     } else {
@@ -146,6 +170,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   @override
   void dispose() {
     _ptsCtrl.dispose();
+    _fahrt.dispose();
     super.dispose();
   }
 
@@ -194,6 +219,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
       _gesamt = gesamt;
       _sliderVal = start.clamp(sk.min, sk.max);
       _beantwortet = false;
+      _rastung.ruecksetzen();
       _letztePts = 0;
       _abweichung = 0;
       _alleErgebnisse
@@ -215,20 +241,24 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     final rng = Random(TagesSeedService.seedFuer(_kId));
 
     // Verschiedene Länder für die tägliche Kategorie
-    final pool = countryRankings
-        .where((c) => (kat.getValue(c) ?? -1) > 0)
-        .where((c) => kat.id != 'area' || (c.area ?? 0) >= 0.1)
-        .toList()
-      ..shuffle(rng);
+    final pool =
+        countryRankings
+            .where((c) => (kat.getValue(c) ?? -1) > 0)
+            .where((c) => kat.id != 'area' || (c.area ?? 0) >= 0.1)
+            .toList()
+          ..shuffle(rng);
 
-    final fragen =
-        pool.take(_kFragen).map((land) => _Frage(land, kat)).toList();
+    final fragen = pool
+        .take(_kFragen)
+        .map((land) => _Frage(land, kat))
+        .toList();
 
     // EINMAL pro Tages-Runde aus den ECHTEN Werten der tatsächlich gezogenen
     // Länder berechnet — bleibt danach für alle Fragen dieser Runde
     // unverändert (siehe SkalaService.ausRundenWerten).
-    final werteDieserRunde =
-        fragen.map((f) => f.kat.getValue(f.land)!).toList();
+    final werteDieserRunde = fragen
+        .map((f) => f.kat.getValue(f.land)!)
+        .toList();
     final sk = fragen.isNotEmpty
         ? SkalaService.ausRundenWerten(kat.id, werteDieserRunde)
         : null;
@@ -242,6 +272,7 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
       _gesamt = 0;
       _fertig = false;
       _beantwortet = false;
+      _rastung.ruecksetzen();
       _letztePts = 0;
       _abweichung = 0;
       _neuerRekord = false;
@@ -249,10 +280,21 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     });
   }
 
+  /// Der Finger zieht den Griff. [p] ist die Position auf dem Balken von 0
+  /// bis 1 — dieselbe Einheit, in der auch die Rastung rechnet.
+  ///
+  /// Wo gerastet wird, entscheidet [ReglerRastung] mit ihrem eigenen feinen
+  /// Raster. Früher hing es an den zehn sichtbaren Abschnitten dieser Skala —
+  /// über den ganzen Balken also zehn Klicks, was sich leer anfühlte.
+  void _ziehen(double p) {
+    _rastung.ziehen(anteil: p);
+    setState(() => _sliderVal = _skala!.wertAn(p));
+  }
+
   void _bestaetigen() {
     // Nur der Knopfklang. Ob die Schätzung gut war, sagt die Punktzahl —
     // richtig/falsch gibt es in den Tages-Challenges bewusst nicht.
-    SoundService.spiele(Klang.knopf);
+    knopfRueckmeldung();
     final q = _fragen[_idx];
     final real = q.kat.getValue(q.land)!;
     final sk = _skala!;
@@ -292,19 +334,22 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
         : sk.abstand(_sliderVal, real).clamp(0.0, 100.0);
     final pts = rundungsGleichstand ? _kMaxPtsProFrage : _punkteFuer(dev);
     _ptsCtrl.forward(from: 0);
+    _fahreZurAntwort(sk.positionVon(_sliderVal), sk.positionVon(real));
     setState(() {
       _beantwortet = true;
       _abweichung = dev;
       _letztePts = pts;
       _gesamt += pts;
-      _alleErgebnisse.add(_SchaetzErgebnis(
-        landIso: q.land.iso2,
-        landName: q.land.name,
-        kategorieLabel: q.kat.label,
-        istProzentKategorie: _istProzentKategorie(q.kat.id),
-        abweichung: dev,
-        punkte: pts,
-      ));
+      _alleErgebnisse.add(
+        _SchaetzErgebnis(
+          landIso: q.land.iso2,
+          landName: q.land.name,
+          kategorieLabel: q.kat.label,
+          istProzentKategorie: _istProzentKategorie(q.kat.id),
+          abweichung: dev,
+          punkte: pts,
+        ),
+      );
     });
   }
 
@@ -316,21 +361,50 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   // Prozent-Kategorien auf 0-100 begrenzt).
   bool _istProzentKategorie(String id) => SkalaService.istProzentKategorie(id);
 
+  /// Der Belohnungsmoment: Nach dem Bestätigen wandert die Markierung sichtbar
+  /// auf den echten Wert, während der eigene Tipp als Pflock stehen bleibt.
+  ///
+  /// Dieselbe Mechanik wie im Länder-Ranking des Lernpfads — Bauteil, Dauer
+  /// und Kurve kommen aus [SchaetzBalken] (widgets/schaetz_balken.dart), damit
+  /// sich der Moment an beiden Stellen gleich anfühlt. Hier ist die Achse
+  /// stufenlos statt in Rangplätzen; umgerechnet wird über dieselbe Skala,
+  /// die auch den Regler bedient.
+  void _fahreZurAntwort(double von, double bis) {
+    _fahrtAnteil = von;
+    _fahrtAnim = Tween<double>(begin: von, end: bis)
+        .animate(CurvedAnimation(parent: _fahrt, curve: kFahrtKurve))
+      ..addListener(() {
+        if (mounted) setState(() => _fahrtAnteil = _fahrtAnim!.value);
+      });
+    _fahrt.forward(from: 0);
+  }
+
   Future<void> _weiter() async {
-    SoundService.spiele(Klang.knopf);
+    knopfRueckmeldung();
     if (_idx + 1 >= _fragen.length) {
-      // Die Runde ist zu Ende — vor allem Speichern, damit der Klang zum Tipp
-      // gehört und nicht erst nach den awaits einsetzt.
-      SoundService.spiele(Klang.sieg);
-      _neuerRekord = await ChallengeRekordService.setzeFallsBesser(_kId, _gesamt);
+      // Die Runde ist zu Ende.
+      //
+      // DER SIEG-KLANG STEHT WEITER UNTEN, nicht hier. Er gehörte einmal
+      // hierher, damit er unmittelbar auf den Tipp folgt — aber dazwischen
+      // liegt das Abzeichen-Popup, und das bringt seinen eigenen Klang mit.
+      // Der Sieg-Fanfare lief dadurch hinter der Abzeichen-Animation ab,
+      // während beim eigentlichen Ergebnis Stille herrschte. Jetzt: erst die
+      // Abzeichen, dann der Klang, dann das Ergebnis.
+      _neuerRekord = await ChallengeRekordService.setzeFallsBesser(
+        _kId,
+        _gesamt,
+      );
       await ChallengeRekordService.speichereHeutigePunkte(_kId, _gesamt);
       await ChallengeRekordService.summeErhoehen(_kId, _gesamt.toDouble());
       await RanglisteService.ergebnisSpeichernMitBereinigung(
-          challengeId: 'schaetzen', wert: _gesamt);
+        challengeId: 'schaetzen',
+        wert: _gesamt,
+      );
       await DailyChallenge.markDone(_kId);
       await DailyResumeService.loeschen(_kId);
-      await ChallengeErgebnisService.speichern(_kId,
-          {'ergebnisse': _alleErgebnisse.map((e) => e.toJson()).toList()});
+      await ChallengeErgebnisService.speichern(_kId, {
+        'ergebnisse': _alleErgebnisse.map((e) => e.toJson()).toList(),
+      });
       final neueAbzeichen = await AbzeichenService.pruefeNachChallengeAbschluss(
         heutePerfekt: _gesamt >= _kMaxPts,
         neuerRekordHeute: _neuerRekord,
@@ -351,10 +425,15 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     // Skala neu bestimmt, nicht die Skala selbst.
     final sk = _skala!;
     final start = sk.wertAn(TagesSeedService.startBruch(nextIdx));
+    // Neue Frage: Fahrt stoppen und die Markierung freigeben, sonst liefe
+    // sie beim naechsten Bestaetigen von der alten Stelle los.
+    _fahrt.stop();
+    _fahrtAnim = null;
     setState(() {
       _idx = nextIdx;
       _sliderVal = start.clamp(sk.min, sk.max);
       _beantwortet = false;
+      _rastung.ruecksetzen();
       _letztePts = 0;
       _abweichung = 0;
     });
@@ -381,23 +460,10 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
     final punkte = _kMaxPtsProFrage * exp(-dev / 17);
     return punkte.round().clamp(0, _kMaxPtsProFrage);
   }
+  // Die Kurzbewertung ("Sehr gut!", "Weiter üben!") ist entfallen: Sie
+  // gehörte in den Kopf der alten Ergebniskarte. Die Auflösung auf dem
+  // Regler kommt mit Punktzahl und Abweichung aus.
 
-  String _labelFuer(int p) {
-    if (p == 100) return t('Perfekter Treffer!');
-    if (p >= 99)  return t('Fast perfekt!');
-    if (p >= 95)  return t('Unglaublich nah!');
-    if (p >= 90)  return t('Sehr präzise!');
-    if (p >= 83)  return t('Hervorragend!');
-    if (p >= 75)  return t('Sehr gut!');
-    if (p >= 65)  return t('Gut gemacht!');
-    if (p >= 55)  return t('Nicht schlecht!');
-    if (p >= 45)  return t('Nah dran!');
-    if (p >= 35)  return t('Gute Richtung!');
-    if (p >= 20)  return t('Weiter üben!');
-    if (p >= 10)  return t('Noch weit weg');
-    if (p >= 1)   return t('Sehr weit daneben');
-    return t('Daneben!');
-  }
 
   Color _farbe(int p) {
     if (p >= 90) return const Color(0xFF4A9E4A);
@@ -454,135 +520,228 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   }
 
   String _fakt(_Frage q, double realVal) {
-    final pool = countryRankings
-        .where((c) => (q.kat.getValue(c) ?? -1) > 0)
-        .toList()
-      ..sort((a, b) {
-        final av = q.kat.getValue(a)!;
-        final bv = q.kat.getValue(b)!;
-        return bv.compareTo(av);
-      });
+    final pool =
+        countryRankings.where((c) => (q.kat.getValue(c) ?? -1) > 0).toList()
+          ..sort((a, b) {
+            final av = q.kat.getValue(a)!;
+            final bv = q.kat.getValue(b)!;
+            return bv.compareTo(av);
+          });
     final rank = pool.indexWhere((c) => c.iso2 == q.land.iso2) + 1;
     final name = q.land.name;
     final rankStr = '$rank';
     switch (q.kat.id) {
       case 'gdpPerCapita':
         return rank <= 3
-            ? t('{name} gehört zu den reichsten Ländern der Welt (Platz {rank}).',
-                {'name': name, 'rank': rankStr})
-            : t('{name} liegt auf Platz {rank} beim BIP pro Kopf.',
-                {'name': name, 'rank': rankStr});
-      case 'population':
-        return rank == 1
-            ? t('{name} ist das bevölkerungsreichste Land der Welt.', {'name': name})
-            : t('{name} ist das {rankOrd}-bevölkerungsreichste Land der Welt.',
-                {'name': name, 'rankOrd': _rangOrdinal(rank)});
-      case 'area':
-        return rank == 1
-            ? t('{name} ist das größte Land der Welt nach Fläche.', {'name': name})
-            : t('{name} ist das {rankOrd}-größte Land der Welt.',
-                {'name': name, 'rankOrd': _rangOrdinal(rank)});
-      case 'lifeExpectancy':
-        return rank <= 5
-            ? t('Die Lebenserwartung in {name} gehört zu den höchsten weltweit.',
-                {'name': name})
-            : t('In {name} leben die Menschen im Schnitt {val} Jahre.',
-                {'name': name, 'val': realVal.toStringAsFixed(1)});
-      case 'minimumWage':
-        return rank <= 3
-            ? t('{name} hat einen der höchsten Mindestlöhne der Welt (Platz {rank}).',
-                {'name': name, 'rank': rankStr})
-            : t('In {name} liegt der Mindestlohn bei {val} USD im Monat (Platz {rank}).',
-                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
-      case 'coastline':
-        return rank == 1
-            ? t('{name} hat die längste Küstenlinie der Welt.', {'name': name})
-            : t('{name} hat eine Küstenlinie von {val} km (Platz {rank}).',
-                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
-      case 'gdpTotal':
-        return rank <= 3
-            ? t('{name} gehört zu den größten Volkswirtschaften der Welt (Platz {rank}).',
-                {'name': name, 'rank': rankStr})
-            : t('{name} erwirtschaftet ein BIP von {val} (Platz {rank}).',
-                {'name': name, 'val': _fmtGeldMrd(realVal / 1e9), 'rank': rankStr});
-      case 'internet':
-        return rank <= 5
-            ? t('{name} gehört zu den schnellsten Ländern beim Internet (Platz {rank}).',
-                {'name': name, 'rank': rankStr})
-            : t('{name} hat eine Download-Geschwindigkeit von {val} Mbps (Platz {rank}).',
-                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
-      case 'corruption':
-        return rank <= 5
-            ? t('{name} ist eines der am wenigsten korrupten Länder weltweit (Platz {rank}).',
-                {'name': name, 'rank': rankStr})
-            : t('{name} erreicht {val} von 100 Punkten im Korruptionsindex (Platz {rank}).',
-                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
-      case 'press_freedom':
-        return rank <= 5
-            ? t('{name} gehört zu den pressefreiesten Ländern der Welt (Platz {rank}).',
-                {'name': name, 'rank': rankStr})
-            : t('{name} erreicht {val} von 100 Punkten beim Pressefreiheitsindex (Platz {rank}).',
-                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
-      case 'happiness':
-        return rank == 1
-            ? t('{name} ist das glücklichste Land der Welt.', {'name': name})
-            : t('{name} liegt auf Platz {rank} im World Happiness Report (Score: {val}).',
-                {'name': name, 'rank': rankStr, 'val': realVal.toStringAsFixed(2)});
-      case 'tourism':
-        return rank <= 3
-            ? t('{name} gehört zu den top Reisezielen weltweit (Platz {rank} nach Einnahmen).',
-                {'name': name, 'rank': rankStr})
-            : t('{name} erwirtschaftet {val} durch Tourismus (Platz {rank}).',
-                {'name': name, 'val': _fmtGeldMrd(realVal), 'rank': rankStr});
-      case 'military':
-        return rank == 1
-            ? t('{name} hat das größte Militärbudget der Welt.', {'name': name})
-            : t('{name} gibt {val} für das Militär aus (Platz {rank}).',
-                {'name': name, 'val': _fmtGeldMrd(realVal), 'rank': rankStr});
-      case 'birth_rate':
-        return rank == 1
-            ? t('{name} hat die höchste Geburtenrate weltweit.', {'name': name})
-            : t('In {name} kommen im Schnitt {val} Kinder pro Frau zur Welt (Platz {rank}).',
-                {'name': name, 'val': realVal.toStringAsFixed(1), 'rank': rankStr});
-      case 'forest':
-        return rank <= 5
-            ? t('{name} gehört zu den waldreichsten Ländern der Welt (Platz {rank}).',
-                {'name': name, 'rank': rankStr})
-            : t('{val} der Fläche von {name} sind von Wald bedeckt (Platz {rank}).', {
-                'val': _fmtGerundetOderZweiDezimal(realVal, '%'),
+            ? t(
+                '{name} gehört zu den reichsten Ländern der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr},
+              )
+            : t('{name} liegt auf Platz {rank} beim BIP pro Kopf.', {
                 'name': name,
                 'rank': rankStr,
               });
+      case 'population':
+        return rank == 1
+            ? t('{name} ist das bevölkerungsreichste Land der Welt.', {
+                'name': name,
+              })
+            : t(
+                '{name} ist das {rankOrd}-bevölkerungsreichste Land der Welt.',
+                {'name': name, 'rankOrd': _rangOrdinal(rank)},
+              );
+      case 'area':
+        return rank == 1
+            ? t('{name} ist das größte Land der Welt nach Fläche.', {
+                'name': name,
+              })
+            : t('{name} ist das {rankOrd}-größte Land der Welt.', {
+                'name': name,
+                'rankOrd': _rangOrdinal(rank),
+              });
+      case 'lifeExpectancy':
+        return rank <= 5
+            ? t(
+                'Die Lebenserwartung in {name} gehört zu den höchsten weltweit.',
+                {'name': name},
+              )
+            : t('In {name} leben die Menschen im Schnitt {val} Jahre.', {
+                'name': name,
+                'val': realVal.toStringAsFixed(1),
+              });
+      case 'minimumWage':
+        return rank <= 3
+            ? t(
+                '{name} hat einen der höchsten Mindestlöhne der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr},
+              )
+            : t(
+                'In {name} liegt der Mindestlohn bei {val} USD im Monat (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr},
+              );
+      case 'coastline':
+        return rank == 1
+            ? t('{name} hat die längste Küstenlinie der Welt.', {'name': name})
+            : t('{name} hat eine Küstenlinie von {val} km (Platz {rank}).', {
+                'name': name,
+                'val': '${realVal.round()}',
+                'rank': rankStr,
+              });
+      case 'gdpTotal':
+        return rank <= 3
+            ? t(
+                '{name} gehört zu den größten Volkswirtschaften der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr},
+              )
+            : t('{name} erwirtschaftet ein BIP von {val} (Platz {rank}).', {
+                'name': name,
+                'val': _fmtGeldMrd(realVal / 1e9),
+                'rank': rankStr,
+              });
+      case 'internet':
+        return rank <= 5
+            ? t(
+                '{name} gehört zu den schnellsten Ländern beim Internet (Platz {rank}).',
+                {'name': name, 'rank': rankStr},
+              )
+            : t(
+                '{name} hat eine Download-Geschwindigkeit von {val} Mbps (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr},
+              );
+      case 'corruption':
+        return rank <= 5
+            ? t(
+                '{name} ist eines der am wenigsten korrupten Länder weltweit (Platz {rank}).',
+                {'name': name, 'rank': rankStr},
+              )
+            : t(
+                '{name} erreicht {val} von 100 Punkten im Korruptionsindex (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr},
+              );
+      case 'press_freedom':
+        return rank <= 5
+            ? t(
+                '{name} gehört zu den pressefreiesten Ländern der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr},
+              )
+            : t(
+                '{name} erreicht {val} von 100 Punkten beim Pressefreiheitsindex (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr},
+              );
+      case 'happiness':
+        return rank == 1
+            ? t('{name} ist das glücklichste Land der Welt.', {'name': name})
+            : t(
+                '{name} liegt auf Platz {rank} im World Happiness Report (Score: {val}).',
+                {
+                  'name': name,
+                  'rank': rankStr,
+                  'val': realVal.toStringAsFixed(2),
+                },
+              );
+      case 'tourism':
+        return rank <= 3
+            ? t(
+                '{name} gehört zu den top Reisezielen weltweit (Platz {rank} nach Einnahmen).',
+                {'name': name, 'rank': rankStr},
+              )
+            : t('{name} erwirtschaftet {val} durch Tourismus (Platz {rank}).', {
+                'name': name,
+                'val': _fmtGeldMrd(realVal),
+                'rank': rankStr,
+              });
+      case 'military':
+        return rank == 1
+            ? t('{name} hat das größte Militärbudget der Welt.', {'name': name})
+            : t('{name} gibt {val} für das Militär aus (Platz {rank}).', {
+                'name': name,
+                'val': _fmtGeldMrd(realVal),
+                'rank': rankStr,
+              });
+      case 'birth_rate':
+        return rank == 1
+            ? t('{name} hat die höchste Geburtenrate weltweit.', {'name': name})
+            : t(
+                'In {name} kommen im Schnitt {val} Kinder pro Frau zur Welt (Platz {rank}).',
+                {
+                  'name': name,
+                  'val': realVal.toStringAsFixed(1),
+                  'rank': rankStr,
+                },
+              );
+      case 'forest':
+        return rank <= 5
+            ? t(
+                '{name} gehört zu den waldreichsten Ländern der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr},
+              )
+            : t(
+                '{val} der Fläche von {name} sind von Wald bedeckt (Platz {rank}).',
+                {
+                  'val': _fmtGerundetOderZweiDezimal(realVal, '%'),
+                  'name': name,
+                  'rank': rankStr,
+                },
+              );
       case 'alcohol':
         return rank <= 3
-            ? t('{name} gehört zu den Ländern mit dem höchsten Alkoholkonsum der Welt (Platz {rank}).',
-                {'name': name, 'rank': rankStr})
-            : t('In {name} werden im Schnitt {val} Liter Alkohol pro Kopf getrunken (Platz {rank}).',
-                {'name': name, 'val': realVal.toStringAsFixed(1), 'rank': rankStr});
+            ? t(
+                '{name} gehört zu den Ländern mit dem höchsten Alkoholkonsum der Welt (Platz {rank}).',
+                {'name': name, 'rank': rankStr},
+              )
+            : t(
+                'In {name} werden im Schnitt {val} Liter Alkohol pro Kopf getrunken (Platz {rank}).',
+                {
+                  'name': name,
+                  'val': realVal.toStringAsFixed(1),
+                  'rank': rankStr,
+                },
+              );
       case 'olympics':
         return rank == 1
-            ? t('{name} hat die meisten Olympia-Medaillen aller Zeiten.', {'name': name})
-            : t('{name} hat {val} olympische Medaillen gewonnen (Platz {rank}).',
-                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
+            ? t('{name} hat die meisten Olympia-Medaillen aller Zeiten.', {
+                'name': name,
+              })
+            : t(
+                '{name} hat {val} olympische Medaillen gewonnen (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr},
+              );
       case 'highest_point':
         return rank == 1
             ? t('{name} hat den höchsten Punkt der Welt.', {'name': name})
-            : t('Der höchste Punkt in {name} liegt auf {val} m (Platz {rank}).',
-                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
+            : t(
+                'Der höchste Punkt in {name} liegt auf {val} m (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr},
+              );
       case 'inflation':
         return rank == 1
-            ? t('{name} hat die höchste Inflationsrate der Welt.', {'name': name})
-            : t('Die Inflationsrate in {name} liegt bei {val} % (Platz {rank}).',
-                {'name': name, 'val': realVal.toStringAsFixed(1), 'rank': rankStr});
+            ? t('{name} hat die höchste Inflationsrate der Welt.', {
+                'name': name,
+              })
+            : t(
+                'Die Inflationsrate in {name} liegt bei {val} % (Platz {rank}).',
+                {
+                  'name': name,
+                  'val': realVal.toStringAsFixed(1),
+                  'rank': rankStr,
+                },
+              );
       case 'debt':
         return rank == 1
-            ? t('{name} hat die höchsten Staatsschulden relativ zur Wirtschaftsleistung.',
-                {'name': name})
-            : t('Die Staatsschulden in {name} liegen bei {val} % des BIP (Platz {rank}).',
-                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr});
+            ? t(
+                '{name} hat die höchsten Staatsschulden relativ zur Wirtschaftsleistung.',
+                {'name': name},
+              )
+            : t(
+                'Die Staatsschulden in {name} liegen bei {val} % des BIP (Platz {rank}).',
+                {'name': name, 'val': '${realVal.round()}', 'rank': rankStr},
+              );
       default:
-        return t('{name} liegt auf Platz {rank} bei {kat}.',
-            {'name': name, 'rank': rankStr, 'kat': q.kat.label});
+        return t('{name} liegt auf Platz {rank} bei {kat}.', {
+          'name': name,
+          'rank': rankStr,
+          'kat': q.kat.label,
+        });
     }
   }
 
@@ -603,57 +762,92 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
         // ganz dasteht — bei normaler Schriftgroesse aendert sich nichts,
         // denn scaleDown vergroessert nie. Gleiche Loesung wie bei der
         // Ueberschrift der Einstellungen.
+        // Der TITEL steht links neben dem Zurück-Pfeil, wie im Ranking Quiz;
+        // die KATEGORIE darunter bleibt mittig, wie sie es immer war.
+        //
+        // Dafür braucht die Spalte CrossAxisAlignment.stretch: Sonst wäre sie
+        // nur so breit wie ihr breitestes Kind, und "mittig" hiesse mittig
+        // unter dem Titel statt mittig in der Leiste. Gestreckt bekommen
+        // beide FittedBoxen die volle Breite der Titelzone und richten ihren
+        // Text darin selbst aus.
         title: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(t('Das große Schätzen'),
+            // WÄHREND DER RUNDE steht in der Leiste nur die Punktzahl. Der
+            // Spielname ist raus wie in den drei anderen Challenges, und die
+            // Kategorie ebenfalls: Sie steht auf der Länderkarte darunter als
+            // grüne Pille, in der Kopfzeile war sie doppelt.
+            //
+            // AUF DEM ERGEBNIS-SCHIRM trägt die Leiste den Spielnamen und
+            // darunter die Kategorie. Dort gibt es keine Länderkarte mehr, die
+            // die Kategorie zeigen könnte, und die Leiste stünde sonst leer.
+            if (_fertig) ...[
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  t('Das große Schätzen'),
                   maxLines: 1,
                   style: const TextStyle(
-                      color: Color(0xFF1A1A1A),
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700)),
-            ),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(_heutigeKat.label,
+                    color: Color(0xFF1A1A1A),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  _heutigeKat.label,
                   maxLines: 1,
                   style: const TextStyle(
-                      color: Color(0xFF888888),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500)),
-            ),
+                    color: Color(0xFF888888),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ] else if (_gesamt > 0)
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  t('{n} Pkt.', {'n': '$_gesamt'}),
+                  maxLines: 1,
+                  style: const TextStyle(
+                    color: Color(0xFF1A1A1A),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
           ],
         ),
         centerTitle: true,
         actions: [
-          if (!_fertig && _gesamt > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Center(
-                child: Text(t('{n} Pkt.', {'n': '$_gesamt'}),
-                    style: const TextStyle(
-                        color: Color(0xFF4A9E4A),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800)),
-              ),
-            ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: ErklaerungButton(
               titel: t('Das große Schätzen — Spielregeln'),
               farbe: const Color(0xFFF9A825),
               abschnitte: [
-                t('Zu einem Land und einer Kategorie (z.B. Bevölkerung, BIP pro Kopf) siehst du eine Skala mit einem Schieberegler.'),
-                t('Bewege den Regler auf die Position, an der du den echten Wert vermutest, und bestätige deine Schätzung.'),
-                t('Je näher deine Schätzung am tatsächlichen Wert liegt, desto mehr Punkte bekommst du für diese Frage.'),
+                t(
+                  'Zu einem Land und einer Kategorie (z.B. Bevölkerung, BIP pro Kopf) siehst du eine Skala mit einem Schieberegler.',
+                ),
+                t(
+                  'Bewege den Regler auf die Position, an der du den echten Wert vermutest, und bestätige deine Schätzung.',
+                ),
+                t(
+                  'Je näher deine Schätzung am tatsächlichen Wert liegt, desto mehr Punkte bekommst du für diese Frage.',
+                ),
                 // Alltagssprachlich formuliert: keine Rede von Logarithmus,
                 // Verhältnis oder Skalentyp. Es soll nur erklären, warum bei
                 // Bevölkerung oder Fläche "knapp daneben" etwas anderes
                 // bedeutet als bei Lebenserwartung.
-                t('Bei Kategorien mit sehr großen Unterschieden — etwa Fläche oder Bevölkerung — kommt es darauf an, wie oft deine Schätzung in den echten Wert passt, nicht wie viel dazwischenliegt. Das Doppelte zu raten ist dort immer gleich weit daneben, egal ob es um 40 oder um 40 Millionen geht.'),
-                t('Das Spiel besteht aus mehreren Fragen hintereinander — am Ende siehst du deine Gesamtpunktzahl und alle Antworten im Überblick.'),
+                t(
+                  'Bei Kategorien mit sehr großen Unterschieden — etwa Fläche oder Bevölkerung — kommt es darauf an, wie oft deine Schätzung in den echten Wert passt, nicht wie viel dazwischenliegt. Das Doppelte zu raten ist dort immer gleich weit daneben, egal ob es um 40 oder um 40 Millionen geht.',
+                ),
+                t(
+                  'Das Spiel besteht aus mehreren Fragen hintereinander — am Ende siehst du deine Gesamtpunktzahl und alle Antworten im Überblick.',
+                ),
               ],
             ),
           ),
@@ -668,357 +862,364 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
   Widget _buildQuiz() {
     if (_fragen.isEmpty || _skala == null) {
       return const Center(
-          child: CircularProgressIndicator(color: Color(0xFF4A9E4A)));
+        child: CircularProgressIndicator(color: Color(0xFF4A9E4A)),
+      );
     }
     final q = _fragen[_idx];
     final realVal = q.kat.getValue(q.land)!;
     final sk = _skala!;
 
+    // EINE LAGE für beide Zustände.
+    //
+    // Der Block sitzt mittig im verbleibenden Platz, etwas über der
+    // geometrischen Mitte. Der Versatz nach oben entsteht dadurch, dass die
+    // ConstrainedBox eine um das Doppelte von [nachOben] kürzere Mindesthöhe
+    // bekommt: Die Spalte zentriert sich in einem kleineren Kasten, der oben
+    // am Sichtfeld beginnt.
+    //
+    // KEINE Fallunterscheidung mehr nach [_beantwortet]. Sie stand hier,
+    // solange die Auflösung eine eigene, viel höhere Ansicht war. Seit sie auf
+    // dem Regler stattfindet und ihre Zeilen ihren Platz schon vorher
+    // freihalten, ist der Block in beiden Zuständen exakt gleich hoch — eine
+    // Umschaltung würde ihn nur ohne Not verschieben.
+    const rand = EdgeInsets.fromLTRB(20, 10, 20, 32);
+    const nachOben = 36.0;
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Rekord-Banner ────────────────────────────────────────────
-            if (_rekord != null) ...[
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                    color: const Color(0xFFEAEAE5),
-                    borderRadius: BorderRadius.circular(10)),
-                child: Row(
-                  children: [
-                    Text(t('🏆 Rekord:'),
-                        style: const TextStyle(
-                            color: Color(0xFF888888),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600)),
-                    const SizedBox(width: 6),
-                    Text(t('{a} / {b} Punkte',
-                        {'a': '$_rekordAnzeige', 'b': '$_kMaxPts'}),
-                        style: const TextStyle(
-                            color: Color(0xFFF9A825),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
+      child: LayoutBuilder(
+        builder: (context, platz) => SingleChildScrollView(
+          padding: rand,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: (platz.maxHeight - rand.vertical - 2 * nachOben)
+                  .clamp(0.0, double.infinity),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Das Rekord-Banner stand hier und ist raus: Während der Runde
+                // hilft der eigene Bestwert nicht — er lenkt vom Schätzen ab
+                // und drückte den Rest der Seite nach unten. Inzwischen ist er
+                // auch vom Ergebnis-Schirm verschwunden, in allen vier
+                // Challenges.
 
-            // ── Fortschritt ──────────────────────────────────────────────
-            Row(
-              children: List.generate(_fragen.length, (i) {
-                final col = i < _idx
-                    ? const Color(0xFF4A9E4A)
-                    : i == _idx
+                // ── Fortschritt ──────────────────────────────────────────────
+                Row(
+                  children: List.generate(_fragen.length, (i) {
+                    final col = i < _idx
+                        ? const Color(0xFF4A9E4A)
+                        : i == _idx
                         ? const Color(0xFF4A9E4A).withValues(alpha: 0.4)
                         : const Color(0xFFD0D0CB);
-                return Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    height: 5,
-                    decoration: BoxDecoration(
-                        color: col, borderRadius: BorderRadius.circular(3)),
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(height: 6),
-            Center(
-              child: Text(t('Frage {a} von {b}',
-                      {'a': '${_idx + 1}', 'b': '${_fragen.length}'}),
-                  style: const TextStyle(
+                    return Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: col,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 6),
+                Center(
+                  child: Text(
+                    t('Frage {a} von {b}', {
+                      'a': '${_idx + 1}',
+                      'b': '${_fragen.length}',
+                    }),
+                    style: const TextStyle(
                       color: Color(0xFF888888),
                       fontSize: 12,
-                      fontWeight: FontWeight.w600)),
-            ),
-            const SizedBox(height: 18),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
 
-            // ── Länder-Karte ─────────────────────────────────────────────
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              padding:
-                  const EdgeInsets.symmetric(vertical: 22, horizontal: 20),
-              child: Column(
-                children: [
-                  zeigeFlagge(q.land.iso2, width: 80, height: 54, borderRadius: 6),
-                  const SizedBox(height: 10),
-                  Text(q.land.name,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
+                // ── Länder-Karte ─────────────────────────────────────────────
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 22,
+                    horizontal: 20,
+                  ),
+                  child: Column(
+                    children: [
+                      zeigeFlagge(
+                        q.land.iso2,
+                        width: 80,
+                        height: 54,
+                        borderRadius: 6,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        q.land.name,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
                           color: Color(0xFF1A1A1A),
                           fontSize: 22,
-                          fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4A9E4A),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(q.kat.label,
-                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4A9E4A),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          q.kat.label,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // ── Slider (vor Antwort) ──────────────────────────────────────
-            if (!_beantwortet) ...[
-              Center(
-                child: Text(sk.format(_sliderVal),
-                    style: const TextStyle(
-                        color: Color(0xFF1A1A1A),
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800)),
-              ),
-              Center(
-                child: Text(t('Deine Schätzung'),
-                    style: const TextStyle(
-                        color: Color(0xFF888888),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-              ),
-              const SizedBox(height: 10),
-              // Der Regler läuft immer von 0 bis 1 — welche Achse dahinter
-              // steht, weiß allein die Skala. Bei linearen Kategorien ist die
-              // Umrechnung die Identität, das Verhalten bleibt also exakt wie
-              // vorher; bei den logarithmischen sitzen die Stufen dagegen auf
-              // gleichen VERHÄLTNISSEN statt gleichen Differenzen, sodass sich
-              // die Länder nicht mehr im linken Zehntel drängen.
-              Slider(
-                value: sk.positionVon(_sliderVal),
-                min: 0,
-                max: 1,
-                divisions: sk.divisionen,
-                activeColor: const Color(0xFF4A9E4A),
-                inactiveColor: const Color(0xFFD0D0CB),
-                onChanged: (p) => setState(() => _sliderVal = sk.wertAn(p)),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(sk.format(sk.min),
-                        style: const TextStyle(
-                            color: Color(0xFFBBBBBB), fontSize: 10)),
-                    Text(sk.format(sk.max),
-                        style: const TextStyle(
-                            color: Color(0xFFBBBBBB), fontSize: 10)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: _bestaetigen,
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4A9E4A),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(t('Bestätigen'),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
-
-            // ── Auflösung (nach Antwort) ──────────────────────────────────
-            if (_beantwortet) ...[
-              // Karte im App-Design-System (weiß, schwarze Outline, harter
-              // Schatten) — die Punkte-Anzeige ist jetzt als farblich zur
-              // Bewertung passender Header DIREKT in die Karte integriert,
-              // statt isoliert darüber zu schweben.
-              Container(
-                width: double.infinity,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
-                  boxShadow: const [
-                    BoxShadow(
-                        color: Color(0xFF1A1A1A),
-                        offset: Offset(0, 4),
-                        blurRadius: 0),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // Punkte-Header — Hintergrundton richtet sich nach der
-                    // Bewertung (rot bei 0-20, orange/gold bei 21-50,
-                    // hellgrün bei 51-80, kräftiges Grün bei 81-100).
-                    Container(
-                      width: double.infinity,
-                      color: _farbe(_letztePts).withValues(alpha: 0.12),
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: ScaleTransition(
-                        scale: _ptsAnim,
-                        child: Column(
-                          children: [
-                            Text(t('+{n} Punkte', {'n': '$_letztePts'}),
-                                style: TextStyle(
-                                    color: _farbe(_letztePts),
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w900)),
-                            const SizedBox(height: 4),
-                            Text(_labelFuer(_letztePts),
-                                style: TextStyle(
-                                    color: _farbe(_letztePts),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700)),
-                          ],
+                            letterSpacing: 0.3,
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // ── Regler und Auflösung ─────────────────────────────────────
+                //
+                // EIN Block für beide Zustände, nicht zwei, die einander
+                // ablösen.
+                //
+                // Vorher verschwand nach dem Bestätigen die ganze Regler-
+                // Ansicht und an ihrer Stelle stand eine grosse Ergebniskarte
+                // mit eigenem Rahmen, eigenem Punkte-Kopf und einer zweiten,
+                // kleineren Skala darin. Der Sprung war so gross, dass es sich
+                // wie ein anderer Screen anfühlte — obwohl dieselbe Frage
+                // gemeint war.
+                //
+                // Jetzt bleibt der Regler stehen und löst sich AUF SICH SELBST
+                // auf: Der Tipp bleibt als Pflock, eine zweite Markierung
+                // fährt zum echten Wert, dazwischen liegt der Abstand. Es ist
+                // buchstäblich derselbe Balken, der im Lernpfad den
+                // Länder-Ranking-Modus bedient ([SchaetzBalken]).
+                //
+                // ALLES, WAS NACH DEM BESTÄTIGEN DAZUKOMMT, HÄLT SCHON VORHER
+                // SEINEN PLATZ: Die Zeilen stehen in einem Visibility mit
+                // maintainSize, sind also unsichtbar, aber vermessen. Dadurch
+                // rückt beim Auflösen nichts — der Knopf bleibt, wo er war.
+                Center(
+                  child: Text(
+                    sk.format(_sliderVal),
+                    style: const TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
                     ),
+                  ),
+                ),
+                Center(
+                  child: Text(
+                    t('Deine Schätzung'),
+                    style: const TextStyle(
+                      color: Color(0xFF888888),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
 
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Values row
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(t('Deine Schätzung'),
-                                        style: const TextStyle(
-                                            color: Color(0xFF2196F3),
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600)),
-                                    Text(sk.format(_sliderVal),
-                                        style: const TextStyle(
-                                            color: Color(0xFF2196F3),
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w800)),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(t('Richtiger Wert'),
-                                        style: const TextStyle(
-                                            color: Color(0xFF4A9E4A),
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600)),
-                                    Text(sk.format(realVal),
-                                        style: const TextStyle(
-                                            color: Color(0xFF4A9E4A),
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w800)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-
-                          // Visual scale track
-                          _SkalaVisuell(
-                            skala: sk,
-                            userVal: _sliderVal,
-                            correctVal: realVal,
-                            format: sk.format,
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Deviation row — jetzt für ALLE Kategorien
-                          // einheitlich skalen-relativ (siehe _bestaetigen()).
-                          Center(
-                            child: Text(
-                              t('Abweichung: {n} % der Skala', {
-                                'n': LocaleService.istEnglisch
-                                    ? _abweichung.toStringAsFixed(1)
-                                    : _abweichung
-                                        .toStringAsFixed(1)
-                                        .replaceAll('.', ','),
-                              }),
-                              style: TextStyle(
-                                  color: _farbe(_letztePts),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // Fact — neutrales Info-Icon statt Glühbirne, da
-                          // dies eine Ergebnis-Erklärung ist, kein Fun-Fact.
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                                color: kHintergrund,
-                                borderRadius: BorderRadius.circular(10)),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(Icons.info_outline_rounded,
-                                    size: 16, color: Color(0xFF888888)),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(_fakt(q, realVal),
-                                      style: const TextStyle(
-                                          color: Color(0xFF555555),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          height: 1.3)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                // Der Balken rechnet in Anteilen von 0 bis 1 — welche Achse
+                // dahinter steht, weiss allein die Skala. Bei linearen
+                // Kategorien ist die Umrechnung die Identität; bei den
+                // logarithmischen sitzen die Stufen auf gleichen
+                // VERHÄLTNISSEN statt gleichen Differenzen, sodass sich die
+                // Länder nicht im linken Zehntel drängen.
+                SchaetzBalken(
+                  anteil: _beantwortet
+                      ? _fahrtAnteil
+                      : sk.positionVon(_sliderVal),
+                  marken: markenGleichmaessig(_kSkalenAbschnitte),
+                  geraten: _beantwortet ? sk.positionVon(_sliderVal) : null,
+                  echt: _beantwortet ? sk.positionVon(realVal) : null,
+                  onZiehen: _beantwortet ? null : _ziehen,
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      sk.format(sk.min),
+                      style: const TextStyle(
+                        color: Color(0xFFBBBBBB),
+                        fontSize: 10,
+                      ),
+                    ),
+                    Text(
+                      sk.format(sk.max),
+                      style: const TextStyle(
+                        color: Color(0xFFBBBBBB),
+                        fontSize: 10,
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 14),
 
-              GestureDetector(
-                onTap: _weiter,
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                      color: const Color(0xFF4A9E4A),
-                      borderRadius: BorderRadius.circular(16)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    _idx + 1 >= _fragen.length
-                        ? t('Ergebnis anzeigen')
-                        : t('Weiter →'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700),
+                // Der echte Wert und die Punkte — ergänzend zum Balken, nicht
+                // an seiner Stelle.
+                Visibility(
+                  visible: _beantwortet,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  // ALLE DREI ZEILEN EINZEILIG, notfalls verkleinert.
+                  //
+                  // Der freigehaltene Platz stimmt nur, solange keine Zeile
+                  // umbricht. Vor dem Bestätigen stehen dort Platzhalterwerte
+                  // (0 Punkte, 0,0 % Abweichung) — die sind kürzer als die
+                  // echten, und auf 320 px bei Schriftskala 1.5 brach die
+                  // Abweichungszeile beim Auflösen auf zwei Zeilen um. Der
+                  // Knopf sprang dadurch um 26 px nach unten.
+                  child: Column(
+                    // Gestreckt, damit die FittedBoxen die volle Breite
+                    // bekommen und ihren Text darin mittig setzen — die
+                    // äussere Spalte richtet links aus.
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          t('Richtiger Wert: {v}', {'v': sk.format(realVal)}),
+                          maxLines: 1,
+                          style: const TextStyle(
+                            color: Color(0xFF4A9E4A),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      // Die Punktzahl bekommt den einzigen Effekt der Seite:
+                      // einen kurzen Sprung. ScaleTransition zeichnet nur
+                      // anders, es verändert den Platzbedarf nicht — die Zeile
+                      // darunter bleibt also stehen.
+                      ScaleTransition(
+                        scale: _ptsAnim,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            t('+{n} Punkte', {'n': '$_letztePts'}),
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: _farbe(_letztePts),
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          t('Abweichung: {n} % der Skala', {
+                            'n': LocaleService.istEnglisch
+                                ? _abweichung.toStringAsFixed(1)
+                                : _abweichung
+                                    .toStringAsFixed(1)
+                                    .replaceAll('.', ','),
+                          }),
+                          maxLines: 1,
+                          style: const TextStyle(
+                            color: Color(0xFF888888),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ],
+                const SizedBox(height: 12),
+
+                // Der Fakt zur Frage. Auch er hält seinen Platz vorher schon
+                // frei — sein Text steht ja fest, sobald die Frage steht.
+                Visibility(
+                  visible: _beantwortet,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAEAE5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          size: 16,
+                          color: Color(0xFF888888),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _fakt(q, realVal),
+                            style: const TextStyle(
+                              color: Color(0xFF555555),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Derselbe Knopf für beide Zustände, an derselben Stelle —
+                // nur die Beschriftung und das Ziel wechseln.
+                GestureDetector(
+                  onTap: _beantwortet ? _weiter : _bestaetigen,
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4A9E4A),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      !_beantwortet
+                          ? t('Bestätigen')
+                          : _idx + 1 >= _fragen.length
+                              ? t('Ergebnis anzeigen')
+                              : t('Weiter →'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1034,35 +1235,38 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
             child: Column(
               children: [
-                RekordBadge(
-                  neuerRekord: _neuerRekord,
-                  rekordText: _rekord != null
-                      ? t('{a} / {b} Punkte', {'a': '$_rekordAnzeige', 'b': '$_kMaxPts'})
-                      : null,
-                ),
-                const SizedBox(height: 16),
+                // Der eigene Bestwert stand hier und ist raus — in allen vier
+                // Challenges (siehe ranking_game_screen.dart). Die Überschrift
+                // "Ergebnis" in der Kopfzeile tritt an seine Stelle.
+                const SizedBox(height: 8),
                 RanglisteErgebnisKarte(
                   challengeId: 'schaetzen',
                   eigenerWert: _gesamt,
                   punkteLabel: t('Gesamtpunktzahl'),
                   farbe: const Color(0xFFF9A825),
                   punkteAnzeige: RichText(
-                    text: TextSpan(children: [
-                      TextSpan(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
                           text: '$_gesamt',
                           style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 30,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF1A1A1A))),
-                      TextSpan(
+                            fontFamily: 'Poppins',
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        TextSpan(
                           text: ' / $_kMaxPts',
                           style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFB0AEA8))),
-                    ]),
+                            fontFamily: 'Poppins',
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFB0AEA8),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1074,23 +1278,50 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
             child: Divider(color: Color(0xFFD0CEC8)),
           ),
           const SizedBox(height: 4),
+          // Der Verlauf als wischbarer Kartenstapel statt als Scrollliste —
+          // dieselbe Bauform wie bei den anderen drei Tages-Challenges und
+          // beim Willkommens-Screen (siehe ergebnis_karten.dart). Kopf,
+          // Punktzahl und Fertig-Knopf bleiben, wo sie waren.
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 20),
-              child: Column(
-                children: [
-                  if (_alleErgebnisse.isNotEmpty)
-                    _ErgebnisListeKarte(
-                        ergebnisse: _alleErgebnisse, farbe: _farbe),
-                  const SizedBox(height: 4),
-                ],
-              ),
-            ),
+            child: _alleErgebnisse.isEmpty
+                ? const SizedBox.shrink()
+                : Builder(builder: (context) {
+                    // ALLE FÜNF RUNDEN AUF EINE KARTE — dafür musste die
+                    // Zeile schrumpfen, nicht die Rechnung geschönt werden:
+                    // Der Innenrand ist von 12 auf 9 herunter, und die
+                    // Kategorie ist aus der Unterzeile raus (siehe
+                    // _ErgebnisZeile). Damit ist eine Zeile rund 56 statt 80
+                    // hoch, und fünf passen auf ein Blatt.
+                    //
+                    // Bei sehr grosser Systemschrift rechnet dieselbe Formel
+                    // wieder auf zwei Karten herunter. Das ist richtig so —
+                    // eine überfüllte Karte wäre schlechter als eine zweite.
+                    final proKarte = wischZeilenProKarte(context,
+                        zeilenHoehe: 56, abzugOben: 230);
+                    final gruppen = <List<_SchaetzErgebnis>>[];
+                    for (var i = 0; i < _alleErgebnisse.length; i += proKarte) {
+                      gruppen.add(_alleErgebnisse.sublist(
+                          i,
+                          i + proKarte > _alleErgebnisse.length
+                              ? _alleErgebnisse.length
+                              : i + proKarte));
+                    }
+                    return WischKartenStapel(
+                      karten: [
+                        for (final gruppe in gruppen)
+                          (context, hoehe) => _ErgebnisListeKarte(
+                                ergebnisse: gruppe,
+                                farbe: _farbe,
+                              ),
+                      ],
+                    );
+                  }),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
             child: ChallengeFertigButton(
-                onTap: () => ChallengePanelSignal.zurueckZumPanel(context)),
+              onTap: () => ChallengePanelSignal.zurueckZumPanel(context),
+            ),
           ),
         ],
       ),
@@ -1100,33 +1331,43 @@ class _PreisSchaetzenScreenState extends State<PreisSchaetzenScreen>
 
 // ── Ergebnis-Liste (alle Fragen der Runde) ───────────────────────────────────
 
+/// Eine Karte des Verlaufs: die Runden dieses Ausschnitts.
+///
+/// Trug vorher den harten 3D-Rahmen der App (schwarzer Rand, versetzter
+/// Schatten). Als Wischkarte nimmt sie die ruhigere [WischKarte] — ein
+/// Schlagschatten machte aus dem Blatt ein Objekt, das über der Fläche
+/// schwebt, und beim Wischen wanderte er mit.
+///
+/// OHNE ÜBERSCHRIFT und mit gleichmässig verteilten Zeilen: Die Runden stehen
+/// in derselben Reihenfolge, in der sie gespielt wurden, und die Nummern
+/// ergeben sich daraus von selbst — „Runden 1–5" sagte nichts, was die Karte
+/// nicht ohnehin zeigt, und drückte die Zeilen an den oberen Rand. Der Platz
+/// gehört jetzt ihnen: [MainAxisAlignment.spaceEvenly] verteilt sie über die
+/// ganze Kartenhöhe, mit gleichen Abständen oben, dazwischen und unten.
+///
+/// KEIN Notfall-Scrollen hier: Ein Scrollbereich hat keine feste Höhe, und
+/// ohne feste Höhe kann spaceEvenly nichts verteilen. Dass es trotzdem passt,
+/// sichert die Zeilenrechnung in [_buildErgebnis] — bei grosser Schrift gibt
+/// sie weniger Zeilen je Karte aus, statt eine Karte zu überfüllen.
 class _ErgebnisListeKarte extends StatelessWidget {
   final List<_SchaetzErgebnis> ergebnisse;
   final Color Function(int) farbe;
 
-  const _ErgebnisListeKarte({required this.ergebnisse, required this.farbe});
+  const _ErgebnisListeKarte({
+    required this.ergebnisse,
+    required this.farbe,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
-        boxShadow: const [
-          BoxShadow(
-              color: Color(0xFF1A1A1A), offset: Offset(0, 4), blurRadius: 0),
-        ],
-      ),
+    return WischKarte(
+      innenrand: const EdgeInsets.fromLTRB(14, 6, 14, 6),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < ergebnisse.length; i++) ...[
-            if (i > 0)
-              const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEE8)),
-            _ErgebnisZeile(ergebnis: ergebnisse[i], farbe: farbe(ergebnisse[i].punkte)),
-          ],
+          for (final e in ergebnisse)
+            _ErgebnisZeile(ergebnis: e, farbe: farbe(e.punkte)),
         ],
       ),
     );
@@ -1149,7 +1390,10 @@ class _ErgebnisZeile extends StatelessWidget {
           : ergebnis.abweichung.toStringAsFixed(1).replaceAll('.', ','),
     });
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      // 9 statt 12 senkrecht: Damit alle fünf Runden auf EINE Karte passen
+      // und der Stapel nicht wegen einer einzigen überzähligen Zeile auf zwei
+      // Karten geht. Siehe auch die Zeilenhöhe in _buildErgebnis().
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       child: Row(
         children: [
           zeigeFlagge(ergebnis.landIso, width: 36, height: 24, borderRadius: 4),
@@ -1158,181 +1402,43 @@ class _ErgebnisZeile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(ergebnis.landName,
-                    style: const TextStyle(
-                        color: Color(0xFF1A1A1A),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800)),
+                Text(
+                  ergebnis.landName,
+                  style: const TextStyle(
+                    color: Color(0xFF1A1A1A),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text('${ergebnis.kategorieLabel} · $abweichungText',
-                    style: const TextStyle(
-                        color: Color(0xFF888888),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)),
+                // OHNE die Kategorie. Eine Runde hat nur EINE Kategorie
+                // ([_heutigeKat], siehe _starteFragen), und die steht bereits
+                // in der Kopfzeile über dem Ergebnis. In jeder Zeile wiederholt
+                // brach der Text auf schmalen Schirmen um und machte die Zeile
+                // eine ganze Textzeile höher — genau die Höhe, an der die
+                // fünfte Runde von der Karte fiel.
+                Text(
+                  abweichungText,
+                  style: const TextStyle(
+                    color: Color(0xFF888888),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          Text('${ergebnis.punkte}',
-              style: TextStyle(
-                  color: farbe, fontSize: 18, fontWeight: FontWeight.w900)),
+          Text(
+            '${ergebnis.punkte}',
+            style: TextStyle(
+              color: farbe,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );
   }
-}
-
-// ── Skala-Visualisierung ──────────────────────────────────────────────────────
-
-class _SkalaVisuell extends StatelessWidget {
-  /// Dieselbe Skala, auf der auch geraten wurde — die Marker sitzen dadurch
-  /// auf derselben Achse wie vorher der Regler. Ohne das lägen bei den
-  /// logarithmischen Kategorien Regler und Auswertung auseinander.
-  final SkalaErgebnis skala;
-  final double userVal, correctVal;
-  final String Function(double) format;
-
-  const _SkalaVisuell({
-    required this.skala,
-    required this.userVal,
-    required this.correctVal,
-    required this.format,
-  });
-
-  double get min => skala.min;
-  double get max => skala.max;
-
-  static const _markerGroesse = 18.0;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (_, constraints) {
-      final w = constraints.maxWidth;
-      final userPct = skala.positionVon(userVal);
-      final correctPct = skala.positionVon(correctVal);
-      final userX = userPct * w;
-      final correctX = correctPct * w;
-      const trackTop = 30.0;
-      const trackHeight = 3.0;
-
-      return SizedBox(
-        height: 58,
-        child: Stack(
-          children: [
-            // Track
-            const Positioned(
-              top: trackTop,
-              left: 0,
-              right: 0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Color(0xFFEAEAE5),
-                  borderRadius: BorderRadius.all(Radius.circular(2)),
-                ),
-                child: SizedBox(height: trackHeight),
-              ),
-            ),
-
-            // Dezente gestrichelte Verbindungslinie zwischen Schätzung und
-            // echtem Wert (ersetzt die vorherige rohe volle Balkenfüllung).
-            Positioned(
-              top: trackTop,
-              left: userX < correctX ? userX : correctX,
-              width: (correctX - userX).abs(),
-              height: trackHeight,
-              child: CustomPaint(
-                painter: _GestrichelteLinie(color: const Color(0xFFD98C82)),
-              ),
-            ),
-
-            // Nutzer-Marker (blau) — größer + weißer Rand für Kontrast.
-            Positioned(
-              top: trackTop + trackHeight / 2 - _markerGroesse / 2,
-              left: (userX - _markerGroesse / 2).clamp(0, w - _markerGroesse),
-              child: _Marker(color: const Color(0xFF2196F3)),
-            ),
-
-            // Richtiger-Wert-Marker (grün) — größer + weißer Rand.
-            Positioned(
-              top: trackTop + trackHeight / 2 - _markerGroesse / 2,
-              left:
-                  (correctX - _markerGroesse / 2).clamp(0, w - _markerGroesse),
-              child: _Marker(color: const Color(0xFF4A9E4A)),
-            ),
-
-            // Min label bottom-left
-            Positioned(
-              bottom: 0,
-              left: 0,
-              child: Text(format(min),
-                  style: const TextStyle(
-                      color: Color(0xFFBBBBBB),
-                      fontSize: 8,
-                      fontWeight: FontWeight.w600)),
-            ),
-            // Max label bottom-right
-            Positioned(
-              bottom: 0,
-              right: 0,
-              child: Text(format(max),
-                  style: const TextStyle(
-                      color: Color(0xFFBBBBBB),
-                      fontSize: 8,
-                      fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-class _Marker extends StatelessWidget {
-  final Color color;
-  const _Marker({required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: _SkalaVisuell._markerGroesse,
-      height: _SkalaVisuell._markerGroesse,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2.5),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.18),
-              blurRadius: 3,
-              offset: const Offset(0, 1)),
-        ],
-      ),
-    );
-  }
-}
-
-class _GestrichelteLinie extends CustomPainter {
-  final Color color;
-  const _GestrichelteLinie({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = size.height
-      ..strokeCap = StrokeCap.round;
-    const dashWidth = 4.0;
-    const dashGap = 3.0;
-    final y = size.height / 2;
-    double x = 0;
-    while (x < size.width) {
-      final xEnde = (x + dashWidth).clamp(0.0, size.width);
-      canvas.drawLine(Offset(x, y), Offset(xEnde, y), paint);
-      x += dashWidth + dashGap;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _GestrichelteLinie oldDelegate) =>
-      oldDelegate.color != color;
 }

@@ -83,27 +83,42 @@ void main() {
     // Vatikanstadt (Bevölkerung ~800) und Russland (Bevölkerung ~143 Mio)
     // sind beide in Europa — die Skalen dürfen sich nicht ähneln.
     //
-    // Die 60 Fragen sind kein Selbstzweck: _preisSchaetzen zieht die Kategorie
-    // je Frage ZUFÄLLIG aus allen, für die das Land echte Daten hat, und die
-    // Station lässt sich nicht auf eine Kategorie festlegen. Mit den früheren
-    // 20 Fragen war die Wahrscheinlichkeit, dass "bevoelkerung" bei Russland
-    // (sieben gültige Kategorien) gar nicht vorkommt, rund 5 % — der Test
-    // schlug damit etwa in jedem zwanzigsten Lauf fehl, ohne dass irgendetwas
-    // kaputt war. Mit 60 Ziehungen liegt sie unter 0,1 Promille.
+    // Die 60 Ziehungen sind kein Selbstzweck: _preisSchaetzen zieht die
+    // Kategorie je Frage ZUFÄLLIG aus allen, für die das Land echte Daten
+    // hat, und die Station lässt sich nicht auf eine Kategorie festlegen.
+    // Bei 20 Ziehungen war die Wahrscheinlichkeit, dass "bevoelkerung" bei
+    // Russland (sieben gültige Kategorien) gar nicht vorkommt, rund 5 % —
+    // der Test schlug damit etwa in jedem zwanzigsten Lauf fehl, ohne dass
+    // irgendetwas kaputt war. Mit 60 liegt sie unter 0,1 Promille.
+    //
+    // GEZOGEN WIRD ÜBER 60 STATIONEN MIT JE EINER FRAGE, nicht über eine
+    // Station mit 60: Seit dem Umbau gegen doppelte Fragen füllt der
+    // Generator einen zu kleinen Länder-Pool aus dem Kontinent auf, statt
+    // dasselbe Land zu wiederholen (siehe keine_doppelten_fragen_test.dart).
+    // Eine Station mit Pool ['VA'] und 60 Fragen läge also über halb Europa.
     const kZiehungen = 60;
 
-    final vatikanFragen = await FragenGenerator.generiereFragenFuerStation(LernStation(
-      id: 'test_va', modus: LernModus.preisSchaetzen, fragenAnzahl: kZiehungen,
-      laenderCodes: const ['VA'], kategorien: const [], schwierigkeitsgrad: 1,
-    ));
-    final vatikan =
-        vatikanFragen.where((f) => f.meta['kategorie'] == 'bevoelkerung').toList();
-    final russlandFragen = await FragenGenerator.generiereFragenFuerStation(LernStation(
-      id: 'test_ru', modus: LernModus.preisSchaetzen, fragenAnzahl: kZiehungen,
-      laenderCodes: const ['RU'], kategorien: const [], schwierigkeitsgrad: 1,
-    ));
-    final russland =
-        russlandFragen.where((f) => f.meta['kategorie'] == 'bevoelkerung').toList();
+    Future<List<Frage>> zieheFuer(String iso2) async {
+      final treffer = <Frage>[];
+      for (var i = 0; i < kZiehungen; i++) {
+        final fragen = await FragenGenerator.generiereFragenFuerStation(
+          LernStation(
+            id: 'test_${iso2}_$i',
+            modus: LernModus.preisSchaetzen,
+            fragenAnzahl: 1,
+            laenderCodes: [iso2],
+            kategorien: const [],
+            schwierigkeitsgrad: 1,
+          ),
+        );
+        treffer.addAll(fragen.where((f) =>
+            f.laenderCode == iso2 && f.meta['kategorie'] == 'bevoelkerung'));
+      }
+      return treffer;
+    }
+
+    final vatikan = await zieheFuer('VA');
+    final russland = await zieheFuer('RU');
 
     expect(vatikan, isNotEmpty);
     expect(russland, isNotEmpty);

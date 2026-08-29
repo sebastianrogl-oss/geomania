@@ -188,6 +188,35 @@ class PortfolioService {
     return ladeStatus();
   }
 
+  /// DEBUG: Nimmt den heutigen Portfolio-Tag zurück.
+  ///
+  /// Anders als die drei Punkte-Challenges hinterlässt das Portfolio mehr als
+  /// eine Erledigt-Marke: Es schreibt ein neues Kapital und hängt es an den
+  /// Verlauf. Beides wird hier rückgängig gemacht, sonst spielte man beim
+  /// zweiten Durchgang des Tages auf einem Kapital weiter, das die erste
+  /// Runde schon verändert hat — und der Verlauf bekäme zwei Punkte für
+  /// denselben Tag.
+  ///
+  /// Das Kapital kommt aus dem Verlauf selbst: Sein vorletzter Eintrag ist
+  /// der Stand vor dem heutigen Abschluss. Gibt es keinen, war heute der
+  /// erste Tag überhaupt — dann gilt wieder das Startkapital.
+  ///
+  /// NICHT zurückgerechnet werden Rekord, Serie und die Spielstil-Summen: Für
+  /// die fehlen die Vorwerte, sie liessen sich nur raten.
+  static Future<void> debugHeuteZuruecksetzen() async {
+    final prefs = await SharedPreferences.getInstance();
+    final verlauf = prefs.getStringList(_kVerlauf) ?? [];
+    if (verlauf.isNotEmpty) {
+      verlauf.removeLast();
+      await prefs.setStringList(_kVerlauf, verlauf);
+    }
+    final vorher = verlauf.isEmpty
+        ? kStartKapital
+        : double.tryParse(verlauf.last) ?? kStartKapital;
+    await prefs.setDouble(_kKapital, vorher);
+    await prefs.remove(_kLetzterSpieltag);
+  }
+
   // ── Spielstil-Rohdaten (für Phase 8) ─────────────────────────────────────────
 
   static Future<PortfolioSpielstilRohdaten> ladeSpielstilRohdaten() async {

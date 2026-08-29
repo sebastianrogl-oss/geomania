@@ -11,6 +11,7 @@ import 'services/ad_service.dart';
 import 'services/auth_service.dart';
 import 'services/benachrichtigungs_service.dart';
 import 'services/haptik_service.dart';
+import 'services/knopf_rueckmeldung.dart';
 import 'services/fortschritt_service.dart';
 import 'services/locale_service.dart';
 import 'services/onboarding_service.dart';
@@ -19,6 +20,7 @@ import 'screens/home_screen.dart';
 import 'screens/rangliste_screen.dart';
 import 'screens/profil_screen.dart';
 import 'screens/anmelde_screen.dart';
+import 'widgets/gradnetz.dart';
 import 'screens/anzeigename_screen.dart';
 import 'screens/willkommen_screen.dart';
 import 'theme/app_theme.dart';
@@ -112,7 +114,24 @@ class GeoManiaApp extends StatelessWidget {
           title: 'GeoMania',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.theme,
-          home: const StartWrapper(),
+          // OHNE const, und das ist der ganze Unterschied zwischen einem
+          // Sprachwechsel, der durchschlägt, und einem, der nur den
+          // Umschalter selbst umfärbt.
+          //
+          // Ein const-Widget ist kanonisiert: Bei jedem Neubau steht hier
+          // dieselbe Instanz. Flutter vergleicht in Element.updateChild das
+          // alte mit dem neuen Widget, findet sie identisch — und lässt den
+          // ganzen Teilbaum darunter unangetastet stehen. Der Umschalter fiel
+          // dabei nicht auf, weil er selbst auf LocaleService hört; alles
+          // andere ("Wie sollen wir dich nennen?", der Anmelde-Screen, der
+          // Lernpfad) blieb in der alten Sprache stehen, bis der Screen aus
+          // einem anderen Grund neu gebaut wurde.
+          //
+          // Eine neue Instanz je Durchlauf hat denselben Typ und keinen Key,
+          // wird also nicht ersetzt, sondern aktualisiert: Der State und
+          // damit auch ein schon eingetippter Name bleiben erhalten, nur
+          // build() läuft wieder — und mit ihm jedes t().
+          home: StartWrapper(),
         );
       },
     );
@@ -184,7 +203,20 @@ class _StartWrapperState extends State<StartWrapper> {
       return AnmeldeScreen(onAngemeldet: _pruefeName);
     }
     if (_nameGewaehlt == null || _willkommenGezeigt == null) {
-      return const Scaffold(backgroundColor: kHintergrund);
+      // Kein leerer Bildschirm mehr, sondern derselbe Hintergrund wie auf den
+      // Einstiegs-Screens. Vorher stand hier eine nackte Farbfläche: Das
+      // Gradnetz verschwand für die Dauer der Firestore-Abfrage — am Gerät
+      // gemessen bis zu 1,2 s — und kam danach zurück. Jetzt bleibt der
+      // Untergrund über den ganzen Übergang stehen.
+      //
+      // schritt 0, also die Drehung des Anmelde-Screens: Diese Wartezeit
+      // gehört noch zum Anfang des Einstiegs. So ändert sich das Netz während
+      // des Wartens gar nicht, und die Drehung passiert erst beim Wechsel auf
+      // den Zielscreen — ein Übergang statt zweier.
+      return Scaffold(
+        backgroundColor: kHintergrund,
+        body: const GradnetzHintergrund(schritt: 0, child: SizedBox.expand()),
+      );
     }
     if (_nameGewaehlt == false) {
       return AnzeigenameScreen(
@@ -194,7 +226,12 @@ class _StartWrapperState extends State<StartWrapper> {
     if (_willkommenGezeigt == false) {
       return WillkommenScreen(onFertig: _willkommenFertig);
     }
-    return const MainScreen();
+    // Auch hier ohne const — aus demselben Grund wie beim home der
+    // MaterialApp oben: Ein Sprachwechsel baut diesen Screen neu, und eine
+    // kanonisierte const-Instanz käme unverändert wieder heraus. Der ganze
+    // Hauptbereich (Lernpfad, Rangliste, Profil, untere Leiste) bliebe dann
+    // in der alten Sprache stehen.
+    return MainScreen();
   }
 }
 
@@ -262,6 +299,7 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
+          knopfRueckmeldung();
           if (index == 1) {
             _gehezuRangliste();
           } else if (index == 2) {

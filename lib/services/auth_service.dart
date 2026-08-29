@@ -5,7 +5,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
@@ -327,15 +327,37 @@ class AuthService {
           throw _NameVergebenException();
         }
 
+        // Die alte Reservierung freigeben — aber NUR, wenn es sie wirklich
+        // gibt und sie mir gehört.
+        //
+        // Vorher wurde blind gelöscht, sobald im spieler-Dokument ein anderer
+        // Name stand. Genau daran scheiterte jeder allererste Name:
+        // spielerAnlegen() trägt den Platzhalter "Spieler" ein, den niemand
+        // je reserviert hat. Der Löschversuch traf also ein Dokument, das gar
+        // nicht existiert — und firestore.rules prüfen für "delete"
+        // `resource.data.uid == request.auth.uid`. Ohne resource ist diese
+        // Bedingung falsch, die GANZE Transaktion flog mit permission-denied
+        // heraus, und der Screen zeigte nur "Etwas ist schiefgelaufen".
+        //
+        // Der Blick ins Dokument deckt beide Fälle ab: nicht vorhanden und
+        // fremd. Ein Existenz-Test allein täte es nicht — eine Reservierung,
+        // die inzwischen jemand anderem gehört, dürfte ich ebenso wenig
+        // löschen.
         final alterName = altesSpielerDoc.data()?['anzeigename'] as String?;
-        if (alterName != null) {
-          final alterNormalisiert = _normalisiereName(alterName);
-          if (alterNormalisiert.isNotEmpty && alterNormalisiert != normalisiert) {
-            transaction.delete(_db
-                .collection('anzeigenamen_reserviert')
-                .doc(alterNormalisiert));
+        final alterNormalisiert =
+            alterName == null ? '' : _normalisiereName(alterName);
+        DocumentReference<Map<String, dynamic>>? freizugeben;
+        if (alterNormalisiert.isNotEmpty &&
+            alterNormalisiert != normalisiert) {
+          final alteRef =
+              _db.collection('anzeigenamen_reserviert').doc(alterNormalisiert);
+          final alteReservierung = await transaction.get(alteRef);
+          if (alteReservierung.exists &&
+              alteReservierung.data()?['uid'] == u.uid) {
+            freizugeben = alteRef;
           }
         }
+        if (freizugeben != null) transaction.delete(freizugeben);
 
         // NUR anlegen, nie überschreiben. firestore.rules erlauben für
         // Reservierungen bewusst "create" und "delete", aber kein "update" —
@@ -356,13 +378,28 @@ class AuthService {
         }
         transaction.set(
             spielerRef,
-            {'anzeigename': neuerName, 'nameGewaehlt': true},
+            {
+              'anzeigename': neuerName,
+              'nameGewaehlt': true,
+              // Beim allerersten Namen die Standardfelder gleich mit
+              // anlegen. Sie kamen bisher nie an: spielerAnlegen() weiter
+              // unten schreibt sie nur, wenn das Dokument noch NICHT
+              // existiert — nach dieser Transaktion existiert es aber
+              // immer. Wessen Konto also erst hier ein spieler-Dokument
+              // bekam, dem fehlten erstelltAm und das Startkapital
+              // dauerhaft.
+              if (!altesSpielerDoc.exists) ...{
+                'erstelltAm': FieldValue.serverTimestamp(),
+                'portfolioKapital': 1000.0,
+                'portfolioRekord': 1000.0,
+              },
+            },
             SetOptions(merge: true));
       });
     } on _NameVergebenException {
       return AnzeigenameErgebnis.bereitsVergeben;
     } catch (e) {
-      print('Namens-Reservierung fehlgeschlagen: $e');
+      debugPrint('Namens-Reservierung fehlgeschlagen: $e');
       return AnzeigenameErgebnis.fehler;
     }
 
@@ -370,12 +407,11 @@ class AuthService {
       await u.updateDisplayName(neuerName);
       await u.reload();
     } catch (e) {
-      print('Name-Fehler: $e');
+      debugPrint('Name-Fehler: $e');
     }
-    // Stellt bei einem allerersten Namen sicher, dass das spieler-Dokument
-    // auch die restlichen Standardfelder bekommt (erstelltAm, Startkapital
-    // etc.) — die Transaktion oben schreibt bewusst nur 'anzeigename', damit
-    // sie so schmal wie möglich bleibt.
+    // Hält den Anzeigenamen im Dokument mit dem Konto gleich. Die
+    // Standardfelder legt inzwischen die Transaktion oben an — hier kämen
+    // sie zu spät, weil das Dokument dann längst existiert.
     await spielerAnlegen();
     return AnzeigenameErgebnis.erfolgreich;
   }
@@ -399,12 +435,16 @@ class AuthService {
           'portfolioRekord': 1000.0,
         });
       } else {
-        await ref.update({
-          'anzeigename': u.displayName ?? 'Spieler',
-        });
+        // Nur schreiben, wenn das Konto wirklich einen Namen trägt. Sonst
+        // ersetzte ein fehlgeschlagenes updateDisplayName() den gerade
+        // gewählten Namen im Dokument stillschweigend durch den Platzhalter.
+        final name = (u.displayName ?? '').trim();
+        if (name.isNotEmpty) {
+          await ref.update({'anzeigename': name});
+        }
       }
     } catch (e) {
-      print('Spieler-Anlegen-Fehler: $e');
+      debugPrint('Spieler-Anlegen-Fehler: $e');
     }
   }
 }

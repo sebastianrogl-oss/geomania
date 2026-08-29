@@ -295,16 +295,33 @@ const Map<String, String> uebersetzungenOnboarding = {
 
   // ── Willkommens-Screen ─────────────────────────────────────────────────────
   //
-  // Vier Zeilen, jede neben dem echten Bauteil aus der App. Beide Fassungen
-  // müssen in EINE Zeile passen, deshalb hier keine Nebensätze — auf schmalen
-  // Geräten setzt der Screen zu lange Zeilen zwar kleiner statt sie
-  // abzuschneiden, aber das soll die Ausnahme bleiben, nicht die Regel.
-  'Schön, dass du da bist!': 'Good to have you here!',
-  '195 Länder entdecken': 'Discover 195 countries',
-  'Station für Station': 'One station at a time',
-  'Jeden Tag dranbleiben': 'Keep it up every day',
-  'Abzeichen verdienen': 'Earn badges',
+  // Fünf wischbare Karten, jede mit einem echten Bauteil aus der App. Beide
+  // Fassungen müssen KURZ bleiben: Die Karte hat eine feste Höhe, und was
+  // nicht hineinpasst, drückt die Grafik zusammen. Höchstens zwei Sätze, und
+  // die englische Fassung nicht länger als die deutsche.
+  'Überspringen': 'Skip',
   'Los geht\'s': 'Let\'s go',
+
+  '195 Länder entdecken': 'Discover 195 countries',
+  'Flaggen, Hauptstädte, Umrisse, Zahlen — die ganze Welt in kleinen Portionen.':
+      'Flags, capitals, outlines, figures — the whole world in small helpings.',
+
+  'Station für Station': 'One station at a time',
+  'Der Lernpfad führt dich durch jeden Kontinent. Eine Station nach der anderen.':
+      'The learning path takes you across every continent, one station after '
+          'the next.',
+
+  'Immer anders gefragt': 'Never the same question',
+  'Flaggen raten, Umrisse erkennen, Zahlen schätzen, Rätsel lösen.':
+      'Guess flags, recognise outlines, estimate figures, solve puzzles.',
+
+  'Dranbleiben lohnt sich': 'Sticking with it pays off',
+  'Jeder Tag zählt für deine Serie. Abzeichen gibt es obendrauf.':
+      'Every day counts towards your streak. Badges come on top.',
+
+  'Jeden Tag etwas Neues': 'Something new every day',
+  'Vier Tages-Challenges warten — für alle gleich, jeden Tag neu.':
+      'Four daily challenges await — the same for everyone, new each day.',
 
   // ── Anmeldung ──────────────────────────────────────────────────────────────
   // Ein Satz statt zweier: Der Anmelde-Screen soll den Namen, einen Satz und

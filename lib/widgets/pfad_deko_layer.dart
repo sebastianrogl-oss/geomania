@@ -106,8 +106,7 @@ Widget _dekoImage(String datei, double left, double top, double size) => Positio
           height: size,
           fit: BoxFit.contain,
           errorBuilder: (ctx, err, stack) {
-            // ignore: avoid_print
-            print('ICON FEHLER: $err');
+            debugPrint('ICON FEHLER: $err');
             return const SizedBox.shrink();
           },
         ),

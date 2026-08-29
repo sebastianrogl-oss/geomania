@@ -158,11 +158,21 @@ class StatistikKacheln extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return LayoutBuilder(builder: (context, constraints) {
+      // Dieselbe Seite, die gleich auch jede Kachel aus IHREN Constraints
+      // liest: drei gleich breite Expanded mit zwei Abständen dazwischen.
+      final seite = (constraints.maxWidth - 2 * _kKachelAbstand) / 3;
+      final labelSkala = _labelSkala(
+        context,
+        seite,
+        [t('Streak'), t('Stationen'), t('Abzeichen')],
+      );
+      return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: _Kachel(
+            labelSkala: labelSkala,
             label: t('Streak'),
             grafik: (grundmass, zahl) => _Flamme(
               zahl: streak,
@@ -174,6 +184,7 @@ class StatistikKacheln extends StatelessWidget {
         const SizedBox(width: _kKachelAbstand),
         Expanded(
           child: _Kachel(
+            labelSkala: labelSkala,
             label: t('Stationen'),
             grafik: (grundmass, zahl) => StatistikStationsButton(
               zahl: stationen,
@@ -185,6 +196,7 @@ class StatistikKacheln extends StatelessWidget {
         const SizedBox(width: _kKachelAbstand),
         Expanded(
           child: _Kachel(
+            labelSkala: labelSkala,
             label: t('Abzeichen'),
             grafik: (grundmass, zahl) {
               final muenze = grundmass * _kMuenzFaktor;
@@ -201,21 +213,86 @@ class StatistikKacheln extends StatelessWidget {
           ),
         ),
       ],
-    );
+      );
+    });
   }
 }
+
+/// Gemeinsamer Verkleinerungsfaktor der drei Beschriftungen.
+///
+/// EINER für alle drei, nicht je Kachel einer: „Streak" passt fast immer,
+/// „Stationen" und „Abzeichen" laufen bei grosser Systemschrift als Erste an.
+/// Bekäme jede Kachel ihren eigenen Faktor, stünden die drei Wörter
+/// verschieden gross und nicht mehr auf einer Linie — genau das, was die
+/// gemeinsame Feldhöhe oben verhindern soll.
+///
+/// 1.0 heisst: nichts zu tun, alles passt. Darunter wird die Schrift ANDERS
+/// GESETZT statt nachträglich skaliert (kein FittedBox) — dieselbe Regel wie
+/// bei den Grafiken am Dateikopf: nichts wird nachträglich verkleinert.
+double _labelSkala(BuildContext context, double seite, List<String> labels) {
+  final verfuegbar = seite - 2 * (seite * _kInnenrand);
+  if (verfuegbar <= 0) return 1.0;
+  // NACHGEMESSEN statt einmal ausgerechnet: Ein halbierter Schriftgrad ergibt
+  // keine exakt halb so breite Zeile — jede Glyphe wird einzeln auf die
+  // Pixelraster gerundet, und über neun Buchstaben summiert sich das auf rund
+  // ein Prozent. Bei Schriftskala 2 blieb genau dieses Prozent übrig. Zwei
+  // Nachschläge reichen; danach ist die Abweichung kleiner als ein Pixel.
+  var skala = 1.0;
+  for (var runde = 0; runde < 3; runde++) {
+    var breiteste = 0.0;
+    for (final l in labels) {
+      final breite = _labelMasse(context, l, _labelStil(seite, skala)).width;
+      if (breite > breiteste) breiteste = breite;
+    }
+    if (breiteste <= verfuegbar || breiteste <= 0) break;
+    skala *= verfuegbar / breiteste;
+  }
+  return skala;
+}
+
+/// Misst eine Beschriftung so, wie sie am Ende auch gezeichnet wird.
+///
+/// ÜBER [DefaultTextStyle], nicht nur über [_labelStil]: Ein [Text] erbt
+/// alles, was sein eigener Stil offenlässt — Schriftfamilie und vor allem den
+/// Zeichenabstand des Themes. Ohne dieses Erbe fiel die Messung rund zwei
+/// Prozent zu schmal aus, und genau diese zwei Prozent standen dann über den
+/// Kachelrand hinaus.
+TextPainter _labelMasse(BuildContext context, String text, TextStyle stil) =>
+    TextPainter(
+      text: TextSpan(text: text, style: DefaultTextStyle.of(context).style.merge(stil)),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+
+/// Der Stil der Beschriftung, in [_labelSkala] und in [_Kachel] derselbe —
+/// gemessen wird, was auch gezeichnet wird.
+TextStyle _labelStil(double seite, [double skala = 1.0]) => TextStyle(
+      color: _kLabelFarbe,
+      fontSize: seite * _kLabelAnteil * skala,
+      fontWeight: FontWeight.w700,
+      // Feste Zeilenhöhe, sonst stimmt die Rechnung nicht: die
+      // voreingestellte Zeilenhöhe von Poppins ist rund das 1,7-fache
+      // der Schriftgröße. 1.12 lässt der Unterlänge im "g" von
+      // "Abzeichen" genug Raum.
+      height: _kLabelZeilenhoehe,
+    );
 
 /// Eine Kachel. Quadratisch (siehe [_kSeitenverhaeltnis]), alles darin ein
 /// Anteil ihrer Seite.
 class _Kachel extends StatelessWidget {
   final String label;
 
+  /// Gemeinsamer Verkleinerungsfaktor der Beschriftung, siehe [_labelSkala].
+  final double labelSkala;
+
   /// Bekommt das Grundmaß und die Schriftgröße der Zahl — beide aus der
   /// Kachelseite berechnet und für alle drei Kacheln gleich. Wie weit ein
   /// Element davon abweicht, entscheidet sein Faktor am Dateikopf.
   final Widget Function(double grundmass, double zahlGroesse) grafik;
 
-  const _Kachel({required this.label, required this.grafik});
+  const _Kachel(
+      {required this.label, required this.labelSkala, required this.grafik});
 
   @override
   Widget build(BuildContext context) {
@@ -245,28 +322,17 @@ class _Kachel extends StatelessWidget {
           // Kacheln damit exakt quadratisch, darüber werden sie so viel höher
           // wie die Beschriftung an Höhe gewinnt.
           final innen = seite * _kInnenrand;
-          final labelStil = TextStyle(
-            color: _kLabelFarbe,
-            fontSize: seite * _kLabelAnteil,
-            fontWeight: FontWeight.w700,
-            // Feste Zeilenhöhe, sonst stimmt die Rechnung nicht: die
-            // voreingestellte Zeilenhöhe von Poppins ist rund das 1,7-fache
-            // der Schriftgröße. 1.12 lässt der Unterlänge im "g" von
-            // "Abzeichen" genug Raum.
-            height: _kLabelZeilenhoehe,
-          );
+          // MIT dem gemeinsamen Faktor: Bei grosser Systemschrift stand
+          // "Stationen" sonst breiter da als die Kachel und wurde von
+          // maxLines: 1 hart abgeschnitten — ohne Überlauf-Warnung, weil
+          // TextOverflow.clip der Standard ist.
+          final labelStil = _labelStil(seite, labelSkala);
           // GEMESSEN statt gerechnet. Schriftgröße mal Zeilenhöhe mal
           // Skalierung ist nur eine Näherung — sie lag um rund einen halben
           // Pixel daneben, und genau so viel lief die Kachel dann noch über.
           // Der TextPainter liefert die Höhe, die der Text tatsächlich
           // einnimmt, samt Schriftmetrik und Skalierung.
-          final labelHoehe = (TextPainter(
-            text: TextSpan(text: label, style: labelStil),
-            textDirection: TextDirection.ltr,
-            maxLines: 1,
-            textScaler: MediaQuery.textScalerOf(context),
-          )..layout())
-              .height;
+          final labelHoehe = _labelMasse(context, label, labelStil).height;
           final noetigeHoehe = 2 * innen +
               feldHoehe +
               seite * _kAbstandGrafikLabel +

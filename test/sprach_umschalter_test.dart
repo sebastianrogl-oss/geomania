@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:geomania/main.dart';
 import 'package:geomania/screens/anzeigename_screen.dart';
 import 'package:geomania/services/locale_service.dart';
 import 'package:geomania/theme/app_theme.dart';
@@ -127,5 +128,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(LocaleService.sprache.value, 'de');
     expect(find.text('Wie sollen wir dich nennen?'), findsOneWidget);
+  });
+
+  /// DIE WURZEL MUSS BEI JEDEM DURCHLAUF EIN NEUES home LIEFERN.
+  ///
+  /// Hier stand `home: const StartWrapper()`. Ein const-Widget ist
+  /// kanonisiert — bei jedem Neubau kommt dieselbe Instanz heraus, Flutter
+  /// erkennt sie in Element.updateChild als identisch und lässt den ganzen
+  /// Teilbaum unangetastet. Der Sprachwechsel färbte dadurch nur den
+  /// Umschalter um (der hört selbst auf LocaleService); der Anmelde-Screen,
+  /// das Namensfeld und der Lernpfad blieben deutsch.
+  ///
+  /// Der Test oben konnte das nicht sehen: Er baut die Wurzel nach und setzte
+  /// den Screen direkt als home ein, ohne const. Deshalb hier die echte
+  /// Wurzel aus main.dart — geprüft wird nur ihre Bauanleitung, kein Screen,
+  /// also braucht es weder Firebase noch einen Anmeldestand.
+  testWidgets('GeoManiaApp reicht bei jedem Sprachwechsel ein neues home durch',
+      (tester) async {
+    late BuildContext kontext;
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(builder: (c) {
+        kontext = c;
+        return const SizedBox.shrink();
+      }),
+    ));
+
+    final wurzel = const GeoManiaApp().build(kontext)
+        as ValueListenableBuilder<String>;
+    final deutsch = wurzel.builder(kontext, 'de', null) as MaterialApp;
+    final englisch = wurzel.builder(kontext, 'en', null) as MaterialApp;
+
+    expect(identical(deutsch.home, englisch.home), isFalse,
+        reason: 'home ist bei beiden Durchläufen dieselbe Instanz — mit einem '
+            'const-Widget baut der Teilbaum darunter nie neu');
   });
 }

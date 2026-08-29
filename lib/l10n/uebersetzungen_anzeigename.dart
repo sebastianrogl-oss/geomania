@@ -7,4 +7,9 @@ const Map<String, String> uebersetzungenAnzeigename = {
   'Dein Name': 'Your name',
   'Dieser Name ist schon vergeben — bitte wähle einen anderen.':
       'This name is already taken — please choose another one.',
+  // Sammelmeldung für alles, was beim Speichern des Namens sonst schiefgehen
+  // kann (kein Netz, abgelehnte Firestore-Regel). Steht auch im
+  // Einstellungen-Screen, der denselben Weg nutzt.
+  'Etwas ist schiefgelaufen — bitte versuch es erneut.':
+      'Something went wrong — please try again.',
 };

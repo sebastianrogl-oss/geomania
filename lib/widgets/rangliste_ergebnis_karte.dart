@@ -73,9 +73,52 @@ class _RanglisteErgebnisKarteState extends State<RanglisteErgebnisKarte> {
       fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF888888));
   static const _minMaxStyle = TextStyle(fontSize: 11, color: Color(0xFF888888));
 
+  /// Höhe, die die Karte beim Laden schon einnimmt.
+  ///
+  /// ── Warum überhaupt ein Platzhalter ──────────────────────────────────────
+  ///
+  /// Bis eben stand hier `SizedBox.shrink()`: Solange Rang und Verteilung aus
+  /// der Rangliste nachgeladen wurden, war die Karte NICHT DA — und alles
+  /// darunter zog nach oben. In den Ergebnis-Ansichten der Tages-Challenges
+  /// ist das der wischbare Kartenstapel in einem Expanded: Er bekam für den
+  /// Bruchteil einer Sekunde die ganze Fläche und schrumpfte dann sichtbar
+  /// zusammen. Am deutlichsten beim Aufruf über „Ergebnisse" von aussen, wo
+  /// nichts anderes den Moment überdeckt.
+  ///
+  /// Der Platzhalter hält den Platz frei, statt ihn erst zu beanspruchen,
+  /// wenn die Zahlen da sind. Er zeigt dabei, was schon feststeht — Label und
+  /// Punktzahl kommen vom Aufrufer und stehen sofort zur Verfügung; nur der
+  /// Rang und die Kurve müssen warten.
+  ///
+  /// 176 ist die Höhe der geladenen Karte OHNE Verteilungskurve, ausgemessen
+  /// am Gerät. Mit Kurve wächst sie danach noch — dieser Sprung bleibt, ist
+  /// aber der kleinere von beiden und tritt nur auf, wenn genug Mitspieler
+  /// da sind.
+  static const double _kPlatzhalterHoehe = 176;
+
+  Widget _platzhalter() {
+    return Container(
+      height: _kPlatzhalterHoehe,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.punkteLabel, style: _labelStyle),
+          const SizedBox(height: 4),
+          widget.punkteAnzeige,
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (!_geladen) return const SizedBox.shrink();
+    if (!_geladen) return _platzhalter();
 
     final platzInfo = _platzInfo;
     final top100 = _top100 ?? [];

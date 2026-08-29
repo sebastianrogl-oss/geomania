@@ -211,6 +211,7 @@ class FortschrittService {
     int richtig,
     int falsch, {
     String? falscheFragenJson,
+    int? sterneBasis,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     // VOR dem Setzen lesen — entscheidet unten über die Sterne.
@@ -234,7 +235,11 @@ class FortschrittService {
     // Station. Wer eine bereits abgeschlossene Station noch einmal spielt,
     // sammelt dadurch keine Sterne ein zweites Mal. Die Wiederholungsrunde
     // läuft ohnehin über wiederholungAbschliessen() und kommt hier nie an.
-    final vergebeneSterne = warSchonAbgeschlossen ? 0 : richtig;
+    //
+    // [sterneBasis] ist ein Stern je BEANTWORTETER Frage (StationSession).
+    // Der Fallback auf [richtig] gilt für Aufrufer, die den Wert nicht
+    // mitliefern — er entspricht dem Verhalten vor der Umstellung.
+    final vergebeneSterne = warSchonAbgeschlossen ? 0 : (sterneBasis ?? richtig);
     if (vergebeneSterne > 0) {
       final prevGesamt = prefs.getInt(_kGesamtRichtig) ?? 0;
       await prefs.setInt(_kGesamtRichtig, prevGesamt + vergebeneSterne);
@@ -585,38 +590,22 @@ class FortschrittService {
     final alterStreak = prefs.getInt(_kStreak) ?? 0;
     int streak = alterStreak;
 
-    // DEBUG (Bug 1 — Streak-Untersuchung): kompletter Zustand des
-    // Lernpfad-weiten Streaks (separat vom Streak je Tages-Challenge in
-    // ChallengeRekordService) bei jedem Aufruf aus station_quiz_screen.dart.
-    // ignore: avoid_print
-    print('[LP-Streak] VOR Update: alterStreak=$alterStreak, '
-        'letzteAktivitaet=$letzteStr, heute=$heute');
-
     if (letzteStr != null) {
       final letzte = DateTime.parse(letzteStr);
       final diff =
           DateTime(heute.year, heute.month, heute.day)
               .difference(DateTime(letzte.year, letzte.month, letzte.day))
               .inDays;
-      // ignore: avoid_print
-      print('[LP-Streak] letzteAktivitaet geparst=$letzte, diff=$diff Tage');
       if (diff == 0) {
-        // ignore: avoid_print
-        print('[LP-Streak] diff==0 (schon heute aktualisiert) -> keine Änderung');
         return (alterStreak, alterStreak);
       }
       streak = diff == 1 ? streak + 1 : 1;
     } else {
       streak = 1;
-      // ignore: avoid_print
-      print('[LP-Streak] keine letzteAktivitaet gespeichert -> neuerStreak=1');
     }
 
     await prefs.setInt(_kStreak, streak);
     await prefs.setString(_kLetzteAkt, heute.toIso8601String());
-    // ignore: avoid_print
-    print('[LP-Streak] NACH Update: gespeicherter Streak=$streak, '
-        'gespeicherte letzteAktivitaet=${heute.toIso8601String()}');
     return (alterStreak, streak);
   }
 
@@ -662,9 +651,6 @@ class FortschrittService {
     final prefs = await SharedPreferences.getInstance();
     final gestern = DateTime.now().subtract(const Duration(days: 1));
     await prefs.setString(_kLetzteAkt, gestern.toIso8601String());
-    // ignore: avoid_print
-    print('[LP-Streak/DEBUG] letzteAktivitaet auf gestern gesetzt: '
-        '${gestern.toIso8601String()}');
   }
 
   /// Erhöht die verdienten Sterne. Schreibt denselben Zähler wie der echte
@@ -674,16 +660,12 @@ class FortschrittService {
     final prefs = await SharedPreferences.getInstance();
     final vorher = prefs.getInt(_kGesamtRichtig) ?? 0;
     await prefs.setInt(_kGesamtRichtig, vorher + anzahl);
-    // ignore: avoid_print
-    print('[Sterne/DEBUG] verdient $vorher -> ${vorher + anzahl}');
   }
 
   /// Setzt die verdienten Sterne auf 0.
   static Future<void> debugSterneZuruecksetzen() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kGesamtRichtig, 0);
-    // ignore: avoid_print
-    print('[Sterne/DEBUG] verdiente Sterne auf 0 zurückgesetzt');
   }
 
   /// Setzt Streak und letzte Aktivität zurück, damit der Neustart-Fall
@@ -692,8 +674,6 @@ class FortschrittService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kStreak, 0);
     await prefs.remove(_kLetzteAkt);
-    // ignore: avoid_print
-    print('[LP-Streak/DEBUG] Streak auf 0 zurückgesetzt');
   }
 
   // ── Abzeichen ─────────────────────────────────────────────────────────────

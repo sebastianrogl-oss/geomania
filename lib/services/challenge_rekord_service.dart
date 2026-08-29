@@ -7,6 +7,15 @@ class ChallengeRekordService {
     return 'ch_heute_${id}_${n.year}${n.month.toString().padLeft(2, '0')}${n.day.toString().padLeft(2, '0')}';
   }
 
+  /// DEBUG: Löscht die heute erzielten Punkte einer Challenge.
+  ///
+  /// Der REKORD bleibt: Er gehört nicht zum heutigen Tag. Wer ihn auch
+  /// zurücksetzen will, tut das über den Fortschritts-Reset.
+  static Future<void> debugHeutigePunkteLoeschen(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_heuteKey(id));
+  }
+
   static Future<int?> getRekord(String id) async {
     final prefs = await SharedPreferences.getInstance();
     final v = prefs.getInt(_rekordKey(id));
@@ -73,19 +82,7 @@ class ChallengeRekordService {
     final alterStreak = prefs.getInt(_streakKey(id)) ?? 0;
     int streak = alterStreak;
 
-    // DEBUG (Bug 1 — Streak-Untersuchung): kompletter Zustand bei jedem
-    // Aufruf, um Debug 1224/Zeitzonen-/Mehrfachaufruf-Verdacht am Gerät zu
-    // verifizieren.
-    // ignore: avoid_print
-    print('[Streak/$id] VOR Update: alterStreak=$alterStreak, '
-        'letzterSpieltag=$letzter, heute=$heute, '
-        'DateTime.now()=${DateTime.now()}');
-
-    if (letzter == heute) {
-      // ignore: avoid_print
-      print('[Streak/$id] letzter==heute -> keine Änderung, return $streak');
-      return streak;
-    }
+    if (letzter == heute) return streak;
 
     if (letzter != null) {
       final letzteDatum = DateTime.parse(letzter);
@@ -94,20 +91,12 @@ class ChallengeRekordService {
           .difference(DateTime(letzteDatum.year, letzteDatum.month, letzteDatum.day))
           .inDays;
       streak = diff == 1 ? streak + 1 : 1;
-      // ignore: avoid_print
-      print('[Streak/$id] letzteDatum=$letzteDatum, diff=$diff Tage -> '
-          'neuerStreak=$streak');
     } else {
       streak = 1;
-      // ignore: avoid_print
-      print('[Streak/$id] kein letzter Spieltag gespeichert -> neuerStreak=1');
     }
 
     await prefs.setInt(_streakKey(id), streak);
     await prefs.setString(_letzterSpieltagKey(id), heute);
-    // ignore: avoid_print
-    print('[Streak/$id] NACH Update: gespeicherter Streak=$streak, '
-        'gespeicherter letzterSpieltag=$heute');
     return streak;
   }
 

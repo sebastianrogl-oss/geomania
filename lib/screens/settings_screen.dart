@@ -9,7 +9,14 @@ import '../services/ad_service.dart';
 import '../services/auth_service.dart';
 import '../services/benachrichtigungs_service.dart';
 import '../services/einstellungen_service.dart';
+import '../services/challenge_ergebnis_service.dart';
+import '../services/challenge_rekord_service.dart';
+import '../services/daily_challenge.dart';
+import '../services/daily_resume_service.dart';
+import '../services/portfolio_service.dart';
 import '../services/haptik_service.dart';
+import '../services/knopf_rueckmeldung.dart';
+import '../services/streak_ziel_service.dart';
 import '../services/fortschritt_service.dart';
 import '../services/locale_service.dart';
 import '../services/onboarding_service.dart';
@@ -21,6 +28,7 @@ import '../widgets/abzeichen_popup.dart';
 import '../services/abzeichen_service.dart';
 import '../widgets/streak_feier_overlay.dart';
 import 'station_quiz_screen.dart';
+import 'streak_ziel_screen.dart';
 import '../theme/app_theme.dart';
 
 const _bg = kHintergrund;
@@ -50,7 +58,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Fallback, falls PackageInfo.fromPlatform() fehlschlägt (z.B. Plugin auf
   // der Plattform nicht verfügbar) — besser eine plausible als gar keine
   // Versionsangabe.
-  String _appVersion = '1.0.2';
+  String _appVersion = '1.1.0';
 
   @override
   void initState() {
@@ -211,6 +219,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       content: Text('🎓 Onboarding zurückgesetzt — Modus-Anleitungen sofort, '
           'Willkommens-Screen beim nächsten App-Start'),
       backgroundColor: Color(0xFFB8570A),
+    ));
+  }
+
+  // Setzt die Ziel-Abfrage zurück und zeigt den Screen sofort — sonst käme er
+  // erst nach der zweiten abgeschlossenen Station wieder, und nach einer
+  // getroffenen Wahl gar nicht mehr.
+  Future<void> _debugStreakZiel() async {
+    await StreakZielService.zuruecksetzen();
+    if (!mounted) return;
+    await StreakZielScreen.zeigen(context);
+    if (!mounted) return;
+    final ziel = await StreakZielService.ziel();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ziel == null
+          ? '🔥 Kein Ziel gesetzt (später entschieden)'
+          : '🔥 Ziel gespeichert: $ziel Tage'),
+      backgroundColor: const Color(0xFFB8570A),
     ));
   }
 
@@ -684,6 +710,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ));
   }
 
+  // ── DEBUG: Tages-Challenges zurücksetzen (nur kDebugMode) ─────────────────
+  //
+  // Macht den heutigen Tag wieder spielbar — alle vier Challenges, nicht nur
+  // eine. Gedacht zum Durchspielen von Ablauf und Ergebnis-Schirmen, ohne bis
+  // Mitternacht warten zu müssen.
+  //
+  // ZURÜCKGESETZT WIRD NUR DER HEUTIGE TAG:
+  //  * die Erledigt-Marken im Panel (DailyChallenge),
+  //  * die heute erzielten Punkte (ChallengeRekordService),
+  //  * das gespeicherte Detail-Ergebnis für "Ergebnis ansehen",
+  //  * ein liegengebliebener Zwischenstand,
+  //  * beim Portfolio zusätzlich Kapital und Verlaufspunkt des Tages.
+  //
+  // STEHEN BLEIBEN Rekorde, Serien, Spieltage, Spielzähler, Punktesummen,
+  // Abzeichen und bereits hochgeladene Ranglisten-Einträge. Sie gehören zur
+  // Spielhistorie, nicht zum heutigen Tag; ein zweiter Durchgang zählt dort
+  // also mit. Für einen wirklich sauberen Stand ist der Fortschritts-Reset
+  // weiter oben der richtige Weg.
+  Future<void> _tagesChallengesZuruecksetzen() async {
+    // Dieselben IDs, unter denen die vier Screens speichern — nicht die der
+    // Rangliste ('schaetzen', 'higherlower', 'ranking'), die eine eigene
+    // Benennung hat.
+    const ids = ['preis', 'higher_lower', 'ranking_game', 'portfolio'];
+
+    await DailyChallenge.debugHeuteLeeren();
+    for (final id in ids) {
+      await ChallengeRekordService.debugHeutigePunkteLoeschen(id);
+      await ChallengeErgebnisService.debugLoeschen(id);
+      await DailyResumeService.debugLoeschen(id);
+    }
+    await PortfolioService.debugHeuteZuruecksetzen();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🐞 Tages-Challenges zurückgesetzt — Rekorde und '
+          'Serien bleiben'),
+      backgroundColor: Color(0xFFB8570A),
+    ));
+  }
+
   // ── DEBUG: Alles freischalten (nur kDebugMode) ────────────────────────────
   //
   // Schaltet nur die PRÜFUNG aus, statt Fortschritt zu schreiben — siehe
@@ -997,6 +1063,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _neueModiTesten,
                 ),
                 _Zeile(
+                  icon: Icons.today_rounded,
+                  title: t('Tages-Challenges zurücksetzen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _tagesChallengesZuruecksetzen,
+                ),
+                _Zeile(
                   icon: Icons.lock_open_rounded,
                   title: t('Alle Stationen freischalten (Debug)'),
                   titleColor: const Color(0xFFB8570A),
@@ -1031,6 +1103,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('Onboarding zurücksetzen (Debug)'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: _debugOnboardingZuruecksetzen,
+                ),
+                _Zeile(
+                  icon: Icons.local_fire_department_outlined,
+                  title: t('Streak-Ziel zeigen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugStreakZiel,
                 ),
               ]),
               const SizedBox(height: 24),
@@ -1139,7 +1217,14 @@ class _Zeile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      // Jede Zeile dieses Screens ist ein Knopf — die Rückmeldung sitzt
+      // deshalb hier und nicht in den rund zwanzig Handlern.
+      onTap: onTap == null
+          ? null
+          : () {
+              knopfRueckmeldung();
+              onTap!();
+            },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
@@ -1186,7 +1271,10 @@ class _SpracheZeile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        knopfRueckmeldung();
+        onTap();
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(

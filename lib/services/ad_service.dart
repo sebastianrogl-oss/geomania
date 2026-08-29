@@ -6,8 +6,8 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Zentrale Stelle für AdMob-Werbung: seltene, automatische Interstitials
-/// nach abgeschlossenen Lernpfad-Stationen, sowie Rewarded-Ads für
-/// Kontinent- und Profilbild-Freischaltung.
+/// nach abgeschlossenen Lernpfad-Stationen und Tages-Challenges, sowie
+/// Rewarded-Ads für Kontinent- und Profilbild-Freischaltung.
 ///
 /// Beide Plattformen nutzen die echten Ad-Unit-IDs (siehe auch
 /// APPLICATION_ID in AndroidManifest.xml / GADApplicationIdentifier in
@@ -37,16 +37,7 @@ class AdService {
     // würde dort mit MissingPluginException abstürzen. Web bleibt bewusst
     // ohne Werbung (betrifft nur Chrome-Testläufe, nicht die echten
     // Android-/iOS-Zielplattformen).
-    // DEBUG (Bug 5 — Rewarded Ads "nicht verfügbar"): kompletten Ladevorgang
-    // inkl. verwendeter Ad-Unit-ID und AdMob-Fehlermeldung protokollieren.
-    final startZeit = DateTime.now();
-    // ignore: avoid_print
-    print('[Ad/Rewarded] ladeRewardedAd() aufgerufen um $startZeit, '
-        'kIsWeb=$kIsWeb, adUnitId=$_rewardedAdUnitId, '
-        'bereits geladenes _rewardedAd vorhanden: ${_rewardedAd != null}');
     if (kIsWeb) {
-      // ignore: avoid_print
-      print('[Ad/Rewarded] kIsWeb -> lade nicht (Web wird bewusst ohne Werbung betrieben)');
       return;
     }
     await RewardedAd.load(
@@ -54,24 +45,14 @@ class AdService {
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
-          // ignore: avoid_print
-          print('[Ad/Rewarded] onAdLoaded nach '
-              '${DateTime.now().difference(startZeit).inMilliseconds}ms — Ad erfolgreich geladen');
           _rewardedAd = ad;
         },
         onAdFailedToLoad: (error) {
-          // ignore: avoid_print
-          print('[Ad/Rewarded] onAdFailedToLoad nach '
-              '${DateTime.now().difference(startZeit).inMilliseconds}ms — code=${error.code}, '
-              'domain=${error.domain}, message=${error.message}, '
-              'responseInfo=${error.responseInfo}');
-          print('Rewarded Ad Fehler: $error');
+          debugPrint('Rewarded Ad Fehler: $error');
           _rewardedAd = null;
         },
       ),
     );
-    // ignore: avoid_print
-    print('[Ad/Rewarded] RewardedAd.load()-Aufruf abgeschickt (Callback kommt asynchron)');
   }
 
   /// Zeigt eine Rewarded-Ad und ruft [onBelohnt] auf, sobald der Nutzer die
@@ -82,21 +63,10 @@ class AdService {
   static Future<bool> zeigeRewardedAd({
     required VoidCallback onBelohnt,
   }) async {
-    // DEBUG (Bug 5 — Rewarded Ads "nicht verfügbar"): jeden Schritt bis zum
-    // Anzeigen (oder Scheitern) protokollieren — insbesondere ob beim
-    // Antippen bereits ein vorgeladenes Ad vorhanden ist, oder ob hier zum
-    // ersten Mal (zu spät) synchron nachgeladen werden muss.
-    // ignore: avoid_print
-    print('[Ad/Rewarded] zeigeRewardedAd() aufgerufen, kIsWeb=$kIsWeb, '
-        'bereits vorgeladenes _rewardedAd vorhanden: ${_rewardedAd != null}');
     if (kIsWeb) return false;
     if (_rewardedAd == null) {
-      // ignore: avoid_print
-      print('[Ad/Rewarded] KEIN vorgeladenes Ad -> lade jetzt synchron nach (verzögert die Anzeige)');
       await ladeRewardedAd();
       if (_rewardedAd == null) {
-        // ignore: avoid_print
-        print('[Ad/Rewarded] Nachladen fehlgeschlagen -> "Werbung nicht verfügbar" wird zurückgegeben');
         return false;
       }
     }
@@ -113,37 +83,26 @@ class AdService {
     final fertig = Completer<bool>();
     _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
-        // ignore: avoid_print
-        print('[Ad/Rewarded] onAdDismissedFullScreenContent — wurdeBelohnt=$wurdeBelohnt, lade nächstes Rewarded-Ad vor');
         ad.dispose();
         _rewardedAd = null;
         ladeRewardedAd(); // nächste Rewarded-Ad direkt vorladen
         if (!fertig.isCompleted) fertig.complete(wurdeBelohnt);
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
-        // ignore: avoid_print
-        print('[Ad/Rewarded] onAdFailedToShowFullScreenContent: $error');
         ad.dispose();
         _rewardedAd = null;
         if (!fertig.isCompleted) fertig.complete(false);
       },
     );
 
-    // ignore: avoid_print
-    print('[Ad/Rewarded] rufe _rewardedAd!.show() auf...');
     unawaited(_rewardedAd!.show(
       onUserEarnedReward: (ad, reward) {
-        // ignore: avoid_print
-        print('[Ad/Rewarded] onUserEarnedReward: type=${reward.type}, amount=${reward.amount}');
         wurdeBelohnt = true;
         onBelohnt();
       },
     ));
 
-    final ergebnis = await fertig.future;
-    // ignore: avoid_print
-    print('[Ad/Rewarded] zeigeRewardedAd() beendet, wurdeBelohnt=$ergebnis');
-    return ergebnis;
+    return fertig.future;
   }
 
   // ── INTERSTITIAL ────────────────────────────────────────────────────────
@@ -168,30 +127,16 @@ class AdService {
   /// passiert nichts (kein Fehler/Warten: Interstitials sind rein optional
   /// und dürfen den Nutzer nie blockieren).
   static Future<void> zeigeInterstitialFallsBereit() async {
-    // DEBUG (Bug 2 — Stationsbutton-Bug nach Level 5): jeden Schritt
-    // protokollieren, inkl. ob überhaupt ein vorgeladenes Interstitial
-    // bereitsteht und wie lange der await auf show() tatsächlich dauert.
-    // ignore: avoid_print
-    print('[Ad/Interstitial] zeigeInterstitialFallsBereit() gestartet, '
-        'kIsWeb=$kIsWeb, _interstitialAd==null: ${_interstitialAd == null}');
     if (kIsWeb) return;
-    if (_interstitialAd == null) {
-      // ignore: avoid_print
-      print('[Ad/Interstitial] kein vorgeladenes Ad vorhanden -> überspringe show()');
-      return;
-    }
+    if (_interstitialAd == null) return;
 
     _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
-        // ignore: avoid_print
-        print('[Ad/Interstitial] onAdDismissedFullScreenContent gefeuert');
         ad.dispose();
         _interstitialAd = null;
         ladeInterstitialAd();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
-        // ignore: avoid_print
-        print('[Ad/Interstitial] onAdFailedToShowFullScreenContent: $error');
         ad.dispose();
         _interstitialAd = null;
       },
@@ -204,8 +149,7 @@ class AdService {
     try {
       await _interstitialAd!.show();
     } catch (e, stack) {
-      // ignore: avoid_print
-      print('Interstitial Fehler (nicht kritisch): $e\n$stack');
+      debugPrint('Interstitial Fehler (nicht kritisch): $e\n$stack');
       _interstitialAd = null;
     }
   }
@@ -213,22 +157,19 @@ class AdService {
   // ── Seltener automatischer Interstitial-Trigger ────────────────────────
   //
   // Zwei Bedingungen MÜSSEN beide erfüllt sein (verhindert zu häufige UND
-  // erzwingt nicht zu seltene Anzeigen): mindestens 5 abgeschlossene
+  // erzwingt nicht zu seltene Anzeigen): mindestens 4 abgeschlossene
   // Lernpfad-Stationen seit der letzten Anzeige UND mindestens 5 Minuten
   // seit der letzten Anzeige vergangen.
 
   static const _kStationenSeitAd = 'stationen_seit_letzter_ad';
   static const _kLetzteAdZeitpunkt = 'letzte_ad_zeitpunkt';
-  static const _kMindestStationen = 5;
+  static const _kMindestStationen = 4;
   static const _kMindestMinuten = 5;
 
   /// Nach JEDEM Abschluss einer Lernpfad-Station aufrufen (nie mitten in
   /// einer laufenden Frage) — erhöht den Stationszähler und zeigt bei
   /// Bedarf ein Interstitial.
   static Future<void> pruefeUndZeigeInterstitial() async {
-    final startZeit = DateTime.now();
-    // ignore: avoid_print
-    print('[Ad/Interstitial] pruefeUndZeigeInterstitial() aufgerufen um $startZeit');
     final prefs = await SharedPreferences.getInstance();
 
     final stationenSeitAd = (prefs.getInt(_kStationenSeitAd) ?? 0) + 1;
@@ -240,25 +181,67 @@ class AdService {
         DateTime.now().difference(DateTime.parse(letzteAdZeit)).inMinutes >=
             _kMindestMinuten;
 
-    // ignore: avoid_print
-    print('[Ad/Interstitial] stationenSeitAd=$stationenSeitAd '
-        '(Schwelle $_kMindestStationen), letzteAdZeit=$letzteAdZeit, '
-        'genugStationen=$genugStationen, genugZeitVergangen=$genugZeitVergangen');
 
     if (genugStationen && genugZeitVergangen) {
-      // ignore: avoid_print
-      print('[Ad/Interstitial] Bedingungen erfüllt -> zeigeInterstitialFallsBereit() wird aufgerufen');
       await zeigeInterstitialFallsBereit();
       await prefs.setInt(_kStationenSeitAd, 0);
       await prefs.setString(
           _kLetzteAdZeitpunkt, DateTime.now().toIso8601String());
     } else {
-      // ignore: avoid_print
-      print('[Ad/Interstitial] Bedingungen NICHT erfüllt -> kein Ad-Versuch diesmal');
     }
-    // ignore: avoid_print
-    print('[Ad/Interstitial] pruefeUndZeigeInterstitial() beendet nach '
-        '${DateTime.now().difference(startZeit).inMilliseconds}ms');
+  }
+
+  // ── Interstitial nach Tages-Challenges ─────────────────────────────────
+  //
+  // Unabhängig vom Stationszähler: einmal, sobald die zweite Tages-Challenge
+  // des Tages erledigt ist, und einmal, sobald alle erledigt sind. Die
+  // gesetzten Marken hängen am Tagesdatum, damit pro Tag höchstens diese
+  // zwei Anzeigen entstehen — auch wenn eine Challenge (z.B. nach dem
+  // Debug-Zurücksetzen) ein zweites Mal abgeschlossen wird.
+  //
+  // Die 5-Minuten-Sperre der Stations-Interstitials gilt hier bewusst NICHT:
+  // Wer die vier Challenges am Stück durchspielt, käme sonst nie über die
+  // zweite Marke hinaus. Der Zeitstempel wird trotzdem gesetzt und der
+  // Stationszähler zurückgesetzt, damit unmittelbar danach nicht noch ein
+  // Stations-Interstitial hinterherkommt.
+
+  static const _kChallengeAdMarken = 'challenge_ad_marken';
+
+  /// Nach jedem Abschluss einer Tages-Challenge aufrufen (zentral aus
+  /// DailyChallenge.markDone). [erledigteHeute] ist die Anzahl der heute
+  /// bereits erledigten Challenges inklusive der gerade abgeschlossenen,
+  /// [gesamtAnzahl] die Anzahl aller Tages-Challenges.
+  static Future<void> pruefeUndZeigeInterstitialNachChallenge(
+    int erledigteHeute,
+    int gesamtAnzahl,
+  ) async {
+    final schwelle = erledigteHeute >= gesamtAnzahl
+        ? 'alle'
+        : (erledigteHeute >= 2 ? 'zwei' : null);
+    if (schwelle == null) return;
+
+    final jetzt = DateTime.now();
+    final tag = '${jetzt.year}-${jetzt.month.toString().padLeft(2, '0')}-'
+        '${jetzt.day.toString().padLeft(2, '0')}';
+    final marke = '$tag:$schwelle';
+
+    final prefs = await SharedPreferences.getInstance();
+    final marken = prefs.getStringList(_kChallengeAdMarken) ?? const <String>[];
+    if (marken.contains(marke)) {
+      return;
+    }
+
+    await zeigeInterstitialFallsBereit();
+
+    // Nur die Marken von heute behalten — die Liste soll nicht mitwachsen.
+    await prefs.setStringList(_kChallengeAdMarken, [
+      for (final m in marken)
+        if (m.startsWith('$tag:')) m,
+      marke,
+    ]);
+    await prefs.setInt(_kStationenSeitAd, 0);
+    await prefs.setString(
+        _kLetzteAdZeitpunkt, DateTime.now().toIso8601String());
   }
 
   // ── UMP (User Messaging Platform) — GDPR/EEA-Einwilligung ───────────────

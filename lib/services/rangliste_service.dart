@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../data/abzeichen_data.dart';
 import 'abzeichen_service.dart';
 import 'auth_service.dart';
@@ -89,7 +91,7 @@ class RanglisteService {
         });
       }
     } catch (e) {
-      print('Rangliste speichern Fehler: $e');
+      debugPrint('Rangliste speichern Fehler: $e');
     }
   }
 
@@ -133,7 +135,7 @@ class RanglisteService {
       // Einzelne Dokumente können hier per Regel abgelehnt werden (z.B. noch
       // keine 14 Tage alt durch Zeitzonen-Grenzfälle) — das darf das
       // eigentliche Speichern oben nicht beeinträchtigen, daher nur loggen.
-      print('Rangliste-Bereinigung Fehler: $e');
+      debugPrint('Rangliste-Bereinigung Fehler: $e');
     }
   }
 
@@ -166,14 +168,14 @@ class RanglisteService {
           uid: d['uid'] ?? '',
           name: d['anzeigename'] ?? 'Spieler',
           wert: d['punkte'] ?? 0,
-          istIch: d['uid'] == AuthService.uid,
+          istIch: _istIch(d['uid']),
           topAbzeichen: d['topAbzeichen'] as String?,
           profilbildPfad: d['profilbild'] as String?,
           zusatzWert: d['zusatzWert'] as num?,
         );
       }).toList();
     } catch (e) {
-      print('Rangliste laden Fehler: $e');
+      debugPrint('Rangliste laden Fehler: $e');
       return [];
     }
   }
@@ -217,7 +219,7 @@ class RanglisteService {
 
       return (platz: platz, gesamt: gesamt);
     } catch (e) {
-      print('Platz laden Fehler: $e');
+      debugPrint('Platz laden Fehler: $e');
       return null;
     }
   }
@@ -234,7 +236,7 @@ class RanglisteService {
         'profilbild': pfad,
       }, SetOptions(merge: true));
     } catch (e) {
-      print('Profilbild aktualisieren Fehler: $e');
+      debugPrint('Profilbild aktualisieren Fehler: $e');
     }
   }
 
@@ -259,7 +261,7 @@ class RanglisteService {
         'profilbild': profilbild,
       });
     } catch (e) {
-      print('Portfolio Kapital speichern Fehler: $e');
+      debugPrint('Portfolio Kapital speichern Fehler: $e');
     }
   }
 
@@ -279,13 +281,13 @@ class RanglisteService {
           uid: d['uid'] ?? '',
           name: d['anzeigename'] ?? 'Spieler',
           wert: d['kapital'] ?? 0,
-          istIch: d['uid'] == AuthService.uid,
+          istIch: _istIch(d['uid']),
           topAbzeichen: d['topAbzeichen'] as String?,
           profilbildPfad: d['profilbild'] as String?,
         );
       }).toList();
     } catch (e) {
-      print('Portfolio Alltime Fehler: $e');
+      debugPrint('Portfolio Alltime Fehler: $e');
       return [];
     }
   }
@@ -318,9 +320,24 @@ class RanglisteService {
 
       return (platz: platz, gesamt: gesamt);
     } catch (e) {
-      print('Portfolio-Platz laden Fehler: $e');
+      debugPrint('Portfolio-Platz laden Fehler: $e');
       return null;
     }
+  }
+
+  /// Gehört dieser Ranglisten-Eintrag dem angemeldeten Spieler?
+  ///
+  /// Verglichen wird die uid, nicht der Anzeigename — Namen sind zwar
+  /// reserviert (siehe anzeigenamen_reserviert), aber sie ändern sich, und
+  /// ein alter Eintrag trägt dann noch den alten.
+  ///
+  /// DIE null-PRÜFUNG IST NICHT ÜBERFLÜSSIG: Ohne sie ergäbe `null == null`
+  /// true. Wer nicht angemeldet ist ([AuthService.uid] ist null), hätte dann
+  /// jeden Alt-Eintrag ohne uid-Feld als "seinen" markiert bekommen — grün
+  /// hinterlegt, mit dem eigenen Profilbild daneben.
+  static bool _istIch(Object? uidImEintrag) {
+    final ich = AuthService.uid;
+    return ich != null && uidImEintrag == ich;
   }
 }
 

@@ -53,13 +53,56 @@ enum LernModus {
 /// Sitzungs-Service (beim Merken) als auch der Fortschritts-Service (beim
 /// Einsammeln) greifen darauf zu, und beide importieren diese Datei ohnehin.
 /// Weitere Modi lassen sich hier eintragen, ohne andere Stellen anzufassen.
-const Set<LernModus> kOhneWiederholung = {
-  LernModus.flaechenVergleich,
-  LernModus.zweiWahrheiten,
-  LernModus.wasGehoertNichtDazu,
-  LernModus.laenderRanking,
-  LernModus.nachbarschaftsKette,
+/// Die Modi, deren falsche Fragen in die Wiederholungsrunde am Ende eines
+/// Abschnitts wandern.
+///
+/// NUR AUSWENDIGLERNEN: Flagge, Umriss und Hauptstadt eines Landes sind
+/// Fakten, die sitzen sollen — dieselbe Frage ein zweites Mal vorgelegt zu
+/// bekommen ist dort genau der Zweck. Alle drei stehen mit ihren Varianten
+/// drin (Bild, Auswahl, Eingabe), denn gelernt wird das Land, nicht die
+/// Abfrageform.
+///
+/// Bewusst als POSITIV-Liste, obwohl die Sperre [kOhneWiederholung] heisst:
+/// Ein neuer Modus soll standardmässig OHNE Wiederholung laufen. Wer ihn
+/// dazunehmen will, trägt ihn hier bewusst ein — andersherum hätte jeder
+/// vergessene Eintrag stillschweigend Wiederholungen erzeugt.
+const Set<LernModus> kModiMitWiederholung = {
+  LernModus.flaggenQuizBild,
+  LernModus.flaggenQuizMultiple,
+  LernModus.flaggenQuizEingabe,
+  LernModus.umrissBild,
+  LernModus.umrissMultiple,
+  LernModus.umrissEingabe,
+  LernModus.hauptstaedteMultiple,
+  LernModus.hauptstaedteEingabe,
 };
+
+/// Alles andere — Schätzen, Spielen, Zufallswissen.
+///
+/// Vorher standen hier nur fünf Modi von Hand. Wiederholt wurden dadurch auch
+/// Fragen, bei denen das nichts bringt: Wer eine Einwohnerzahl daneben
+/// geschätzt oder einen Zufallsfakt nicht gewusst hat, lernt nichts daraus,
+/// dieselbe Frage gleich noch einmal zu sehen.
+///
+/// DIE SPERRE GILT AN ZWEI STELLEN, und beide sind nötig:
+///  1. INNERHALB der Station — eine falsch beantwortete Frage wandert nicht
+///     zurück in die Warteschlange, es geht direkt weiter
+///     ([StationSession.falscheAntwortVerarbeiten]).
+///  2. Am ABSCHNITTSENDE — sie kommt nicht in die Wiederholungsrunde
+///     ([StationSession.falscheAntwortVerarbeiten] beim Merken,
+///     [FortschrittService.sammelFalscheFragenFuerAbschnitt] als Filter für
+///     Einträge aus der Zeit davor).
+///
+/// DIE STERNEZAHL BLEIBT GLEICH. Vergeben wird ein Stern je BEANTWORTETER
+/// Frage, nicht je richtiger ([StationSession.sterneBasis]). Ohne das wäre
+/// die Station stillschweigend teurer geworden: Solange eine falsche Frage
+/// zurückkam, war am Ende jede Frage einmal richtig — jetzt ist ein Fehler
+/// endgültig, und aus 6 Fragen wären 5 Sterne geworden. Die
+/// Wiederholungsrunde selbst vergibt ohnehin keine Sterne, sie läuft über
+/// wiederholungAbschliessen() und kommt an der Sternevergabe nie vorbei.
+final Set<LernModus> kOhneWiederholung = LernModus.values
+    .where((m) => !kModiMitWiederholung.contains(m))
+    .toSet();
 
 // ── Klassen ───────────────────────────────────────────────────────────────────
 
@@ -296,24 +339,40 @@ const Map<String, Set<LernModus>> kModusSperrenProWelt = {
 /// Bewusst eine Liste je MODUS und keine Modus-mal-Welt-Matrix: letztere
 /// haette 21 x 7 Felder, von denen fast alle denselben Wert truegen, und
 /// muesste bei jedem neuen Modus komplett durchgesehen werden.
-/// nachbarschaftsKette steht bewusst NICHT hier: gemessen liegt ihre Grenze
-/// bei 10, der Modus läuft aber nur in Welten mit höchstens 9 Fragen
-/// (Europa 8, Asien 8, Welt 8, Afrika 9, Südamerika über die Ausnahme
-/// unten). Ein Eintrag wäre wirkungslos. Bekäme eine Welt je mehr als 10
-/// Fragen, müsste er nachgetragen werden — darüber wiederholen sich
-/// Start-Ziel-Paare im selben Länderblock.
+/// ── Warum die Spiel-Modi kürzer sind als die Lern-Modi ────────────────────
+///
+/// Die Fragenzahl kam bis zuletzt fast überall aus der Welt-Vorgabe (6 bis 9)
+/// — unabhängig davon, wie lange eine einzelne Frage dauert. Das ging bei
+/// Flaggen, Umrissen und Hauptstädten auf (antippen, weiter), bei den
+/// Spiel-Modi nicht: Wer einen Weg über drei bis fünf Nachbarländer baut,
+/// braucht dafür ein Vielfaches der Zeit eines Flaggen-Tipps. Eine
+/// Ketten-Station in Afrika dauerte damit geschätzt sechs- bis siebenmal so
+/// lang wie eine Flaggen-Station — bei gleicher Belohnung.
+///
+/// Die Zahlen unten sind an der Art der Aufgabe ausgerichtet, nicht an der
+/// Welt. Nach unten gedeckelt sind sie durch den Punkteraum: Unter vier bis
+/// fünf Fragen wiegt ein einzelner Fehlgriff zu schwer, und eine Station mit
+/// drei Sternen fühlt sich nach nichts an.
 const Map<LernModus, int> kFragenObergrenze = {
   // Fuenf Laender sortieren dauert laenger als eine Frage beantworten.
   LernModus.sortierSpiel: 3,
+  // Der teuerste Modus: ein Weg über 3 bis 5 Nachbarländer je Frage
+  // (kKetteMinSchritte/kKetteMaxSchritte). Südamerika lief schon vorher auf
+  // 4 — dort aus Datengründen, weil der Graph für mehr zu dicht ist. Die
+  // Sonderregel ist damit hinfällig.
+  LernModus.nachbarschaftsKette: 4,
+  // Zielvorgang mit Auflösungs-Fahrt je Frage. Fünf reichen für ein Gefühl
+  // fürs Feld; dieselbe Länge hat die Tages-Challenge.
+  LernModus.laenderRanking: 5,
+  // Gleiche Mechanik wie das grosse Schätzen, dort sind es ebenfalls 5.
+  LernModus.preisSchaetzen: 5,
+  // Denkaufgaben mit Lesetext — sechs davon sind eine Runde, neun ermüden.
+  LernModus.grenzkettenRaetsel: 6,
+  LernModus.zweiWahrheiten: 6,
+  LernModus.wasGehoertNichtDazu: 6,
   // Mehr Paare mit brauchbarem Groessenverhaeltnis gibt Afrika nicht her.
   LernModus.flaechenVergleich: 7,
 };
-
-/// Einzige Ausnahme von [kFragenObergrenze]: In Suedamerika liegen zwischen
-/// zwei beliebigen Laendern hoechstens drei Grenzuebertritte, der Graph ist
-/// zu dicht fuer mehr Aufgaben. Ein zweiter Eintrag dieser Art waere der
-/// Punkt, an dem sich eine richtige Tabelle lohnt.
-const int kKetteFragenSuedamerika = 4;
 
 List<LernModus> modiFuerLevel(int level) => switch (level) {
       1 => _modiEinsteiger,
@@ -651,9 +710,7 @@ LernStation _st(
   // Obergrenze des Modus gegen die Vorgabe der Welt — die kleinere gewinnt.
   // Eine Welt mit 6 Fragen bekommt also keine 10, nur weil der Modus sie
   // vertragen wuerde.
-  final grenze = (m == LernModus.nachbarschaftsKette && wid == 'suedamerika')
-      ? kKetteFragenSuedamerika
-      : kFragenObergrenze[m];
+  final grenze = kFragenObergrenze[m];
   return LernStation(
     id: '${wid}_${a}_${i.toString().padLeft(2, '0')}',
     modus: m,

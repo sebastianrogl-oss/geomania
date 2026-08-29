@@ -17,6 +17,12 @@ class ChallengeErgebnisService {
     await prefs.setString(_key(id), jsonEncode(detail));
   }
 
+  /// DEBUG: Wirft das gespeicherte Detail-Ergebnis von heute weg.
+  static Future<void> debugLoeschen(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key(id));
+  }
+
   static Future<Map<String, dynamic>?> laden(String id) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key(id));

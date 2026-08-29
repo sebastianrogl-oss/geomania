@@ -22,6 +22,7 @@ List<Widget> _maskottchenOverlays({
   required String fehlerLabel,
   double size = 315.0,
   double abstandOffset = 0.0,
+  double ueberstand = 0.0,
 }) {
   final overlays = <Widget>[];
   final mitte = screenWidth / 2;
@@ -37,10 +38,16 @@ List<Widget> _maskottchenOverlays({
     // optisch näher an der Mitte saßen als die Wahrzeichen. abstandOffset
     // erlaubt einen bewussten Versatz gegenüber diesem gemeinsamen Basiswert
     // (z.B. Coins etwas weiter außen als Wahrzeichen).
+    // Der Klammergriff am Bildschirmrand darf um [ueberstand] gelockert
+    // werden. Das ist der eigentliche Hebel für die Aussenlage: Auf jedem
+    // Handy ist [abstand] so gross, dass die Klammer ohnehin greift — der
+    // Kasten liegt bündig am Rand, und ein grösserer abstandOffset änderte
+    // dort gar nichts. Beides zusammen verschiebt die Figur auf schmalen wie
+    // auf breiten Bildschirmen gleich weit nach aussen.
     final links = a.pos.dx > mitte;
     final left = links
-        ? (mitte - abstand - size).clamp(0.0, screenWidth - size)
-        : (mitte + abstand).clamp(0.0, screenWidth - size);
+        ? (mitte - abstand - size).clamp(-ueberstand, screenWidth - size)
+        : (mitte + abstand).clamp(0.0, screenWidth - size + ueberstand);
     overlays.add(Positioned(
       left: left,
       top: a.pos.dy - size / 2,
@@ -71,8 +78,7 @@ List<Widget> _maskottchenOverlays({
           height: size,
           fit: BoxFit.contain,
           errorBuilder: (ctx, err, stack) {
-            // ignore: avoid_print
-            print('$fehlerLabel FEHLER: $err');
+            debugPrint('$fehlerLabel FEHLER: $err');
             return const SizedBox.shrink();
           },
         ),
@@ -82,6 +88,19 @@ List<Widget> _maskottchenOverlays({
 
   return overlays;
 }
+
+/// Wie weit die Coiny-Figuren weiter nach aussen rücken als zuvor.
+///
+/// Sie sassen sichtbar weiter innen als die übrigen Karikaturen am Rand.
+///
+/// ABGESCHNITTEN WIRD DABEI NICHTS: Die coin_*.png sind 677x369 gross, die
+/// Figur darin sitzt bei (220,70) und ist 238x273 gross. Bei der Anzeigegrösse
+/// 264,6 (BoxFit.contain, also Faktor 264,6/677 = 0,391) bleiben links wie
+/// rechts durchsichtiger Rand — am knappsten bei coin_winken mit 55,9 px.
+/// Die 30 px Überstand liegen vollständig darin. Siehe den Test in
+/// test/pfad_maskottchen_test.dart, der den Rand aus der Datei nachmisst,
+/// statt sich auf diese Zahlen zu verlassen.
+const double _kCoinyNachAussen = 30.0;
 
 /// Gibt eine Abschnitts-Münze pro Sektion zurück, neben der Anker-Position.
 List<Widget> pfadMaskottchenOverlays({
@@ -93,7 +112,8 @@ List<Widget> pfadMaskottchenOverlays({
       varianten: _coinVarianten,
       fehlerLabel: 'MÜNZE',
       size: 264.6,
-      abstandOffset: 60.0,
+      abstandOffset: 60.0 + _kCoinyNachAussen,
+      ueberstand: _kCoinyNachAussen,
     );
 
 /// Gibt einen Globus pro Sektion zurück, neben der Anker-Position.

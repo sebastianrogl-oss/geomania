@@ -10,13 +10,13 @@ import '../services/daily_challenge.dart';
 import '../services/daily_resume_service.dart';
 import '../services/tages_seed_service.dart';
 import '../services/rangliste_service.dart';
-import '../services/sound_service.dart';
+import '../services/knopf_rueckmeldung.dart';
 import '../widgets/abzeichen_popup.dart';
 import '../widgets/challenge_ergebnis_header.dart';
 import '../widgets/challenge_fertig_button.dart';
+import '../widgets/ergebnis_karten.dart';
 import '../widgets/rangliste_ergebnis_karte.dart';
 import '../widgets/flaggen_widget.dart' show zeigeFlagge;
-import '../widgets/rekord_badge.dart';
 import '../widgets/spiel_erklaerung.dart';
 import '../theme/app_theme.dart';
 
@@ -43,6 +43,81 @@ class _Zuordnung {
 }
 
 // ── Kategorie-Button ──────────────────────────────────────────────────────────
+
+/// Flagge und Ländername über den Kategorie-Knöpfen — die Frage der Runde.
+///
+/// ── Warum der Name umbrechen darf ────────────────────────────────────────
+///
+/// Er stand in einer zentrierten Row neben der Flagge, ohne Flexible. Bei
+/// „Demokratische Republik Kongo" in 20er Fettschrift reicht das über den
+/// Bildschirm hinaus, und Flutter malt den gelb-schwarzen Überlaufbalken über
+/// die halbe Zeile.
+///
+/// Drei Wege standen zur Wahl:
+///
+///  * ABSCHNEIDEN mit Ellipse — fällt aus. Der Ländername IST die Frage; wer
+///    „Demokratische Republik …" liest, weiss nicht, wonach gefragt wird.
+///  * VERKLEINERN mit FittedBox — die längsten Namen würden dabei auf gut die
+///    halbe Schriftgrösse schrumpfen und ständen kleiner da als die
+///    Kategorie-Knöpfe darunter, obwohl sie die Hauptsache sind. Ausserdem
+///    hätte dann jede Runde eine andere Schriftgrösse.
+///  * UMBRECHEN auf zwei Zeilen — gewählt. Die Schrift bleibt, wie sie ist,
+///    der Name bleibt vollständig lesbar, und die Kopfzeile wächst um eine
+///    Zeilenhöhe. Das kann sie: Sie sitzt in einer Column über einem
+///    Expanded, ihre Höhe ist nirgends festgeschrieben.
+///
+/// Die Ellipse bleibt als letzte Sicherung für den Fall, dass jemand bei
+/// sehr grosser Systemschrift auch mit zwei Zeilen nicht hinkommt — dann
+/// lieber gekürzt als überlaufend.
+///
+/// Öffentlich, damit der Test ihn ohne den ganzen Screen bauen kann: Welches
+/// Land drankommt, entscheidet der Tagesseed, ein langer Name lässt sich also
+/// nicht bestellen.
+class RankingLandKopf extends StatelessWidget {
+  final String iso2;
+  final String name;
+
+  const RankingLandKopf({super.key, required this.iso2, required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 72,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAEAE5),
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Center(
+            child: zeigeFlagge(iso2, width: 64, height: 42, borderRadius: 4),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Flexible(
+          child: Text(
+            name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1A1A1A)),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _KatButton extends StatefulWidget {
   final String emoji;
@@ -419,7 +494,7 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
     if (_verwendeteKategorien.contains(katId)) return;
     if (_aktuellerIndex >= _laender.length) return;
     // Nur der Knopfklang — richtig/falsch bleibt in den Challenges stumm.
-    SoundService.spiele(Klang.knopf);
+    knopfRueckmeldung();
 
     final land = _laender[_aktuellerIndex];
     final kat = _tagesKats.firstWhere((k) => k.id == katId);
@@ -444,7 +519,10 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
 
   Future<void> _abschliessen() async {
     // Alle Länder zugeordnet — die Challenge ist geschafft.
-    SoundService.spiele(Klang.sieg);
+    //
+    // Der Sieg-Klang kommt erst ganz unten, hinter dem Abzeichen-Popup:
+    // Sonst liefe er hinter der Abzeichen-Animation ab, und bei der
+    // Auflösung selbst waere es still.
     final pts = _gesamtPunkte();
     _neuerRekord = await ChallengeRekordService.setzeFallsBesser(_kId, pts);
     await ChallengeRekordService.speichereHeutigePunkte(_kId, pts);
@@ -578,6 +656,10 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
                     ),
                   ),
                 ),
+                // KEIN SPIELNAME in der Leiste — dieselbe Entscheidung wie in
+                // den drei anderen Challenges. Er stand hier kurzzeitig; die
+                // Leiste trägt jetzt nur die beiden Knöpfe, der Punktestand
+                // steht mittig darunter.
                 const Spacer(),
                 ErklaerungButton(
                   titel: t('Ranking-Quiz — Spielregeln'),
@@ -665,42 +747,7 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 72,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAEAE5),
-                  borderRadius: BorderRadius.circular(6),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: zeigeFlagge(
-                    land.iso2,
-                    width: 64,
-                    height: 42,
-                    borderRadius: 4,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Text(
-                land.name,
-                style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1A1A1A)),
-              ),
-            ],
-          ),
+          RankingLandKopf(iso2: land.iso2, name: land.name),
           const SizedBox(height: 8),
           Text(
             t('Wähle die beste Kategorie:'),
@@ -814,12 +861,11 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                RekordBadge(
-                  neuerRekord: _neuerRekord,
-                  rekordText:
-                      _rekord != null ? t('{n} Pkt.', {'n': '$_rekord'}) : null,
-                ),
-                const SizedBox(height: 16),
+                // Der eigene Bestwert stand hier und ist raus — in allen vier
+                // Challenges. Er sagt im Moment des Ergebnisses wenig: Wer
+                // gerade gespielt hat, will seine Punktzahl sehen und den
+                // Vergleich mit den anderen, nicht eine zweite Zahl daneben.
+                const SizedBox(height: 8),
                 RanglisteErgebnisKarte(
                   challengeId: 'ranking',
                   eigenerWert: gesamtPunkte,
@@ -853,21 +899,83 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
             child: Divider(color: Color(0xFFD0CEC8)),
           ),
           const SizedBox(height: 4),
+          // Die Auflösung als wischbarer Kartenstapel statt als Scrollliste —
+          // dieselbe Bauform wie bei den anderen drei Tages-Challenges und
+          // beim Willkommens-Screen (siehe ergebnis_karten.dart). Kopf,
+          // Punktzahl und Fertig-Knopf bleiben, wo sie waren.
           Expanded(
-            child: SingleChildScrollView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              child: Column(
-                children: [
-                  ..._tagesKats.map((kat) {
-                    final spieler = _zuordnungen[kat.id];
-                    final ideal = idealProKat[kat.id];
-                    final korrekt = spieler != null &&
-                        ideal != null &&
-                        spieler.land.iso2 == ideal.land.iso2;
+            child: Builder(builder: (context) {
+              // Ein Kategorie-Block ist deutlich höher als eine Textzeile:
+              // Titelzeile, Trenner und darunter zwei Spalten mit Flagge,
+              // Ländername und Rang — ausgemessen rund 130.
+              final proKarte = wischZeilenProKarte(context,
+                  zeilenHoehe: 130, abzugOben: 230, hoechstens: 3);
+              final gruppen = <List<RankingCategory>>[];
+              for (var i = 0; i < _tagesKats.length; i += proKarte) {
+                gruppen.add(_tagesKats.sublist(
+                    i,
+                    i + proKarte > _tagesKats.length
+                        ? _tagesKats.length
+                        : i + proKarte));
+              }
+              return WischKartenStapel(
+                karten: [
+                  for (final gruppe in gruppen)
+                    // Die Blöcke stehen mittig auf der Karte und mit gleichem
+                    // Abstand zueinander, statt oben angeklebt: spaceEvenly
+                    // verteilt sie über die ganze Kartenhöhe.
+                    //
+                    // Kein Notfall-Scrollen: Ein Scrollbereich hat keine
+                    // feste Höhe, und ohne die kann spaceEvenly nichts
+                    // verteilen. Dass es passt, sichert die Rechnung oben —
+                    // bei grosser Schrift gibt sie weniger Blöcke je Karte
+                    // aus, statt eine Karte zu überfüllen.
+                    (context, hoehe) => WischKarte(
+                          innenrand: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final kat in gruppe)
+                                _katBlock(kat, idealProKat),
+                            ],
+                          ),
+                        ),
+                ],
+              );
+            }),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
+              children: [
+                ChallengeFertigButton(
+                    onTap: () => ChallengePanelSignal.zurueckZumPanel(context)),
+                const SizedBox(height: 12),
+                Text(t('Morgen wieder verfügbar'),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
+  /// Ein Kategorie-Block der Auflösung: Wahl des Spielers gegen die ideale.
+  Widget _katBlock(
+      RankingCategory kat, Map<String, _Zuordnung> idealProKat) {
+    final spieler = _zuordnungen[kat.id];
+    final ideal = idealProKat[kat.id];
+    final korrekt = spieler != null &&
+        ideal != null &&
+        spieler.land.iso2 == ideal.land.iso2;
+
+    return Container(
+                      // Ohne eigenen Aussenabstand: Den Abstand zwischen den
+                      // Blöcken macht spaceEvenly auf der Karte, ein zweiter
+                      // von hier käme oben drauf und schöbe die Verteilung
+                      // aus der Mitte.
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -968,27 +1076,6 @@ class _RankingGameScreenState extends State<RankingGameScreen> {
                           ),
                         ],
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(
-              children: [
-                ChallengeFertigButton(
-                    onTap: () => ChallengePanelSignal.zurueckZumPanel(context)),
-                const SizedBox(height: 12),
-                Text(t('Morgen wieder verfügbar'),
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

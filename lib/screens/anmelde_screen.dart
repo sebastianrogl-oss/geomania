@@ -41,14 +41,23 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
       _fehler = null;
     });
     final ergebnis = await anmeldung();
+    // Der Erfolgsfall steht bewusst VOR der mounted-Prüfung: Sobald die
+    // Anmeldung durch ist, meldet authStateChanges das dem StartWrapper, der
+    // tauscht diesen Screen sofort aus — und dieses State-Objekt ist bereits
+    // abgeräumt, wenn wir hier ankommen. Hinter einem `if (!mounted) return;`
+    // wurde spielerAnlegen() deshalb nie erreicht, und das Konto blieb ohne
+    // Gegenstück in der Datenbank zurück.
+    if (ergebnis == AnmeldeErgebnis.erfolgreich) {
+      // Das spieler-Dokument sofort anlegen, damit ein Abbruch VOR der
+      // Namensauswahl kein Konto ohne Gegenstück in der Datenbank
+      // hinterlässt.
+      await AuthService.spielerAnlegen();
+      if (mounted) widget.onAngemeldet();
+      return;
+    }
     if (!mounted) return;
     switch (ergebnis) {
       case AnmeldeErgebnis.erfolgreich:
-        // Das spieler-Dokument sofort anlegen, damit ein Abbruch VOR der
-        // Namensauswahl kein Konto ohne Gegenstück in der Datenbank
-        // hinterlässt.
-        await AuthService.spielerAnlegen();
-        if (mounted) widget.onAngemeldet();
         return;
       case AnmeldeErgebnis.abgebrochen:
         // Kein Fehler — wer den Dialog wegwischt, steht einfach wieder hier.
@@ -81,6 +90,15 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Stack(
+              // Wie beim Stack in GradnetzHintergrund: ohne fit bemisst sich
+              // der Stack an seinem einzigen nicht positionierten Kind, dem
+              // Scrollbereich — und der schrumpft auf seine Inhaltsbreite.
+              // Der Sprachumschalter daneben ist Positioned und zählt nicht
+              // mit. Beide Stacks brauchen das fit; das äussere allein reicht
+              // nicht, dann bleibt zwar die Hintergrundfläche breit, der
+              // Inhalt sitzt aber trotzdem in einem schmalen, linksbündigen
+              // Kasten.
+              fit: StackFit.expand,
               children: [
                 SingleChildScrollView(
                   padding: const EdgeInsets.all(24),

@@ -174,6 +174,13 @@ class HaptikService {
   /// Übernimmt den Schalter aus den Einstellungen.
   static void setzeAktiv(bool aktiv) => _an = aktiv;
 
+  /// Käme ein Stoß überhaupt an? Schalter an UND Motor vorhanden.
+  ///
+  /// Genau die Bedingung, unter der [spiele] etwas tut — hier nur nach aussen
+  /// gelegt, damit ein Aufrufer einen Ersatz anbieten kann, statt stumm ins
+  /// Leere zu greifen (siehe [knopfRueckmeldung]).
+  static bool get kannVibrieren => _an && _hatVibrator;
+
   /// Ein einzelner Stoß.
   ///
   /// Bewusst NICHT awaited aufzurufen: Die Haptik ist Beiwerk und soll den

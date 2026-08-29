@@ -8,4 +8,7 @@ const Map<String, String> uebersetzungenRangliste = {
   'Gesamt': 'All-time',
   'Noch keine Einträge heute — sei der Erste!': 'No entries yet today — be the first!',
   'Keine Daten für diesen Tag': 'No data for this day',
+  // Unter der eigenen Zeile: der eigene Platz und wie viele Spieler
+  // insgesamt gewertet sind.
+  'Dein Platz: #{p} von {g}': 'Your rank: #{p} of {g}',
 };

@@ -28,6 +28,11 @@ class DailyResumeService {
     }
   }
 
+  /// DEBUG: Wie [loeschen] — eigener Name, damit im Aufrufer sichtbar bleibt,
+  /// dass es sich um das Zurücksetzen und nicht um den regulären Abschluss
+  /// handelt.
+  static Future<void> debugLoeschen(String id) => loeschen(id);
+
   static Future<void> loeschen(String id) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_key(id));

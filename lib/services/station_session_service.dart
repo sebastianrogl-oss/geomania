@@ -87,6 +87,18 @@ class StationSession {
   int richtigeAntworten;
   int falscheAntworten;
 
+  /// Grundlage der Sternevergabe: JEDE Frage zählt genau einmal, sobald sie
+  /// beantwortet ist — richtig oder falsch.
+  ///
+  /// Bis eben war das schlicht [richtigeAntworten], und das ging auf, weil
+  /// eine falsche Frage so lange zurück in die Warteschlange wanderte, bis
+  /// sie stimmte: Am Ende war jede Frage einmal richtig. Für die Modi in
+  /// [kOhneWiederholung] gilt das nicht mehr — dort ist eine falsche Antwort
+  /// endgültig. Ohne diesen Zähler würde eine Station mit 6 Fragen und einem
+  /// Fehler nur noch 5 Sterne geben, obwohl sich an der Station nichts
+  /// geändert hat.
+  int sterneBasis;
+
   StationSession({
     required this.stationId,
     required this.aktiveFragen,
@@ -96,6 +108,7 @@ class StationSession {
     this.aktuellerIndex = 0,
     this.richtigeAntworten = 0,
     this.falscheAntworten = 0,
+    this.sterneBasis = 0,
   }) : falscheFragen = falscheFragen ?? [];
 
   Frage? get aktuelleFrage =>
@@ -112,30 +125,45 @@ class StationSession {
 
   void richtigeAntwortVerarbeiten() {
     richtigeAntworten++;
+    // Ohne Bedingung, und das ist kein Versehen: Richtig beantwortet wird
+    // jede Frage höchstens einmal — danach ist sie aus der Warteschlange
+    // raus, und ein Duplikat lässt falscheAntwortVerarbeiten() gar nicht erst
+    // entstehen. Bei den Modi mit Wiederholung ist das zugleich der einzige
+    // Zeitpunkt, an dem die Frage für die Sterne zählt.
+    sterneBasis++;
     aktuellerIndex++;
   }
 
   /// FALSCHE ANTWORT: Frage genau einmal ans Ende hängen (kein Duplikat).
+  ///
+  /// AUSSER bei den Modi in [kOhneWiederholung] — dort ist der Fehler
+  /// endgültig und es geht zur nächsten Frage. Wer eine Einwohnerzahl daneben
+  /// geschätzt oder ein Länder-Ranking falsch sortiert hat, lernt nichts
+  /// daraus, dieselbe Aufgabe direkt noch einmal vorgelegt zu bekommen —
+  /// er hat die Lösung ja gerade gesehen.
   void falscheAntwortVerarbeiten() {
     final frage = aktuelleFrage;
     if (frage == null) return;
     falscheAntworten++;
+    final ohneWiederholung = kOhneWiederholung.contains(frage.modus);
+    // Für die Sterne zählt die Frage genau einmal. Bei den Modi MIT
+    // Wiederholung passiert das erst, wenn sie richtig beantwortet ist;
+    // hier ist es der einzige Zeitpunkt, an dem sie überhaupt vorkommt.
+    if (ohneWiederholung && frage.falschBeantwortet == 0) sterneBasis++;
     frage.falschBeantwortet++;
     frage.antwortOptionen = List.from(frage.antwortOptionen)..shuffle(_rng);
-    // Nur anhängen wenn noch kein Duplikat dieser Frage in der Queue wartet
-    final nochNichtDrin = !aktiveFragen
-        .skip(aktuellerIndex + 1)
-        .any((f) => f.id == frage.id);
-    if (nochNichtDrin) aktiveFragen.add(frage);
-    // falscheFragen ist der Pool der WIEDERHOLUNGSRUNDE (siehe
-    // falscheFragenAlsJson und FortschrittService.stationAbschliessen).
-    // Unterhaltungsmodi bleiben davon ausgenommen: das erneute Vorlegen
-    // derselben Frage bringt dort keinen Lerneffekt. Die Frage wird
-    // trotzdem noch einmal in DIESER Station gestellt (siehe oben) — das
-    // ist der reguläre zweite Versuch, keine Wiederholungsrunde.
-    if (!kOhneWiederholung.contains(frage.modus) &&
-        !falscheFragen.any((f) => f.id == frage.id)) {
-      falscheFragen.add(frage);
+    if (!ohneWiederholung) {
+      // Nur anhängen wenn noch kein Duplikat dieser Frage in der Queue wartet
+      final nochNichtDrin = !aktiveFragen
+          .skip(aktuellerIndex + 1)
+          .any((f) => f.id == frage.id);
+      if (nochNichtDrin) aktiveFragen.add(frage);
+      // falscheFragen ist der Pool der WIEDERHOLUNGSRUNDE am Abschnittsende
+      // (siehe falscheFragenAlsJson und FortschrittService.
+      // sammelFalscheFragenFuerAbschnitt). Dieselbe Auswahl, derselbe Grund.
+      if (!falscheFragen.any((f) => f.id == frage.id)) {
+        falscheFragen.add(frage);
+      }
     }
     aktuellerIndex++;
   }
@@ -158,6 +186,7 @@ class StationSession {
         'aktuellerIndex': aktuellerIndex,
         'richtigeAntworten': richtigeAntworten,
         'falscheAntworten': falscheAntworten,
+        'sterneBasis': sterneBasis,
       };
 
   factory StationSession.fromJson(Map<String, dynamic> json) => StationSession(
@@ -174,6 +203,12 @@ class StationSession {
         aktuellerIndex: json['aktuellerIndex'] as int? ?? 0,
         richtigeAntworten: json['richtigeAntworten'] as int? ?? 0,
         falscheAntworten: json['falscheAntworten'] as int? ?? 0,
+        // Sessions, die vor der Umstellung unterbrochen wurden, kennen das
+        // Feld nicht. Dort war die Sternegrundlage genau richtigeAntworten —
+        // damit läuft eine angefangene Station sauber zu Ende.
+        sterneBasis: json['sterneBasis'] as int? ??
+            json['richtigeAntworten'] as int? ??
+            0,
       );
 
   // ── Persistence ────────────────────────────────────────────────────────────
@@ -341,16 +376,85 @@ class FragenGenerator {
         (iso2) => _rankingWert(iso2, (r) => r.minimumWageUsd)),
   ];
 
-  // Wählt [n] Länder aus [pool], wiederholt wenn nötig (für kleine Listen).
-  static List<String> _pick(List<String> pool, int n) {
-    final shuffled = List.of(pool)..shuffle(_rng);
-    if (shuffled.length >= n) return shuffled.take(n).toList();
-    final result = <String>[];
-    while (result.length < n) {
-      result.addAll(shuffled.take(n - result.length));
+  // Wählt bis zu [n] VERSCHIEDENE Länder aus [pool].
+  //
+  // Füllte früher mit Wiederholungen auf, sobald der Pool kleiner war als
+  // [n] — daraus wurden in 48 der 594 Stationen doppelte Fragen: achtmal
+  // „Welche Währung hat dieses Land?" mit Serbien, siebenmal „Welches Land
+  // grenzt an Papua-Neuguinea?". Wer zu wenig Länder hat, bekommt jetzt
+  // weniger; das Auffüllen macht _erweitert() aus echten anderen Ländern.
+  static List<String> _pick(List<String> pool, int n) =>
+      (pool.toSet().toList()..shuffle(_rng)).take(n).toList();
+
+  // ── Auffüllen, wenn der Abschnitt allein nicht reicht ─────────────────────
+  //
+  // Jeder Modus siebt den Abschnitts-Pool erst auf das, was er braucht:
+  // Umriss vorhanden, Landgrenze vorhanden, Währung im Datensatz. Bleiben
+  // danach weniger als [n] Länder übrig, stockt diese Stelle [gewaehlt] auf
+  // — erst aus dem Kontinent des Abschnitts, dann aus der ganzen Welt,
+  // beides durch denselben Filter [taugt], der schon die Auswahl erzeugt hat.
+  //
+  // Zweite Stufe der Kette: Der Modus-Tausch (siehe _traegtAbschnitt) kommt
+  // VORHER und hat Vorrang — fremde Länder in einem Kontinent-Abschnitt sind
+  // die kleinere, aber immer noch spürbare Abweichung. Reicht auch das
+  // Auffüllen nicht, kommen eben weniger Länder zurück. Doppelt kommt nie
+  // etwas.
+  //
+  // Die Reihenfolge von [gewaehlt] bleibt, nur der Nachschub wird gemischt:
+  // Bei den Kern-Modi steckt in ihr der Schwierigkeits-Verlauf des
+  // Round-Robin-Zyklus (siehe _festeReihenfolge), den ein Mischen zerstören
+  // würde.
+  static List<String> _erweitert(
+    List<String> gewaehlt,
+    int n,
+    String kontinent,
+    bool Function(String) taugt,
+  ) {
+    final ergebnis = <String>[];
+    final drin = <String>{};
+    for (final c in gewaehlt) {
+      if (drin.add(c)) ergebnis.add(c);
     }
-    return result;
+    if (ergebnis.length >= n) return ergebnis.take(n).toList();
+
+    final stufen = <Iterable<String>>[
+      if (kontinent != 'Welt')
+        countries.where((c) => c.region == kontinent).map((c) => c.iso2),
+      countries.map((c) => c.iso2),
+    ];
+    for (final stufe in stufen) {
+      final nachschub = stufe.where((c) => !drin.contains(c) && taugt(c)).toList()
+        ..shuffle(_rng);
+      for (final c in nachschub) {
+        if (ergebnis.length >= n) break;
+        drin.add(c);
+        ergebnis.add(c);
+      }
+      if (ergebnis.length >= n) break;
+    }
+    return ergebnis;
   }
+
+  /// Trägt der Abschnitts-Pool diesen Modus überhaupt?
+  ///
+  /// Erste Stufe der Kette: Schafft der Abschnitt nicht einmal die Hälfte
+  /// der Fragen aus eigenen Ländern, wird der Modus getauscht statt der Pool
+  /// erweitert. Ein Umriss-Quiz in der Karibik, für das genau ein Umriss
+  /// vorliegt, wird so zum Flaggen-Quiz mit denselben sieben Ländern —
+  /// statt zu einem Umriss-Quiz über halb Südamerika.
+  ///
+  /// Die Hälfte ist die Grenze, weil die Station darunter ihr Thema ohnehin
+  /// nicht mehr trägt: Bei sieben Fragen und drei tauglichen Ländern käme
+  /// die Mehrheit von auswärts.
+  static bool _traegtAbschnitt(int vorhanden, int gebraucht) =>
+      vorhanden * 2 >= gebraucht;
+
+  /// Beim Auffüllen aus dem Kontinent oder der Welt muss die Hauptstadt auch
+  /// hinterlegt sein — sonst stünde die Frage ohne Antwort da. Im
+  /// Abschnitts-Pool selbst trifft das auf kein Land zu; die Prüfung gilt
+  /// dem Nachschub.
+  static bool _hatHauptstadt(String iso2) =>
+      (_country(iso2)?.capital ?? '').isNotEmpty;
 
   // ── Graduelle Schwierigkeits-Einmischung ──────────────────────────────────
   //
@@ -456,9 +560,15 @@ class FragenGenerator {
       // Im aktuell freigeschalteten Pool nicht genug unverbrauchte Länder
       // übrig -> mit bereits abgefragten (aus DIESEM Pool) auffüllen, OHNE
       // das Tracker-Set zurückzusetzen (kein Reset mehr pro Abschnitt).
-      final schonDa = eindeutigerPool.where((c) => bereits.contains(c)).toList();
+      //
+      // `rest` schliesst aus, was schon in `gezogen` steht: Ohne das kam
+      // dasselbe Land in einer Station zweimal, sobald der Pool leer war
+      // und noch nichts abgefragt (`schonDa` leer, `eindeutigerPool` also
+      // die Rückfallebene — und der überschneidet sich mit `gezogen`).
+      final rest = eindeutigerPool.where((c) => !gezogen.contains(c)).toList();
+      final schonDa = rest.where((c) => bereits.contains(c)).toList();
       gezogen.addAll(
-          _pick(schonDa.isEmpty ? eindeutigerPool : schonDa, n - gezogen.length));
+          _pick(schonDa.isEmpty ? rest : schonDa, n - gezogen.length));
     }
 
     final aktualisiert = {...bereits, ...gezogen};
@@ -481,12 +591,22 @@ class FragenGenerator {
   /// mit dem Round-Robin-Schlüssel aus _rrModusKey() (siehe dort). Fällt auf
   /// reines _pick() zurück, falls die Station keinem festen Platz im
   /// Lernpfad zugeordnet ist (z.B. in Tests).
+  ///
+  /// Bleibt der Zyklus unter [n] — der Karibik-Block hat sieben Länder, die
+  /// Station acht Fragen —, wird mit [_erweitert] aufgestockt statt ein Land
+  /// ein zweites Mal zu bringen. [taugt] ist dabei derselbe Filter, mit dem
+  /// der Aufrufer schon [pool] gesiebt hat (nur die Umriss-Modi brauchen
+  /// einen; Flagge, Hauptstadt und Name hat jedes Land).
   static Future<List<String>> _pickKern(
-      List<String> pool, int n, LernStation station) async {
+      List<String> pool, int n, LernStation station,
+      {bool Function(String)? taugt}) async {
     final kontext = stationKontext(station.id);
-    if (kontext == null) return _pick(pool, n);
-    final (welt, abschnitt, _) = kontext;
-    return _pickRoundRobin(pool, n, welt.id, _rrModusKey(welt, abschnitt, station.modus));
+    final gezogen = kontext == null
+        ? _pick(pool, n)
+        : await _pickRoundRobin(pool, n, kontext.$1.id,
+            _rrModusKey(kontext.$1, kontext.$2, station.modus));
+    if (gezogen.length >= n) return gezogen;
+    return _erweitert(gezogen, n, _kontinent(station), taugt ?? (_) => true);
   }
 
   // ── Pensionierung: Modus fällt aus, sobald er für diese Welt WELT-WEIT ────
@@ -581,8 +701,36 @@ class FragenGenerator {
   }
 
   /// Haupteinstieg: generiert alle Fragen für eine Station.
+  /// Wirft Fragen weg, die in dieser Station schon einmal vorkommen.
+  ///
+  /// Letzte Stufe der Kette und die eigentliche Zusicherung: Egal was ein
+  /// einzelner Modus baut — innerhalb einer Station kommt keine Frage
+  /// zweimal. Die Modi darüber sorgen dafür, dass hier praktisch nie etwas
+  /// wegfällt; diese Stelle deckt den Rest ab, auch bei einem Modus, den es
+  /// heute noch nicht gibt.
+  ///
+  /// Die Frage IST ihr Text plus das gezeigte Land: Bei Flagge und Umriss
+  /// steht im Text nur „Welchem Land gehört dieser Umriss?", unterschieden
+  /// wird dort über [Frage.laenderCode]. Beim Sortierspiel wiederum ist der
+  /// Ländercode leer und die Ländergruppe steckt in der richtigen Antwort.
+  ///
+  /// NICHT betroffen ist die Wiederholung nach einer falschen Antwort — die
+  /// hängt die Frage in der Session erneut an die Warteschlange (siehe
+  /// [StationSession.beantworte] und [kModiMitWiederholung]) und ist
+  /// ausdrücklich gewollt.
+  static List<Frage> _ohneDoppelte(List<Frage> fragen) {
+    final gesehen = <String>{};
+    return fragen
+        .where((f) => gesehen.add(
+            '${f.modus.name}|${f.laenderCode}|${f.frage}|${f.richtigeAntwort}'))
+        .toList();
+  }
+
   static Future<List<Frage>> generiereFragenFuerStation(
-      LernStation station) async {
+      LernStation station) async =>
+      _ohneDoppelte(await _baueFragen(station));
+
+  static Future<List<Frage>> _baueFragen(LernStation station) async {
     _initCaches();
     final pool = station.laenderCodes.where((c) => c != '*').toList();
     if (pool.isEmpty) return [];
@@ -707,15 +855,28 @@ class FragenGenerator {
   // kUmrissAusschluss) gefilterter Pool — fällt auf den ungefilterten Pool
   // zurück, falls eine Station ausschließlich aus ausgeschlossenen Ländern
   // besteht (verhindert eine leere Fragenliste).
-  static List<String> _umrissPool(List<String> pool) {
-    final gefiltert = pool.where(kannAlsUmrissErscheinen).toList();
-    return gefiltert.isEmpty ? pool : gefiltert;
-  }
+  /// Länder des Abschnitts, die im Umriss-Quiz erscheinen dürfen.
+  ///
+  /// Fiel früher auf den ungefilterten Pool zurück, wenn NICHTS taugte —
+  /// dann standen Zwergstaaten als Umriss da. Jetzt liefert die Stelle
+  /// ehrlich die leere Liste; ob das reicht, entscheidet der Aufrufer mit
+  /// [_traegtAbschnitt] und weicht sonst auf das Flaggen-Quiz aus.
+  static List<String> _umrissPool(List<String> pool) =>
+      pool.where(kannAlsUmrissErscheinen).toList();
 
   static Future<List<Frage>> _umrissBild(LernStation station, List<String> pool) async {
     final kontId = _normalisiereKontinent(_kontinent(station));
-    final ausgewaehlt =
-        await _pickKern(_umrissPool(pool), station.fragenAnzahl, station);
+    final umrisse = _umrissPool(pool);
+    // Karibik: von sieben Ländern hat genau eines einen brauchbaren Umriss.
+    // Dann lieber dieselben sieben Länder als Flaggen-Quiz (gleiche Form der
+    // Frage: Bild sehen, Land wählen) als ein Umriss-Quiz über halb
+    // Südamerika.
+    if (!_traegtAbschnitt(umrisse.length, station.fragenAnzahl)) {
+      return await _flaggenBild(
+          station, pool, _kontinent(station), station.schwierigkeitsgrad);
+    }
+    final ausgewaehlt = await _pickKern(umrisse, station.fragenAnzahl, station,
+        taugt: kannAlsUmrissErscheinen);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2);
@@ -737,8 +898,15 @@ class FragenGenerator {
 
   static Future<List<Frage>> _umrissMultiple(LernStation station, List<String> pool) async {
     final kontId = _normalisiereKontinent(_kontinent(station));
-    final ausgewaehlt =
-        await _pickKern(_umrissPool(pool), station.fragenAnzahl, station);
+    final umrisse = _umrissPool(pool);
+    // Ausweichmodus wie bei _umrissBild, hier auf die Gegenrichtung: Land
+    // sehen, Bild wählen.
+    if (!_traegtAbschnitt(umrisse.length, station.fragenAnzahl)) {
+      return await _flaggenMultiple(
+          station, pool, _kontinent(station), station.schwierigkeitsgrad);
+    }
+    final ausgewaehlt = await _pickKern(umrisse, station.fragenAnzahl, station,
+        taugt: kannAlsUmrissErscheinen);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final optionen = generiereUmrissOptionen(iso2, kontId);
@@ -757,7 +925,8 @@ class FragenGenerator {
 
   static Future<List<Frage>> _hauptstaedteMultiple(
     LernStation station, List<String> pool, String kontinent, int schw) async {
-    final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station);
+    final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station,
+        taugt: _hatHauptstadt);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2)!;
@@ -786,7 +955,8 @@ class FragenGenerator {
   // eigener, von hauptstaedteMultiple komplett isolierter Zyklus.
   static Future<List<Frage>> _hauptstaedteEingabe(
       LernStation station, List<String> pool) async {
-    final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station);
+    final ausgewaehlt = await _pickKern(pool, station.fragenAnzahl, station,
+        taugt: _hatHauptstadt);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2)!;
@@ -830,8 +1000,14 @@ class FragenGenerator {
   // Zyklus (siehe Kommentar bei _hauptstaedteEingabe).
   static Future<List<Frage>> _umrissEingabe(
       LernStation station, List<String> pool) async {
-    final ausgewaehlt =
-        await _pickKern(_umrissPool(pool), station.fragenAnzahl, station);
+    final umrisse = _umrissPool(pool);
+    // Ausweichmodus wie bei _umrissBild, hier auf die Tastatur-Variante:
+    // Bild sehen, Ländernamen tippen.
+    if (!_traegtAbschnitt(umrisse.length, station.fragenAnzahl)) {
+      return await _flaggenQuizEingabe(station, pool);
+    }
+    final ausgewaehlt = await _pickKern(umrisse, station.fragenAnzahl, station,
+        taugt: kannAlsUmrissErscheinen);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2);
@@ -887,6 +1063,72 @@ class FragenGenerator {
     'AUD': 'Dollar',     'NZD': 'Dollar',
   };
 
+  // ── Echte Währungszeichen ──────────────────────────────────────────────────
+  //
+  // Auf die Münze über der Frage gehört ein ZEICHEN — €, ₹, ฿ —, keine
+  // Abkürzung. „Fr", „NT$" oder „KSh" sind Kürzel des Namens; als Prägung
+  // sähen sie aus, als hätte jemand mit dem Kugelschreiber auf die Münze
+  // geschrieben. Wo es kein Zeichen gibt, bleibt die Münze blank.
+  //
+  // ENTSCHIEDEN WIRD NACH UNICODE, nicht nach Gefühl: Ein Zeichen zählt,
+  // wenn jedes seiner Zeichen in einem der Blöcke steht, die Unicode als
+  // Währungssymbol führt (Kategorie Sc). Das trennt sauber:
+  //
+  //   € £ $ ¥ ₹ ₩ ₽ ₺ ₴ ₦ ₨ ₸ ₮ ₭ ₾ ₼ ₵ ₱ ₪ ₫ ฿ ៛ ৳ ֏ ﷼   → Münze
+  //   Fr  kr  zł  Kč  Ft  lei  Rp  RM  KSh  R$  NT$  د.إ    → blank
+  //
+  // Die Liste wächst damit von selbst mit, wenn jemand in currencies.dart
+  // ein echtes Zeichen nachträgt — ohne dass hier etwas anzupassen wäre.
+  static const List<List<int>> _kZeichenBloecke = [
+    [0x24, 0x24], // $
+    [0xA2, 0xA5], // ¢ £ ¤ ¥
+    [0x58F, 0x58F], // ֏ Dram
+    [0x60B, 0x60B], // ؋ Afghani
+    [0x7FE, 0x7FF],
+    [0x9F2, 0x9F3], // ৲ ৳ Taka
+    [0x9FB, 0x9FB],
+    [0xAF1, 0xAF1],
+    [0xBF9, 0xBF9],
+    [0xE3F, 0xE3F], // ฿ Baht
+    [0x17DB, 0x17DB], // ៛ Riel
+    [0x20A0, 0x20C0], // Der Währungssymbol-Block: ₠ bis ₿
+    [0xA838, 0xA838],
+    [0xFDFC, 0xFDFC], // ﷼ Rial
+    [0xFE69, 0xFE69],
+    [0xFF04, 0xFF04],
+    [0xFFE0, 0xFFE1],
+    [0xFFE5, 0xFFE6],
+  ];
+
+  /// Währungen, deren echtes Zeichen in currencies.dart als Abkürzung steht.
+  ///
+  /// Nachgetragen statt im Datensatz geändert: Dort hängen der Währungs-Screen
+  /// und die Fun-Facts mit dran, und „Rs" ist als AUSGESCHRIEBENE Abkürzung
+  /// dort nicht falsch. Für die Prägung braucht es das Zeichen selbst.
+  ///
+  /// ₨ ist das Rupien-Zeichen und gilt für Sri Lanka und Nepal so gut wie für
+  /// Pakistan; ﷼ ist das Rial-Zeichen und gilt für Saudi-Arabien, Katar und
+  /// Oman so gut wie für den Iran, wo es schon eingetragen ist.
+  static const Map<String, String> _kZeichenNachtrag = {
+    'LKR': '₨',
+    'NPR': '₨',
+    'SAR': '﷼',
+    'QAR': '﷼',
+    'OMR': '﷼',
+  };
+
+  static bool _istWaehrungsZeichen(String s) {
+    if (s.isEmpty) return false;
+    return s.runes.every((r) =>
+        _kZeichenBloecke.any((b) => r >= b[0] && r <= b[1]));
+  }
+
+  /// Das Zeichen für die Münze — leer, wenn die Währung keines hat.
+  static String _waehrungsZeichen(CurrencyData curr) {
+    final roh = _kZeichenNachtrag[curr.currencyCode] ?? curr.currencySymbol;
+    return _istWaehrungsZeichen(roh) ? roh : '';
+  }
+
   static String _kuerzeWaehrungsname(CurrencyData curr) =>
       LocaleService.istEnglisch
           ? (waehrungsKuerzelEn[curr.currencyCode] ?? curr.currencyName)
@@ -896,10 +1138,17 @@ class FragenGenerator {
 
   static Future<List<Frage>> _waehrung(
     LernStation station, List<String> pool, String kontinent, int schw) async {
-    final mitWaehrung = pool.where((c) => _waehrungByIso2!.containsKey(c)).toList();
-    if (mitWaehrung.isEmpty) return await _hauptstaedteMultiple(station, pool, kontinent, schw);
+    bool hatWaehrung(String c) => _waehrungByIso2!.containsKey(c);
+    final mitWaehrung = pool.where(hatWaehrung).toList();
+    // In europa_3 steht genau ein Land des Abschnitts im Währungsdatensatz —
+    // dann acht Fragen über fremde Länder zu stellen wäre schlechter als
+    // dieselben Länder nach ihren Hauptstädten zu fragen.
+    if (!_traegtAbschnitt(mitWaehrung.length, station.fragenAnzahl)) {
+      return await _hauptstaedteMultiple(station, pool, kontinent, schw);
+    }
 
-    final ausgewaehlt = _pick(mitWaehrung, station.fragenAnzahl);
+    final ausgewaehlt = _erweitert(_pick(mitWaehrung, station.fragenAnzahl),
+        station.fragenAnzahl, kontinent, hatWaehrung);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2)!;
@@ -972,12 +1221,38 @@ class FragenGenerator {
     final kategorie = gueltigeKategorien.isEmpty
         ? _spielKategorien.first
         : gueltigeKategorien[_rng.nextInt(gueltigeKategorien.length)];
-    final kategoriePool =
-        kontinentPool.where((iso2) => kategorie.wert(iso2) != null).toList();
+    bool hatWert(String iso2) => kategorie.wert(iso2) != null;
+    // Genug Länder für DREI verschiedene Fünfergruppen: Bei genau fünf
+    // tauglichen Ländern gibt es nur eine einzige mögliche Runde, und die
+    // Station stellte dreimal dieselbe Aufgabe. Sieben reichen für die
+    // üblichen drei Runden; fehlen sie im Abschnitt, kommen sie aus dem
+    // Kontinent.
+    final eigene = kontinentPool.where(hatWert).toList();
+    final gebraucht = 5 + station.fragenAnzahl - 1;
+    // Nur AUFfüllen, nie kürzen: _erweitert() gibt genau [gebraucht] zurück,
+    // und ein Abschnitt mit zwanzig tauglichen Ländern soll seine Vielfalt
+    // behalten statt auf sieben eingedampft zu werden.
+    final kategoriePool = eigene.length >= gebraucht
+        ? eigene
+        : _erweitert(eigene, gebraucht, kontinent, hatWert);
 
     final fragen = <Frage>[];
+    // Zwei Runden mit denselben fünf Ländern wären zweimal dieselbe Aufgabe
+    // — die Reihenfolge ist ja dieselbe. Verglichen wird die Gruppe, nicht
+    // die gemischte Anzeige.
+    final gesehen = <String>{};
     for (int runde = 0; runde < station.fragenAnzahl; runde++) {
-      final fuenf = _pick(kategoriePool, 5);
+      List<String>? neueGruppe;
+      for (var versuch = 0; versuch < 20 && neueGruppe == null; versuch++) {
+        final kandidat = _pick(kategoriePool, 5);
+        if (gesehen.add((List.of(kandidat)..sort()).join(','))) {
+          neueGruppe = kandidat;
+        }
+      }
+      // Der Pool gibt keine neue Fünfergruppe mehr her — dann hat die
+      // Station eben weniger Runden statt einer doppelten.
+      if (neueGruppe == null) break;
+      final fuenf = neueGruppe;
 
       // Größte zuerst.
       final sortiert = List.of(fuenf)
@@ -1019,7 +1294,15 @@ class FragenGenerator {
   static List<Frage> _preisSchaetzen(
       LernStation station, List<String> pool, String kontinent) {
     final kontinentPool = _poolFuerKontinent(pool, kontinent);
-    final ausgewaehlt = _pick(kontinentPool, station.fragenAnzahl);
+    // Kein Modus-Tausch nötig: Einwohnerzahl und Fläche hat praktisch jedes
+    // Land, der Filter greift also nie so hart wie bei Währung oder Umriss.
+    // Das Auffüllen steht trotzdem da, weil _pick() nicht mehr wiederholt.
+    bool hatPreisWert(String c) => _preisKategorien.any((k) => k.wert(c) != null);
+    final ausgewaehlt = _erweitert(
+        _pick(kontinentPool.where(hatPreisWert).toList(), station.fragenAnzahl),
+        station.fragenAnzahl,
+        kontinent,
+        hatPreisWert);
 
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
@@ -1069,11 +1352,14 @@ class FragenGenerator {
 
   static Future<List<Frage>> _wirtschaftssektoren(
       LernStation station, List<String> pool, int schw) async {
-    final mitSektor =
-        pool.where((c) => _sektorByIso2!.containsKey(c)).toList();
-    if (mitSektor.isEmpty) return await _flaggenBild(station, pool, 'Welt', schw);
+    bool hatSektor(String c) => _sektorByIso2!.containsKey(c);
+    final mitSektor = pool.where(hatSektor).toList();
+    if (!_traegtAbschnitt(mitSektor.length, station.fragenAnzahl)) {
+      return await _flaggenBild(station, pool, 'Welt', schw);
+    }
 
-    final ausgewaehlt = _pick(mitSektor, station.fragenAnzahl);
+    final ausgewaehlt = _erweitert(_pick(mitSektor, station.fragenAnzahl),
+        station.fragenAnzahl, _kontinent(station), hatSektor);
     final alleSektoren = sektorEmojis.keys.map(_sektorAnzeigename).toList();
 
     return ausgewaehlt.asMap().entries.map((e) {
@@ -1101,12 +1387,17 @@ class FragenGenerator {
 
   static Future<List<Frage>> _nachbarland(
       LernStation station, List<String> pool, String kontinent, int schw) async {
-    final mitNachbarn =
-        pool.where((c) => (nachbarn[c] ?? const []).isNotEmpty).toList();
+    bool hatNachbarn(String c) => (nachbarn[c] ?? const []).isNotEmpty;
+    final mitNachbarn = pool.where(hatNachbarn).toList();
     // Inselstaaten ohne Landgrenze: Modus überspringen, Flaggen-Quiz statt.
-    if (mitNachbarn.isEmpty) return await _flaggenBild(station, pool, kontinent, schw);
+    // In ozeanien_1 hat genau ein Land des Abschnitts überhaupt eine
+    // Landgrenze (Papua-Neuguinea) — daher kam die Frage siebenmal.
+    if (!_traegtAbschnitt(mitNachbarn.length, station.fragenAnzahl)) {
+      return await _flaggenBild(station, pool, kontinent, schw);
+    }
 
-    final ausgewaehlt = _pick(mitNachbarn, station.fragenAnzahl);
+    final ausgewaehlt = _erweitert(_pick(mitNachbarn, station.fragenAnzahl),
+        station.fragenAnzahl, kontinent, hatNachbarn);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2)!;
@@ -1200,13 +1491,15 @@ class FragenGenerator {
 
   static Future<List<Frage>> _bipGesamtQuiz(LernStation station, List<String> pool) async {
     // gdp: 0 ist ein Platzhalter für "keine Daten" (siehe _SpielKategorie).
-    final mitBip = pool.where((c) => (_country(c)?.gdp ?? 0) > 0).toList();
-    if (mitBip.isEmpty) {
+    bool hatBip(String c) => (_country(c)?.gdp ?? 0) > 0;
+    final mitBip = pool.where(hatBip).toList();
+    if (!_traegtAbschnitt(mitBip.length, station.fragenAnzahl)) {
       return await _hauptstaedteMultiple(
           station, pool, 'Welt', station.schwierigkeitsgrad);
     }
 
-    final ausgewaehlt = _pick(mitBip, station.fragenAnzahl);
+    final ausgewaehlt = _erweitert(_pick(mitBip, station.fragenAnzahl),
+        station.fragenAnzahl, _kontinent(station), hatBip);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2)!;
@@ -1237,13 +1530,15 @@ class FragenGenerator {
   static String _flaecheFuer(double area) => SkalaService.flaeche(area).format(area);
 
   static Future<List<Frage>> _flaecheQuiz(LernStation station, List<String> pool) async {
-    final mitFlaeche = pool.where((c) => _ranking(c)?.area != null).toList();
-    if (mitFlaeche.isEmpty) {
+    bool hatFlaeche(String c) => _ranking(c)?.area != null;
+    final mitFlaeche = pool.where(hatFlaeche).toList();
+    if (!_traegtAbschnitt(mitFlaeche.length, station.fragenAnzahl)) {
       return await _hauptstaedteMultiple(
           station, pool, 'Welt', station.schwierigkeitsgrad);
     }
 
-    final ausgewaehlt = _pick(mitFlaeche, station.fragenAnzahl);
+    final ausgewaehlt = _erweitert(_pick(mitFlaeche, station.fragenAnzahl),
+        station.fragenAnzahl, _kontinent(station), hatFlaeche);
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2)!;
@@ -1273,26 +1568,104 @@ class FragenGenerator {
   // ── Währung → Land (umgekehrtes Währungsquiz) ────────────────────────────
 
   static Future<List<Frage>> _waehrungZuLand(LernStation station, List<String> pool) async {
-    final mitWaehrung = pool.where((c) => _waehrungByIso2!.containsKey(c)).toList();
-    // Nur Länder deren Währung innerhalb des Pools eindeutig ist — sonst
-    // gäbe es mehrere "richtige" Länder für dieselbe Währung (z.B. Euro).
-    final eindeutig = mitWaehrung.where((iso2) {
-      final code = _waehrungByIso2![iso2]!.currencyCode;
-      return mitWaehrung.where((c) => _waehrungByIso2![c]!.currencyCode == code).length == 1;
-    }).toList();
-    if (eindeutig.isEmpty) return await _hauptstaedteMultiple(station, pool, 'Welt', station.schwierigkeitsgrad);
+    // Jede Währung darf in der Station nur EINMAL gefragt werden — sonst
+    // stünden zwei Fragen „Welches Land nutzt Franken?" mit verschiedenen
+    // richtigen Antworten nebeneinander.
+    //
+    // EINDEUTIG HEISST SEIT DEM WEGFALL DES CODES: auch der ANGEZEIGTE Name
+    // muss einmalig sein, nicht nur der Währungscode. Vorher stand in der
+    // Frage "Franken (CHF)", und der Code trennte, was der Kurzname
+    // zusammenwirft: "Dollar" steht für USD, CAD, SGD, TWD, AUD und NZD,
+    // "Krone" für SEK, NOK, DKK und CZK, "Dinar" für sieben Währungen.
+    //
+    // Gezogen wird der Reihe nach, statt vorher zu filtern: Früher fiel
+    // JEDES Land raus, dessen Währung im Pool mehrfach vorkam — von 54
+    // afrikanischen Ländern blieben sechs übrig, und _pick() füllte den Rest
+    // mit Wiederholungen auf. Jetzt kommt das erste Franc-Land durch und nur
+    // die weiteren werden übersprungen.
+    final codes = <String>{};
+    final namen = <String>{};
+    final gewaehlt = <String>[];
+    void nimm(Iterable<String> kandidaten) {
+      for (final iso2 in kandidaten) {
+        if (gewaehlt.length >= station.fragenAnzahl) return;
+        final curr = _waehrungByIso2![iso2];
+        if (curr == null) continue;
+        final name = _kuerzeWaehrungsname(curr);
+        if (codes.contains(curr.currencyCode) || namen.contains(name)) continue;
+        codes.add(curr.currencyCode);
+        namen.add(name);
+        gewaehlt.add(iso2);
+      }
+    }
 
-    final ausgewaehlt = _pick(eindeutig, station.fragenAnzahl);
+    nimm(pool.toSet().toList()..shuffle(_rng));
+    // Trägt der Abschnitt den Modus nicht, lieber ein anderer Modus mit den
+    // eigenen Ländern als dieser mit fremden (Stufe 1 der Kette).
+    if (!_traegtAbschnitt(gewaehlt.length, station.fragenAnzahl)) {
+      return await _hauptstaedteMultiple(
+          station, pool, 'Welt', station.schwierigkeitsgrad);
+    }
+    if (gewaehlt.length < station.fragenAnzahl) {
+      final kontinent = _kontinent(station);
+      final drin = gewaehlt.toSet();
+      final rest = _waehrungByIso2!.keys.where((c) => !drin.contains(c));
+      if (kontinent != 'Welt') {
+        nimm(rest.where((c) => _country(c)?.region == kontinent).toList()
+          ..shuffle(_rng));
+      }
+      nimm(rest.toList()..shuffle(_rng));
+    }
+
+    final ausgewaehlt = gewaehlt;
     return ausgewaehlt.asMap().entries.map((e) {
       final iso2 = e.value;
       final co = _country(iso2)!;
       final curr = _waehrungByIso2![iso2]!;
-      final waehrungsName = '${_kuerzeWaehrungsname(curr)} (${curr.currencyCode})';
-      final distrIso2 = AntwortGenerator.generiereOptionenAusListe(
-              iso2, eindeutig, anzahlOptionen: 4)
-          .where((c) => c != iso2)
-          .take(3)
+      // Nur der Name, ohne den Code in Klammern — wie in der Gegenrichtung
+      // (siehe _waehrung): Für die meisten Spieler sagt "(CHF)" nichts, und
+      // wer den Code kennt, kennt auch das Land. Dass der Name allein
+      // trennscharf bleibt, sichert der Filter oben.
+      final waehrungsName = _kuerzeWaehrungsname(curr);
+      // ── ABLENKER, DIE NICHT AUCH RICHTIG SIND ──────────────────────────
+      //
+      // NICHT über AntwortGenerator.generiereOptionenAusListe: Das füllt aus
+      // dem ganzen Kontinent auf, sobald die übergebene Liste zu kurz ist,
+      // und geht dabei am Währungsfilter vorbei. Auf einem dünnen Pool kam
+      // so heraus: "Welches Land nutzt Euro?" mit Luxemburg, Finnland,
+      // Nordmazedonien und Deutschland — drei davon richtig. Am Gerät
+      // gesehen, nicht ausgedacht.
+      //
+      // Hier wird stattdessen selbst gezogen, mit genau einer Bedingung:
+      // Kein Ablenker darf dieselbe Währung tragen wie die Antwort — weder
+      // denselben Code noch denselben angezeigten Namen. Bevorzugt aus
+      // derselben Weltgegend, dann global aufgefüllt.
+      // NUR LÄNDER MIT BEKANNTER WÄHRUNG kommen als Ablenker in Frage. Wer
+      // nicht im Währungsdatensatz steht, lässt sich nicht prüfen — und
+      // genau das ging schief: Zypern nutzt den Euro, fehlt aber in
+      // currencies.dart, rutschte damit durch jede Prüfung und stand neben
+      // Deutschland in der Auswahl. Zweiter Anlauf, wieder am Gerät gesehen.
+      //
+      // Der Datensatz trägt rund 80 Länder — für drei Ablenker mehr als
+      // genug.
+      bool andereWaehrung(String c) {
+        final andere = _waehrungByIso2![c]!;
+        return andere.currencyCode != curr.currencyCode &&
+            _kuerzeWaehrungsname(andere) != waehrungsName;
+      }
+
+      final mitBekannterWaehrung = _waehrungByIso2!.keys
+          .where((c) => c != iso2 && andereWaehrung(c))
           .toList();
+      final gleicheGegend = mitBekannterWaehrung
+          .where((c) => _country(c)?.region == co.region)
+          .toList()
+        ..shuffle(_rng);
+      final restDerWelt = mitBekannterWaehrung
+          .where((c) => _country(c)?.region != co.region)
+          .toList()
+        ..shuffle(_rng);
+      final distrIso2 = [...gleicheGegend, ...restDerWelt].take(3).toList();
       final optionen = [
         co.name,
         ...distrIso2.map((c) => _country(c)?.name ?? c),
@@ -1306,6 +1679,15 @@ class FragenGenerator {
         modus: LernModus.waehrungZuLand,
         // Absichtlich leer: würde sonst per Landkopf die Antwort verraten.
         laenderCode: '',
+        // Das Währungszeichen für die Münze über der Frage (siehe
+        // _WaehrungMuenze im Quiz-Screen). Es verrät nichts: Zum Zeichen
+        // gehören oft mehrere Länder, und wer € erkennt, weiss deshalb noch
+        // nicht, welches der vier Länder in der Auswahl gemeint ist.
+        //
+        // Leer heisst: Die Währung hat kein echtes Zeichen, die Münze bleibt
+        // blank. Der Schlüssel steht trotzdem da — an ihm erkennt die
+        // Oberfläche, dass hier überhaupt eine Münze hingehört.
+        meta: {'symbol': _waehrungsZeichen(curr)},
       );
     }).toList();
   }
@@ -1468,9 +1850,14 @@ class FragenGenerator {
     final pool = gefiltert.isEmpty ? laenderFakten : gefiltert;
 
     final shuffled = List.of(pool)..shuffle(_rng);
-    final ausgewaehlt = <LandFakt>[];
-    while (ausgewaehlt.length < station.fragenAnzahl) {
-      ausgewaehlt.addAll(shuffled.take(station.fragenAnzahl - ausgewaehlt.length));
+    final ausgewaehlt = shuffled.take(station.fragenAnzahl).toList();
+    if (ausgewaehlt.length < station.fragenAnzahl) {
+      // Für Nordamerika sind fünf Fakten kuratiert, die Station stellt acht
+      // Fragen — die letzten drei kamen doppelt. Lieber ein Fakt aus einem
+      // anderen Kontinent als derselbe zweimal.
+      final rest = laenderFakten.where((f) => !ausgewaehlt.contains(f)).toList()
+        ..shuffle(_rng);
+      ausgewaehlt.addAll(rest.take(station.fragenAnzahl - ausgewaehlt.length));
     }
 
     return ausgewaehlt.asMap().entries.map((e) {
@@ -1567,15 +1954,29 @@ class FragenGenerator {
     final gefiltert = kontinent == 'Welt'
         ? grenzkettenRaetsel
         : grenzkettenRaetsel.where((r) => r.kontinent == kontId).toList();
-    if (gefiltert.isEmpty) {
-      // Kein kuratierter Eintrag für diesen Kontinent (z.B. Südamerika,
-      // strukturell keine eindeutige Kette möglich) -> Modus für diese
-      // Station überspringen, kein Crash, keine leere Frage.
+    if (!_traegtAbschnitt(gefiltert.length, station.fragenAnzahl)) {
+      // Kein oder kaum ein kuratierter Eintrag für diesen Kontinent (z.B.
+      // Südamerika, strukturell keine eindeutige Kette möglich) -> Modus für
+      // diese Station überspringen, kein Crash, keine leere Frage.
       return await _flaggenBild(station, pool, kontinent, schw);
     }
 
-    final ausgewaehlt =
+    var ausgewaehlt =
         await _pickGrenzketten(gefiltert, station.fragenAnzahl, station);
+    if (ausgewaehlt.length < station.fragenAnzahl) {
+      // Für Europa sind sieben Ketten kuratiert, die Station stellt acht
+      // Fragen — die achte kam vorher als Wiederholung einer der sieben.
+      // Jetzt kommt sie aus einem anderen Kontinent: Eine Kette ist ohnehin
+      // an ihre Länder gebunden, nicht an den Abschnitt.
+      final drin = ausgewaehlt.map((r) => r.id).toSet();
+      final nachschub =
+          grenzkettenRaetsel.where((r) => !drin.contains(r.id)).toList()
+            ..shuffle(_rng);
+      ausgewaehlt = [
+        ...ausgewaehlt,
+        ...nachschub.take(station.fragenAnzahl - ausgewaehlt.length),
+      ];
+    }
     return ausgewaehlt.asMap().entries.map((e) {
       final r = e.value;
       final von = _country(r.vonLandIso)?.name ?? r.vonLandIso;
@@ -2335,39 +2736,61 @@ class FragenGenerator {
         .toList();
     if (erlaubt.isEmpty) return _ausweichHauptstaedte(station, pool);
 
+    // ── EINE KATEGORIE FÜR DIE GANZE STATION ────────────────────────────────
+    //
+    // Vorher wechselte sie von Frage zu Frage: erst Bevölkerung, dann
+    // Waldanteil, dann BIP. Jede Frage begann damit von vorn — man musste
+    // sich bei jeder neu überlegen, worum es überhaupt geht, und konnte kein
+    // Gefühl für die Skala aufbauen.
+    //
+    // WELCHE es ist, bleibt Zufall, aber ein fester: Der Würfel hängt an der
+    // Stations-ID, nicht an der Uhrzeit. Dieselbe Station zeigt damit immer
+    // dieselbe Kategorie — auch nach einem Abbruch mitten drin, und für jeden
+    // Spieler dieselbe.
+    //
+    // Genommen wird die erste Kategorie, die genug Länder aus dem Pool trägt.
+    // Trägt keine die volle Fragenzahl, gewinnt die mit den meisten: lieber
+    // eine Station mit vier Fragen zu EINER Kategorie als fünf zu dreien.
+    final kandidaten = List.of(erlaubt)..shuffle(Random(station.id.hashCode));
+
+    ({RankingCategory kat, List<CountryRanking> feld, List<String> waehlbar})?
+        beste;
+    for (final kat in kandidaten) {
+      // Die Rangliste geht über ALLE Länder mit Daten, nicht über den
+      // Stationspool: ein Rangplatz ist nur dann eine Aussage, wenn er sich
+      // auf das ganze Feld bezieht.
+      final feld = countryRankings.where((r) => kat.getValue(r) != null).toList()
+        ..sort((a, b) => kat.getValue(b)!.compareTo(kat.getValue(a)!));
+      if (feld.length < 20) continue;
+
+      final imFeld = feld.map((r) => r.iso2).toSet();
+      final waehlbar = pool.where(imFeld.contains).toList();
+      if (waehlbar.isEmpty) continue;
+
+      if (waehlbar.length >= station.fragenAnzahl) {
+        beste = (kat: kat, feld: feld, waehlbar: waehlbar);
+        break;
+      }
+      if (beste == null || waehlbar.length > beste.waehlbar.length) {
+        beste = (kat: kat, feld: feld, waehlbar: waehlbar);
+      }
+    }
+    if (beste == null) return _ausweichHauptstaedte(station, pool);
+
+    final kat = beste.kat;
+    final feld = beste.feld;
+    // Kein Land zweimal in einer Station.
+    final laender = (List.of(beste.waehlbar)..shuffle(_rng))
+        .take(station.fragenAnzahl)
+        .toList();
+
     final fragen = <Frage>[];
-    final benutzt = <String>{};
+    for (final iso in laender) {
+      final rang = feld.indexWhere((r) => r.iso2 == iso) + 1;
+      final wert = kat.getValue(feld[rang - 1])!;
+      final co = _country(iso);
 
-    for (var runde = 0;
-        runde < 4 && fragen.length < station.fragenAnzahl;
-        runde++) {
-      final kategorien = List.of(erlaubt)..shuffle(_rng);
-      for (final kat in kategorien) {
-        if (fragen.length >= station.fragenAnzahl) break;
-
-        // Die Rangliste geht über ALLE Länder mit Daten, nicht über den
-        // Stationspool: ein Rangplatz ist nur dann eine Aussage, wenn er sich
-        // auf das ganze Feld bezieht.
-        final feld = countryRankings
-            .where((r) => kat.getValue(r) != null)
-            .toList()
-          ..sort((a, b) => kat.getValue(b)!.compareTo(kat.getValue(a)!));
-        if (feld.length < 20) continue;
-
-        final imFeld = feld.map((r) => r.iso2).toSet();
-        // Kein Land zweimal in einer Station — das schließt die Kombination
-        // aus Land UND Kategorie mit ein.
-        final waehlbar =
-            pool.where((c) => imFeld.contains(c) && !benutzt.contains(c)).toList();
-        if (waehlbar.isEmpty) continue;
-
-        final iso = waehlbar[_rng.nextInt(waehlbar.length)];
-        final rang = feld.indexWhere((r) => r.iso2 == iso) + 1;
-        final wert = kat.getValue(feld[rang - 1])!;
-        final co = _country(iso);
-
-        benutzt.add(iso);
-        fragen.add(Frage(
+      fragen.add(Frage(
           id: '${station.id}_lr_${fragen.length}',
           // "in der Kategorie X" statt "beim X": die Kategorienamen haben
           // unterschiedliche Genera (die Bevölkerung, der Waldanteil, das
@@ -2387,8 +2810,7 @@ class FragenGenerator {
             'einheit': kat.unit,
             'emoji': kat.emoji,
           },
-        ));
-      }
+      ));
     }
     return fragen;
   }

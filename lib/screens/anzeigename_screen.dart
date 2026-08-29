@@ -57,14 +57,35 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kHintergrund,
-      body: GradnetzHintergrund(
+      // TIPP DANEBEN SCHLIESST DIE TASTATUR.
+      //
+      // Ohne das gab es aus dem Namensfeld kein Zurück: Die Tastatur fuhr
+      // hoch und blieb, egal wohin man tippte — auf diesem Screen gibt es
+      // weder einen Zurück-Pfeil noch etwas anderes, das den Fokus nimmt, und
+      // Android schliesst sie von sich aus nicht.
+      //
+      // HitTestBehavior.opaque, damit auch die leeren Flächen zählen; die
+      // Kinder (Textfeld, Knopf, Sprachumschalter) werden beim Treffertest
+      // trotzdem zuerst gefragt und behalten ihre Tipps.
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: GradnetzHintergrund(
         schritt: 1,
         child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Stack(
+              // Siehe anmelde_screen.dart: ohne fit schrumpft der Stack auf
+              // die Inhaltsbreite des Scrollbereichs. Hier fällt es heute
+              // nicht auf, weil Namensfeld und Knopf über die volle Breite
+              // gehen — die Anfälligkeit bliebe aber liegen.
+              fit: StackFit.expand,
               children: [
                 SingleChildScrollView(
+              // Zweiter Weg aus dem Feld heraus: Wer bei offener Tastatur
+              // wischt, will sie weghaben.
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.all(24),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
@@ -194,6 +215,7 @@ class _AnzeigenameScreenState extends State<AnzeigenameScreen> {
             );
           },
         ),
+      ),
       ),
       ),
     );

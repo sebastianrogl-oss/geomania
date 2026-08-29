@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'einstiegs_deko.dart';
 
 // ── Gradnetz ─────────────────────────────────────────────────────────────────
 //
@@ -65,7 +66,21 @@ const double _kDrehungProSchritt = 12;
 
 /// Zusätzliche Neigung je Schritt, in Grad. Verschiebt die Breitenkreise —
 /// ohne sie bliebe bei reiner Längsdrehung die waagerechte Gliederung starr.
-const double _kNeigungProSchritt = 4;
+///
+/// 2 statt 4, seit der Einstieg sieben Schritte hat (Anmelden, Name und fünf
+/// Willkommens-Karten) statt dreier: Mit 4 lag die Neigung ab Schritt 5 über
+/// der Schwelle, ab der der Pol ins Bild kommt — die Längenkreise laufen dort
+/// sternförmig zusammen, und aus der ruhigen Textur wird ein Blickfang.
+const double _kNeigungProSchritt = 2;
+
+/// Obergrenze der Neigung, in Grad.
+///
+/// Gerechnet, nicht geschätzt: Der Pol liegt in der orthografischen Projektion
+/// bei y = Mitte − Radius·cos(Neigung). Mit [_kRadiusFaktor] 1.55 auf einem
+/// 384 px breiten Schirm sind das 595·cos(Neigung) über der Mitte; bei einer
+/// halben Schirmhöhe von rund 400 px wandert er ab etwa 47° ins Bild. 44 hält
+/// Abstand dazu, auch wenn später Schritte dazukommen.
+const double _kNeigungMax = 44;
 
 /// Schrittweite beim Abtasten einer Linie, in Grad.
 const double _kAbtastung = 2;
@@ -90,6 +105,28 @@ class GradnetzHintergrund extends StatelessWidget {
     return ColoredBox(
       color: kHintergrund,
       child: Stack(
+        // OHNE DIESES fit SCHRUMPFT DER GANZE SCREEN.
+        //
+        // Ein Stack bemisst sich an seinen NICHT positionierten Kindern —
+        // hier ist das einzig `child`. Fläche, Gradnetz und Deko hängen als
+        // Positioned.fill daran und zählen dabei nicht mit; sie übernehmen
+        // hinterher nur, was herauskam.
+        //
+        // Der Inhalt darin ist ein SingleChildScrollView, und der schrumpft
+        // unter lockeren Constraints auf seine Inhaltsbreite
+        // (RenderSingleChildViewport: size = constraints.constrain(child.size)).
+        // Scaffold reicht dem Body lockere Constraints (min = 0), also hing
+        // die Breite des GANZEN Screens daran, ob im Inhalt zufällig ein Kind
+        // mit voller Breite steckt.
+        //
+        // Am Gerät nachgemessen: Sobald der Ladekreis den Google-Knopf ersetzt
+        // — das einzige Kind mit width: double.infinity —, fiel die Fläche von
+        // 384 auf 300,5 px und blieb linksbündig stehen. Der zentrierte Inhalt
+        // sprang dadurch 41,75 px nach links und nach 877 ms wieder zurück.
+        //
+        // StackFit.expand gibt dem Kind straffe Constraints. Damit hängt die
+        // Breite am Bildschirm statt am Inhalt.
+        fit: StackFit.expand,
         children: [
           // RepaintBoundary: Das Netz ändert sich nie, es soll nicht bei jedem
           // Tastendruck im Namensfeld neu gezeichnet werden.
@@ -98,11 +135,16 @@ class GradnetzHintergrund extends StatelessWidget {
               child: CustomPaint(
                 painter: _GradnetzMaler(
                   laengsDrehung: schritt * _kDrehungProSchritt,
-                  neigung: _kGrundNeigung + schritt * _kNeigungProSchritt,
+                  neigung: (_kGrundNeigung + schritt * _kNeigungProSchritt)
+                      .clamp(0.0, _kNeigungMax),
                 ),
               ),
             ),
           ),
+          // Zwischen Netz und Inhalt: die Stationsbuttons liegen ÜBER dem
+          // Gradnetz, damit die Linien nicht durch sie hindurchlaufen, und
+          // unter dem Inhalt, damit Text und Knöpfe unberührt bleiben.
+          Positioned.fill(child: EinstiegsDeko(schritt: schritt)),
           child,
         ],
       ),

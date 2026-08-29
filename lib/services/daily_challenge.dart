@@ -1,7 +1,14 @@
+import 'dart:async';
+
 import 'package:shared_preferences/shared_preferences.dart';
+import 'ad_service.dart';
 import 'challenge_rekord_service.dart';
 
 class DailyChallenge {
+  /// Anzahl aller Tages-Challenges (Preis schätzen, Higher-or-Lower,
+  /// Ranking, Portfolio) — Grundlage für "alle erledigt".
+  static const int anzahlChallenges = 4;
+
   static String _key() {
     final n = DateTime.now();
     return 'daily_${n.year}_${n.month.toString().padLeft(2, '0')}_${n.day.toString().padLeft(2, '0')}';
@@ -25,6 +32,28 @@ class DailyChallenge {
     await ChallengeRekordService.besteStreakAktualisieren(id, streak);
     await ChallengeRekordService.spieltagVermerken(id);
     await ChallengeRekordService.spielGezaehlt(id);
+
+    // Interstitial nach der zweiten und nach der letzten Tages-Challenge
+    // des Tages (der AdService entscheidet selbst, ob die Schwelle heute
+    // schon bedient wurde). BEWUSST NICHT awaited — genau wie beim
+    // Stationsabschluss: die Werbung ist rein optional und darf die
+    // Auflösung der Challenge niemals verzögern oder blockieren. Fehler
+    // fängt der AdService intern ab.
+    unawaited(AdService.pruefeUndZeigeInterstitialNachChallenge(
+      done.length,
+      anzahlChallenges,
+    ));
+  }
+
+  /// DEBUG: Streicht alle heutigen Erledigt-Marken.
+  ///
+  /// Danach stehen die vier Tages-Challenges wieder als offen im Panel. Was
+  /// [markDone] sonst noch gefüllt hat — Serie, Spieltage-Historie, Zähler —
+  /// bleibt stehen: Diese Werte gehören zur Spielhistorie, nicht zum heutigen
+  /// Tag, und ein Zurückrechnen wäre bestenfalls geraten.
+  static Future<void> debugHeuteLeeren() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key());
   }
 
   static Duration untilMidnight() {

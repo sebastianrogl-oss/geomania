@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Der Startbildschirm. Die Farbe kommt aus values/colors.xml und ist
+     dieselbe wie kHintergrund in der App — sonst blitzt beim Start kurz
+     eine fremde Flaeche auf. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+    <item android:drawable="@color/geomania_hintergrund" />
 
     <!-- You can insert your own image assets here -->
     <!-- <item>

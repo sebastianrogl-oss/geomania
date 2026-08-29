@@ -32,6 +32,17 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
+    // OHNE Scaffold, und das geht hier gut — aber nur hier.
+    //
+    // [HomeScreen] bringt selbst keins mit; im Betrieb liefert MainScreen es.
+    // Fehlt es, findet ein Text keinen Material-Vorfahren, und Flutter setzt
+    // ihn in seinem Ersatzstil: Monospace mit gelber Doppel-Unterstreichung,
+    // ohne die Poppins aus dem Theme. Dieser Test misst nur Positionen und
+    // Höhen, dem ist die Schrift gleichgültig.
+    //
+    // Wer hier etwas SICHTBARES prüfen will — gerenderte Bilder, Textbreiten,
+    // Farben —, muss den HomeScreen in ein `Scaffold(body: ...)` setzen.
+    // Sonst prüft er den Ersatzstil statt der App.
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.theme,
       home: const HomeScreen(),

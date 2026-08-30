@@ -35,12 +35,18 @@ const _kZahlVersatzRechtsAnteil = 0.036;
 /// Passt die Zahl nicht hinein (zwei-, dreistellige Streaks), verkleinert
 /// die FittedBox sie automatisch so weit wie nötig. Einstellige Zahlen
 /// bleiben unangetastet, weil scaleDown nur verkleinert.
-/// 0.45 statt 0.40, seit die Flamme in der Profil-Kachel kleiner geworden
-/// ist: bei dreistelligen Streaks (ab 100 Tagen) reichte der Platz sonst
-/// nicht mehr, und die FittedBox setzte GENAU DIESE eine Zahl kleiner als die
-/// beiden daneben. Nur diese Kachel gibt ueberhaupt eine Zahl mit; die
-/// Kopfzeile zeigt ihre Zahl neben der Flamme.
-const _kZahlMaxBreiteAnteil = 0.45;
+///
+/// 0.34 STATT DER FRÜHEREN 0.45: Der helle Kern der Flamme ist schmaler als
+/// ihr Umriss. Mit 0.45 lief eine dreistellige Zahl über den Kern hinaus in
+/// den dunkleren Rand — lesbar blieb sie, aber sie sass sichtbar nicht mehr
+/// IN der Flamme, sondern auf ihr.
+///
+/// Die 0.45 stammten aus einer Zeit, in der alle drei Kacheln ihre Zahl
+/// gleich gross zeigen sollten; eine engere Grenze hätte damals genau diese
+/// eine Zahl kleiner gesetzt als die beiden daneben. Seit die Zahlen nach
+/// Stellenzahl gestaffelt sind (siehe _kZahlStaffelFlamme in
+/// statistik_kacheln.dart), ist das ausdrücklich gewollt.
+const _kZahlMaxBreiteAnteil = 0.34;
 
 /// Farbe der Zahl in der Flamme.
 ///

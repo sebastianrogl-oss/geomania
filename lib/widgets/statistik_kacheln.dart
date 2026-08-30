@@ -134,7 +134,7 @@ const double _kZahlFaktorButton = 1.0;
 // Die Werte greifen an der SCHRIFTGRÖSSE an, nicht an einer FittedBox: Eine
 // nachträglich gestauchte Zahl wirkt gequetscht, eine kleiner gesetzte nicht.
 // Die FittedBox im [_Zahl] bleibt als Notnagel darunter liegen.
-const Map<int, double> _kZahlStaffelFlamme = {1: 1.0, 2: 0.82, 3: 0.66};
+const Map<int, double> _kZahlStaffelFlamme = {1: 1.0, 2: 0.68, 3: 0.48};
 const Map<int, double> _kZahlStaffelRund = {1: 1.0, 2: 1.0, 3: 0.82};
 
 /// Der Faktor für [zahl] aus einer der Staffeln oben — bei mehr Stellen als

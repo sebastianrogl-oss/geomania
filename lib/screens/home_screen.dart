@@ -723,21 +723,21 @@ class _GreenHeaderState extends State<_GreenHeader> {
       padding: const EdgeInsets.symmetric(horizontal: _kLeisteRand),
       child: Row(
         children: [
-          // ── Vier Zeichen, drei gleiche Lücken ───────────────────────────
+          // ── Drei Zeichen links, das Profilbild rechts ────────────────────
           //
-          // Welt-Emoji, Flamme, Stern und Profilbild stehen wieder in
-          // gleichem Abstand: Der Sprung vom Emoji zur Flamme ist so gross
-          // wie der von der Flamme zum Stern. Zwischenzeitlich standen Flamme
-          // und Stern eng als Paar in der Mitte — auf dem Gerät wirkten sie
-          // dadurch zusammengedrängt, während links und rechts Luft blieb.
+          // Welt-Emoji, Flamme und Stern stehen linksbündig in festem
+          // Abstand; der freie Platz sammelt sich vor dem Profilbild. Zuvor
+          // waren alle vier gleichmäßig über die Leiste verteilt — die drei
+          // Zusammengehörigen (wo bin ich, wie lange schon, wie viel habe
+          // ich) standen dadurch weit auseinander.
           //
-          // Verteilt wird über drei [Spacer]. Das Emoji steht dabei OHNE die
-          // 44er Fläche, die das Paar-Layout brauchte: Die Fläche wäre gut
-          // 22 px breiter als das Emoji selbst, und dieser Leerraum käme zur
-          // Lücke dahinter dazu — die erste Lücke sähe damit doppelt so gross
-          // aus wie die anderen, obwohl gleich viel Platz verteilt wurde.
+          // WICHTIG AM FESTEN ABSTAND: Der Stern hängt damit am ENDE der
+          // Streak-Zahl, nicht an einer ausgerechneten Position. Wächst die
+          // Zahl um eine Stelle — 9 auf 10, 99 auf 100 —, rückt er genau um
+          // deren Breite nach rechts, statt dass die Ziffer in ihn hineinläuft
+          // oder die Lücken sich neu verteilen.
           Text(widget.weltEmoji, style: const TextStyle(fontSize: 22)),
-          const Spacer(),
+          const SizedBox(width: _kLeisteRand),
           // Deutlich größer als das frühere Emoji (18): die Flamme trägt die
           // Streak-Anzeige optisch. Die Kopfzeile ist 56px hoch, 45px passen
           // dort hinein, und die Row zentriert ihre Kinder vertikal — der
@@ -805,7 +805,7 @@ class _GreenHeaderState extends State<_GreenHeader> {
               ),
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: _kLeisteRand),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => zeigeSterneErklaerung(context, kErreichbareSterne),

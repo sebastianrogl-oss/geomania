@@ -10,14 +10,14 @@ import 'package:geomania/widgets/streak_flamme.dart';
 /// Die grüne Kopfleiste des Lernpfads trägt vier Zeichen: Welt-Emoji,
 /// Flamme mit Serie, Stern mit Punktestand, Profilbild.
 ///
-/// Sie stehen in GLEICHEM ABSTAND: Der Sprung vom Emoji zur Flamme ist so
-/// gross wie der von der Flamme zum Stern und der vom Stern zum Profilbild.
+/// Die ersten drei stehen LINKSBÜNDIG in festem Abstand, der freie Platz
+/// sammelt sich vor dem Profilbild. Zwischenzeitlich waren alle vier
+/// gleichmäßig verteilt — die drei Zusammengehörigen standen dadurch weit
+/// auseinander.
 ///
-/// Zwischenzeitlich standen Flamme und Stern eng als Paar in der Mitte. Auf
-/// dem Gerät wirkten sie dadurch zusammengedrängt, während aussen Luft blieb
-/// — deshalb wieder gleichmäßig. Das Emoji steht dabei ohne die 44er Fläche,
-/// die das Paar-Layout brauchte: Ihr Leerraum käme zur ersten Lücke dazu und
-/// liesse sie doppelt so gross aussehen wie die anderen beiden.
+/// Der feste Abstand ist mehr als Geschmack: Der Stern hängt damit am ENDE
+/// der Streak-Zahl. Wächst sie um eine Stelle, rückt er um deren Breite nach
+/// rechts, statt dass die Ziffer in ihn hineinläuft.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -26,9 +26,13 @@ void main() {
   /// an den Stationen, Flammen in der Deko), deshalb wird hier gefiltert.
   const kopfHoehe = 56.0;
 
-  Future<void> baue(WidgetTester tester, Size schirm) async {
+  /// Seitenrand der Leiste, zugleich der Abstand zwischen den drei linken
+  /// Zeichen (`_kLeisteRand` in home_screen.dart).
+  const rand = 16.0;
+
+  Future<void> baue(WidgetTester tester, Size schirm, {int streak = 7}) async {
     SharedPreferences.setMockInitialValues({
-      'lp_streak': 7,
+      'lp_streak': streak,
       'lp_gesamt_richtig': 128,
     });
     tester.view.physicalSize = schirm;
@@ -37,7 +41,10 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.theme,
-      home: const HomeScreen(),
+      // Eigener Key je Aufbau: Ohne ihn uebernaehme ein zweites pumpWidget den
+      // bestehenden State samt schon geladenem Fortschritt, und ein geaenderter
+      // Streak käme gar nicht an (siehe pfad_oberkante_test.dart).
+      home: HomeScreen(key: ValueKey(streak)),
     ));
     // Statt pumpAndSettle in kleinen Schritten: Der Pulsier-Ring der aktiven
     // Station läuft dauerhaft, ein pumpAndSettle liefe in die
@@ -60,66 +67,75 @@ void main() {
     fail('"$was" steht nicht in der Kopfleiste');
   }
 
+  Rect flammenKasten(WidgetTester tester) => imKopf(
+      tester,
+      find.ancestor(
+          of: find.byType(StreakFlamme), matching: find.byType(SizedBox)),
+      'Flammen-Kasten');
+
+  Rect sternKasten(WidgetTester tester) => imKopf(
+      tester,
+      find.ancestor(of: find.text('⭐'), matching: find.byType(ConstrainedBox)),
+      'Stern-Kasten');
+
   for (final breite in [320.0, 360.0, 412.0]) {
-    testWidgets('Gleiche Lücken zwischen allen vieren — ${breite.toInt()} px',
+    testWidgets('Links gebündelt, Profilbild rechts — ${breite.toInt()} px',
         (tester) async {
       await baue(tester, Size(breite, 800));
 
       final emoji =
           imKopf(tester, find.text(lernwelten.first.emoji), 'Welt-Emoji');
-      final flamme = imKopf(tester, find.byType(StreakFlamme), 'Flamme');
-      final serie = imKopf(tester, find.text('7'), 'Seriezahl');
-      final stern = imKopf(tester, find.text('⭐'), 'Stern');
-
-      // Der Stern steht rechts von der Flamme, nicht umgekehrt.
-      expect(stern.left, greaterThan(flamme.right));
-
-      // DREI GLEICHE LÜCKEN — der eigentliche Punkt.
-      //
-      // GEMESSEN WIRD VON KASTEN ZU KASTEN, nicht von Zeichen zu Zeichen:
-      // Innerhalb ihrer Kästen sitzen die Zeichen bewusst verschoben — die
-      // Streak-Zahl rückt in den durchsichtigen Rand der Flamme hinein, das
-      // Profilbild sitzt mit 38 px mittig in seiner 44er Tippfläche. Das sind
-      // optische Entscheidungen; sie dürfen den Test nicht ausschlagen
-      // lassen, und mit einer grosszügigen Toleranz wäre er stumpf. Die
-      // Verteilung selbst — drei gleiche [Spacer] — muss dagegen auf den
-      // Pixel stimmen.
-      final flammeKasten = imKopf(tester,
-          find.ancestor(
-              of: find.byType(StreakFlamme), matching: find.byType(SizedBox)),
-          'Flammen-Kasten');
-      final sternKasten = imKopf(tester,
-          find.ancestor(
-              of: find.text('⭐'), matching: find.byType(ConstrainedBox)),
-          'Stern-Kasten');
-      final profilKasten = imKopf(tester,
+      final flamme = flammenKasten(tester);
+      final stern = sternKasten(tester);
+      final profil = imKopf(
+          tester,
           find.ancestor(
               of: find.byType(ClipOval), matching: find.byType(SizedBox)),
           'Profil-Kasten');
 
-      final ersteLuecke = flammeKasten.left - emoji.right;
-      final mittlereLuecke = sternKasten.left - flammeKasten.right;
-      final letzteLuecke = profilKasten.left - sternKasten.right;
-      expect(mittlereLuecke, moreOrLessEquals(ersteLuecke, epsilon: 1.0),
-          reason: 'erste $ersteLuecke, mittlere $mittlereLuecke');
-      expect(letzteLuecke, moreOrLessEquals(ersteLuecke, epsilon: 1.0),
-          reason: 'erste $ersteLuecke, letzte $letzteLuecke');
+      // Gemessen von Kasten zu Kasten: Wie die Zeichen INNERHALB ihrer Kästen
+      // sitzen, ist eine optische Entscheidung (die Streak-Zahl rückt in den
+      // durchsichtigen Rand der Flamme) und darf hier nicht ausschlagen.
+      expect(flamme.left - emoji.right, moreOrLessEquals(rand, epsilon: 1.0),
+          reason: 'Emoji → Flamme');
+      expect(stern.left - flamme.right, moreOrLessEquals(rand, epsilon: 1.0),
+          reason: 'Flamme → Stern');
 
-      // Und die Zahl steckt tatsächlich im Rand der Flamme, statt rechts
-      // daneben zu stehen: Ohne den Versatz begänne sie erst hinter ihr.
-      expect(serie.left, lessThan(flamme.right),
-          reason: 'Die Streak-Zahl ist nicht an die Flamme herangerückt');
-      // Der Stern bleibt trotzdem frei — die Zahl darf nicht in ihn laufen.
-      expect(serie.right, lessThan(stern.left));
+      // Das Profilbild steht am rechten Rand, der freie Platz liegt davor.
+      expect(breite - profil.right, moreOrLessEquals(rand, epsilon: 1.0),
+          reason: 'Profilbild am rechten Rand');
+      expect(profil.left - stern.right, greaterThan(rand * 2),
+          reason: 'Der freie Platz sammelt sich vor dem Profilbild');
     });
   }
 
   testWidgets('das Welt-Emoji bleibt am linken Rand', (tester) async {
     await baue(tester, const Size(412, 800));
-    // 16 px Seitenrand der Leiste: Das Emoji sitzt linksbündig in seiner
-    // Fläche und rückt durch sie also nicht nach innen.
     final emoji =
         imKopf(tester, find.text(lernwelten.first.emoji), 'Welt-Emoji');
-    expect(emoji.left, moreOrLessEquals(16, epsilon: 1.0));
+    expect(emoji.left, moreOrLessEquals(rand, epsilon: 1.0));
+  });
+
+  /// DER EIGENTLICHE GRUND FÜR DEN FESTEN ABSTAND.
+  ///
+  /// Mit verteilten Lücken hing die Position des Sterns am freien Platz —
+  /// eine breitere Streak-Zahl schob ihn kaum. Jetzt hängt er am Ende der
+  /// Zahl und rückt genau um deren Zuwachs nach rechts.
+  testWidgets('Eine Stelle mehr in der Serie rückt den Stern nach rechts',
+      (tester) async {
+    await baue(tester, const Size(412, 800), streak: 7);
+    final schmalerStern = sternKasten(tester).left;
+    final schmaleZahl = imKopf(tester, find.text('7'), 'Seriezahl').width;
+
+    await baue(tester, const Size(412, 800), streak: 128);
+    final breiterStern = sternKasten(tester).left;
+    final breiteZahl = imKopf(tester, find.text('128'), 'Seriezahl').width;
+
+    expect(breiterStern, greaterThan(schmalerStern),
+        reason: 'Der Stern ist nicht mitgewandert');
+    // Und zwar um GENAU den Zuwachs der Zahl — nicht um weniger (Lücken, die
+    // sich neu verteilen) und nicht um mehr.
+    expect(breiterStern - schmalerStern,
+        moreOrLessEquals(breiteZahl - schmaleZahl, epsilon: 1.0));
   });
 }

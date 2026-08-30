@@ -3,7 +3,15 @@
 const Map<String, String> uebersetzungenProfil = {
   'Profil': 'Profile',
   'Spieler': 'Player',
+  // Die Titel-Staffel unter dem Namen (siehe data/spieler_titel.dart) — sie
+  // hängt an den abgeschlossenen Stationen, rund alle hundert eine Stufe.
+  'Geo-Neuling 🌱': 'Geo Novice 🌱',
   'Geo-Anfänger 🌍': 'Geo Beginner 🌍',
+  'Kartenleser 🗺️': 'Map Reader 🗺️',
+  'Weltenbummler 🧭': 'Globetrotter 🧭',
+  'Länderkenner 🏔️': 'Country Buff 🏔️',
+  'Geo-Profi 🎓': 'Geo Pro 🎓',
+  'Weltmeister 🏆': 'World Champion 🏆',
   'Lernpfad-Streak: {n} Tage': 'Learning path streak: {n} days',
   'Challenges': 'Challenges',
   'Stationen': 'Stations',

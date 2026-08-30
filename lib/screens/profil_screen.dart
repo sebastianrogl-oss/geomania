@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/lernpfad_data.dart';
 import '../data/modus_kategorien.dart';
+import '../data/spieler_titel.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/ad_service.dart';
 import '../services/abzeichen_service.dart';
@@ -261,7 +262,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
                           fontSize: 20,
                           fontWeight: FontWeight.w800)),
                   const SizedBox(height: 3),
-                  Text(t('Geo-Anfänger 🌍'),
+                  // Hängt an den abgeschlossenen Stationen — derselben Zahl,
+                  // die in der Kachel darunter steht (siehe spieler_titel.dart).
+                  // Wechselt still, ohne Feier: Der Moment gehört dem
+                  // Stationsabschluss.
+                  Text(titelFuerStationen(_totalSeen),
                       style: const TextStyle(
                           color: Color(0xFF4A9E4A),
                           fontSize: 12,

@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../data/abzeichen_data.dart';
 import '../data/lernpfad_data.dart';
 import 'challenge_rekord_service.dart';
@@ -43,6 +45,29 @@ class AbzeichenService {
   static Future<void> entziehen(String abzeichenId) async {
     final ids = await getFreigeschaltete();
     if (ids.remove(abzeichenId)) await _speichern(ids);
+  }
+
+  /// DEBUG: Schaltet ALLE Abzeichen frei — auch die Ehrungen.
+  ///
+  /// Zum Ansehen des vollen Münzalbums und, praktischer, zum Prüfen der
+  /// Profil-Kachel: Erst mit zweistelliger Zahl zeigt sich, ob sie noch in
+  /// die Münze passt. Über den normalen Weg wäre das eine Spielsaison
+  /// Arbeit.
+  ///
+  /// Gibt die neue Anzahl zurück.
+  static Future<int> debugAlleFreischalten() async {
+    if (!kDebugMode) return 0;
+    final ids = alleAbzeichen.map((a) => a.id).toSet();
+    await _speichern(ids);
+    return ids.length;
+  }
+
+  /// DEBUG: Nimmt alle Abzeichen wieder zurück — die Gegenrichtung zu
+  /// [debugAlleFreischalten], damit sich der Zustand nicht nur in eine
+  /// Richtung ändern lässt.
+  static Future<void> debugAlleEntziehen() async {
+    if (!kDebugMode) return;
+    await _speichern({});
   }
 
   /// Einmaliger Hinweis "Wische für dein Münzalbum" im Profilbild-Dialog —

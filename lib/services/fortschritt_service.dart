@@ -197,6 +197,56 @@ class FortschrittService {
     resetSignal.value++;
   }
 
+  /// DEBUG: Setzt den Streak direkt auf [wert].
+  ///
+  /// Anders als [debugLetzteAktivitaetAufGestern] (das den echten Weg über
+  /// streakAktualisieren nimmt und dabei die Feier auslöst) schreibt das hier
+  /// nur die Zahl. Gedacht zum Ansehen der Profil-Kachel: Die Zahl in der
+  /// Flamme staffelt sich nach Stellen, und von 8 auf 101 käme man sonst nur
+  /// über hundert Tage oder hundert Feier-Overlays.
+  static Future<void> debugStreakSetzen(int wert) async {
+    if (!kDebugMode) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kStreak, wert);
+    // Damit die Serie als LAUFEND gilt (siehe laufenderStreak) und die Flamme
+    // brennt statt grau zu sein.
+    await prefs.setString(_kLetzteAkt, DateTime.now().toIso8601String());
+    resetSignal.value++;
+  }
+
+  /// DEBUG: Markiert die ersten [anzahl] Stationen des Pfads als
+  /// abgeschlossen — oder hebt das wieder auf, wenn [anzahl] 0 ist.
+  ///
+  /// Die Stationszahl im Profil zählt echte Abschlüsse
+  /// ([LernpfadSnapshot.abgeschlosseneStationenAnzahl]); "alles freischalten"
+  /// öffnet zwar den Pfad, schliesst aber nichts ab. Um die Kachel mit einer
+  /// zwei- oder dreistelligen Zahl zu sehen, müsste man sonst tatsächlich so
+  /// viele Stationen spielen.
+  ///
+  /// Sterne vergibt das BEWUSST nicht: Die hängen an beantworteten Fragen
+  /// (lp_gesamt_richtig), nicht am Abschluss — und ein Debug-Knopf, der
+  /// nebenbei die Sternsumme aufbläst, würde die Preise der Profilbilder
+  /// verfälschen.
+  static Future<int> debugStationenAbschliessen(int anzahl) async {
+    if (!kDebugMode) return 0;
+    final prefs = await SharedPreferences.getInstance();
+    final alle = [
+      for (final w in lernwelten)
+        for (final a in w.abschnitte)
+          for (final s in a.stationen) s.id,
+    ];
+    for (var i = 0; i < alle.length; i++) {
+      final key = '$_sDone${alle[i]}';
+      if (i < anzahl) {
+        await prefs.setBool(key, true);
+      } else {
+        await prefs.remove(key);
+      }
+    }
+    resetSignal.value++;
+    return anzahl > alle.length ? alle.length : anzahl;
+  }
+
   // ── Station abschließen ────────────────────────────────────────────────────
 
   /// Markiert Station als abgeschlossen. [falscheFragenJson] ist eine

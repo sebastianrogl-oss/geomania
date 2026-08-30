@@ -650,6 +650,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  // ── DEBUG: Streak-Zahl springen lassen (nur kDebugMode) ───────────────────
+  //
+  // Reihum 8 → 23 → 101: ein-, zwei-, dreistellig. Der Knopf daneben
+  // ("Streak simulieren") geht den echten Weg und erhöht um eins, mitsamt
+  // Feier — von 8 auf 101 wären das hundert Overlays. Hier geht es nur um die
+  // Zahl in der Kachel, deshalb wird sie direkt gesetzt.
+  Future<void> _debugStreakZahl() async {
+    final snap = await FortschrittService.ladeSnapshot();
+    final ziel = snap.streak < 8
+        ? 8
+        : snap.streak < 23
+            ? 23
+            : snap.streak < 101
+                ? 101
+                : 8;
+    await FortschrittService.debugStreakSetzen(ziel);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('🐞 Streak auf $ziel gesetzt'),
+    ));
+  }
+
+  // ── DEBUG: Stationszahl simulieren (nur kDebugMode) ───────────────────────
+  //
+  // Reihum 0 → 8 → 128 → 0: einstellig, dreistellig, wieder leer. Genau die
+  // Fälle, an denen sich die Staffel der Kachel-Zahlen ablesen lässt. Die
+  // 128 ist mit Absicht dreistellig UND kleiner als der ganze Pfad, damit die
+  // Kachel nicht wie "fertig" aussieht.
+  Future<void> _debugStationenSimulieren() async {
+    final snap = await FortschrittService.ladeSnapshot();
+    final jetzt = snap.abgeschlosseneStationenAnzahl;
+    final ziel = jetzt == 0
+        ? 8
+        : jetzt <= 8
+            ? 128
+            : 0;
+    final gesetzt = await FortschrittService.debugStationenAbschliessen(ziel);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('🐞 $gesetzt Stationen als abgeschlossen markiert'),
+    ));
+  }
+
+  // ── DEBUG: Alle Abzeichen (nur kDebugMode) ────────────────────────────────
+  //
+  // Zum Prüfen der Profil-Kachel: Erst mit zweistelliger Zahl zeigt sich, ob
+  // sie noch in die Münze passt — und über den normalen Weg wäre das eine
+  // Spielsaison Arbeit. Der Knopf schaltet um, damit sich der Zustand nicht
+  // nur in eine Richtung ändern lässt.
+
+  Future<void> _debugAlleAbzeichen() async {
+    final vorhanden = (await AbzeichenService.getFreigeschaltete()).length;
+    final String meldung;
+    if (vorhanden >= alleAbzeichen.length) {
+      await AbzeichenService.debugAlleEntziehen();
+      meldung = '🐞 Alle Abzeichen entzogen';
+    } else {
+      final anzahl = await AbzeichenService.debugAlleFreischalten();
+      meldung = '🐞 $anzahl Abzeichen freigeschaltet';
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(meldung)));
+  }
+
   // ── DEBUG: Einwilligung (nur kDebugMode) ──────────────────────────────────
   //
   // Der Ablauf ist sonst genau EINMAL zu sehen — beim allerersten Start nach
@@ -1171,6 +1236,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: t('Streak-Ziel zeigen (Debug)'),
                   titleColor: const Color(0xFFB8570A),
                   onTap: _debugStreakZiel,
+                ),
+                _Zeile(
+                  icon: Icons.tag_rounded,
+                  title: t('Streak-Zahl springen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugStreakZahl,
+                ),
+                _Zeile(
+                  icon: Icons.numbers_rounded,
+                  title: t('Stationszahl simulieren (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugStationenSimulieren,
+                ),
+                _Zeile(
+                  icon: Icons.workspace_premium_outlined,
+                  title: t('Alle Abzeichen an/aus (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugAlleAbzeichen,
                 ),
                 _Zeile(
                   icon: Icons.privacy_tip_outlined,

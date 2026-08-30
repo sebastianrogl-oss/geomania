@@ -1197,7 +1197,23 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
           ),
         ),
       ),
-      body: frage == null
+      // TIPP DANEBEN SCHLIESST DIE TASTATUR — wie auf dem Namensfeld beim
+      // ersten Start (anzeigename_screen.dart).
+      //
+      // Betrifft die drei Eingabe-Modi (Hauptstadt, Flaggen- und
+      // Umriss-Quiz mit Tastatur): Das Feld holt sich den Fokus per
+      // autofocus, und ohne diesen Fänger gab es keinen Weg zurück —
+      // Android schliesst die Tastatur von sich aus nicht, und die anderen
+      // Flächen des Quiz nehmen den Fokus nicht an. Die halbe Spielfläche
+      // blieb verdeckt.
+      //
+      // Liegt um den GANZEN Body und nicht nur um die Eingabe-Modi: Ein
+      // Fänger, der nichts zu fangen hat, kostet nichts — die Kinder werden
+      // beim Treffertest zuerst gefragt und behalten ihre Tipps.
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: frage == null
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
@@ -1294,6 +1310,7 @@ class _StationQuizScreenState extends State<StationQuizScreen> {
                   ),
               ],
             ),
+      ),
     );
   }
 

@@ -215,7 +215,32 @@ class _StartWrapperState extends State<StartWrapper> {
       // den Zielscreen — ein Übergang statt zweier.
       return Scaffold(
         backgroundColor: kHintergrund,
-        body: const GradnetzHintergrund(schritt: 0, child: SizedBox.expand()),
+        body: GradnetzHintergrund(
+          schritt: 0,
+          // Ein Zeichen, dass gearbeitet wird — aber erst, wenn es sich
+          // lohnt. Der Normalfall ist unter einer Sekunde durch; ein Kringel,
+          // der dabei kurz aufblitzt, wirkt hektischer als gar keiner.
+          // Bleibt es länger, sieht der Nutzer sonst eine leere Fläche und
+          // hält die App für kaputt.
+          child: FutureBuilder<void>(
+            future: Future<void>.delayed(const Duration(milliseconds: 1200)),
+            builder: (context, schnappschuss) {
+              if (schnappschuss.connectionState != ConnectionState.done) {
+                return const SizedBox.expand();
+              }
+              return const Center(
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: Color(0xFF4A9E4A),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       );
     }
     if (_nameGewaehlt == false) {

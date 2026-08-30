@@ -64,7 +64,27 @@ class AuthService {
     final u = _auth.currentUser;
     if (u == null) return false;
     try {
-      final daten = (await _db.collection('spieler').doc(u.uid).get()).data();
+      // MIT ZEITLIMIT, und das ist der Unterschied zwischen "kurz warten" und
+      // "die App startet nicht".
+      //
+      // Der StartWrapper hängt an dieser Antwort und zeigt bis dahin nur den
+      // Gradnetz-Hintergrund. Ein FEHLER kam bisher schon durch (unten im
+      // catch), aber eine hängende Verbindung ist kein Fehler: Firestore
+      // wartet dann, ohne je zu antworten — Hotel-WLAN, Funkloch mit
+      // Balkenanzeige, Portal-Anmeldung. Am Gerät gemessen dauert der Zugriff
+      // sonst rund 1,2 s; vier Sekunden sind reichlich Luft und trotzdem eine
+      // Grenze.
+      //
+      // Der Rückfall ist dabei nicht geraten: [hatAnzeigename] liest den
+      // Namen aus dem lokal zwischengespeicherten Konto. Wer schon einen hat,
+      // spielt weiter; wer keinen hat, bekommt die Namensabfrage — die ohne
+      // Verbindung ohnehin nicht durchginge, aber dann wenigstens etwas zeigt.
+      final daten = (await _db
+              .collection('spieler')
+              .doc(u.uid)
+              .get()
+              .timeout(const Duration(seconds: 4)))
+          .data();
       if (daten == null) return false;
       if (daten['nameGewaehlt'] == true) return true;
       // Rückfall für Dokumente aus der Zeit vor diesem Feld: ein gespeicherter
@@ -72,8 +92,8 @@ class AuthService {
       final name = (daten['anzeigename'] as String? ?? '').trim();
       return name.isNotEmpty && name != _kNamensPlatzhalter;
     } catch (_) {
-      // Kein Netz: lieber weiterspielen lassen als vor einer Namensabfrage
-      // festhängen, die ohne Verbindung ohnehin nicht durchginge.
+      // Kein Netz, oder das Zeitlimit oben ist abgelaufen: lieber
+      // weiterspielen lassen als vor einer Namensabfrage festhängen.
       return hatAnzeigename;
     }
   }

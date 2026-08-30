@@ -44,7 +44,8 @@ class RanglisteScreen extends StatefulWidget {
 class _RanglisteScreenState extends State<RanglisteScreen> {
   _Challenge _challenge = _Challenge.schaetzen;
   int _portfolioSubTab = 0; // 0 = Heute, 1 = Gesamt (Alltime)
-  late Future<List<RanglistenEintrag>> _future;
+  /// null als Ergebnis heisst: nicht geladen (kein Netz, Firestore-Fehler).
+  late Future<List<RanglistenEintrag>?> _future;
   String? _eigenesProfilbild;
   // Eigener Platz im Portfolio-Gesamt-Ranking, auch außerhalb der
   // angezeigten Top 100 (siehe RanglisteService.ladeEigenenPlatzPortfolio).
@@ -72,7 +73,8 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
         .then((pfad) => mounted ? setState(() => _eigenesProfilbild = pfad) : null);
   }
 
-  Future<List<RanglistenEintrag>> _ladeAktuelle() {
+  /// null heisst: konnte nicht geladen werden (siehe [RanglisteService]).
+  Future<List<RanglistenEintrag>?> _ladeAktuelle() {
     if (_challenge == _Challenge.portfolio && _portfolioSubTab == 1) {
       _ladeEigenenPlatzPortfolio();
       return RanglisteService.ladePortfolioAlltime();
@@ -246,7 +248,7 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
               child: RefreshIndicator(
                 color: const Color(0xFF4A9E4A),
                 onRefresh: _refresh,
-                child: FutureBuilder<List<RanglistenEintrag>>(
+                child: FutureBuilder<List<RanglistenEintrag>?>(
                   future: _future,
                   builder: (context, snap) {
                     if (snap.connectionState == ConnectionState.waiting) {
@@ -262,7 +264,21 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
                         ],
                       );
                     }
-                    final liste = snap.data ?? [];
+                    // NICHT GELADEN ist etwas anderes als LEER.
+                    //
+                    // Vorher fing der Dienst jeden Fehler ab und gab eine
+                    // leere Liste zurück — ohne Netz stand in der Rangliste
+                    // "Noch keine Einträge heute, sei der Erste!". Das ist
+                    // nicht nur falsch, es klingt auch wie eine Einladung,
+                    // während in Wahrheit gar nichts abgefragt werden konnte.
+                    if (snap.data == null) {
+                      return ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+                        children: const [_KeineVerbindung()],
+                      );
+                    }
+                    final liste = snap.data!;
                     if (liste.isEmpty) {
                       // Bei Portfolio "Gesamt" (kein Tagesbezug) und bei
                       // "Heute" bleibt die ursprüngliche "sei der Erste"-
@@ -643,6 +659,51 @@ class _ProfilbildIcon extends StatelessWidget {
 }
 
 // ── Leerzustand ───────────────────────────────────────────────────────────────
+
+/// Dieselbe Karte wie [_LeererZustand], aber für den Fall, dass die Liste gar
+/// nicht abgefragt werden konnte. Der Hinweis auf das Herunterziehen ist
+/// wichtig: Der [RefreshIndicator] liegt darüber, man sieht ihm nur nicht an,
+/// dass er hier der Weg zurück ist.
+class _KeineVerbindung extends StatelessWidget {
+  const _KeineVerbindung();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAEAE5),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+      child: Column(
+        children: [
+          const Text('📡', style: TextStyle(fontSize: 28)),
+          const SizedBox(height: 12),
+          Text(
+            t('Rangliste nicht erreichbar'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF1A1A1A),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            t('Prüf deine Verbindung und zieh die Liste nach unten.'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF888888),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _LeererZustand extends StatelessWidget {
   final bool vergangenerTag;

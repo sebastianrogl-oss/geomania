@@ -141,7 +141,9 @@ class RanglisteService {
 
   // Top 100 der Tages-Rangliste für [tag] (Standard: heute) — [tag] erlaubt
   // das Zurückblättern durch die 14-Tage-Historie im Rangliste-Screen.
-  static Future<List<RanglistenEintrag>> ladeTagesRangliste(
+  /// Gibt null zurueck, wenn die Rangliste NICHT GELADEN werden konnte —
+  /// leere Liste heisst dagegen: geladen, aber noch niemand hat gespielt.
+  static Future<List<RanglistenEintrag>?> ladeTagesRangliste(
       String challengeId, {
     DateTime? tag,
   }) async {
@@ -265,7 +267,8 @@ class RanglisteService {
     }
   }
 
-  static Future<List<RanglistenEintrag>> ladePortfolioAlltime() async {
+  /// null bei Ladefehler, siehe [ladeTagesRangliste].
+  static Future<List<RanglistenEintrag>?> ladePortfolioAlltime() async {
     try {
       final q = await _db
           .collection('portfolio_alltime')

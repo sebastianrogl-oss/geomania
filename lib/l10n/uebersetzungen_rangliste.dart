@@ -11,4 +11,9 @@ const Map<String, String> uebersetzungenRangliste = {
   // Unter der eigenen Zeile: der eigene Platz und wie viele Spieler
   // insgesamt gewertet sind.
   'Dein Platz: #{p} von {g}': 'Your rank: #{p} of {g}',
+  // Wenn die Liste gar nicht geladen werden konnte — zu unterscheiden von
+  // "geladen, aber noch leer".
+  'Rangliste nicht erreichbar': 'Leaderboard unavailable',
+  'Prüf deine Verbindung und zieh die Liste nach unten.':
+      'Check your connection and pull the list down.',
 };

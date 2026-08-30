@@ -60,11 +60,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Versionsangabe.
   String _appVersion = '1.1.0';
 
+  /// Siehe [_ladeWerbeeinstellungen] — startet auf false, damit der Punkt
+  /// nicht kurz aufblitzt, bevor die Antwort von UMP da ist.
+  bool _werbeeinstellungenVerfuegbar = false;
+
   @override
   void initState() {
     super.initState();
     _load();
     _ladeAppVersion();
+    _ladeWerbeeinstellungen();
     // Sprachwechsel von hier aus soll den Screen selbst sofort neu
     // aufbauen (z.B. der Checkmark bei Deutsch/English), nicht erst nach
     // einem Neustart der ganzen App.
@@ -513,9 +518,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── Werbeeinstellungen (UMP-Consent) ────────────────────────────────────
 
+  /// Ob der Punkt "Werbeeinstellungen verwalten" überhaupt erscheint.
+  ///
+  /// UMP verlangt die Datenschutzoptionen nur dort, wo eine Einwilligung
+  /// nötig war (EEA, UK, Schweiz) — und nur, wenn in der AdMob-Konsole eine
+  /// Datenschutzbotschaft MIT Datenschutzoptionen veröffentlicht ist. Sonst
+  /// gibt es nichts zu verwalten, und ein Eintrag, der beim Antippen nur
+  /// bedauert, ist schlechter als gar keiner.
+  Future<void> _ladeWerbeeinstellungen() async {
+    final verfuegbar = await AdService.werbeeinstellungenVerfuegbar();
+    if (!mounted) return;
+    setState(() => _werbeeinstellungenVerfuegbar = verfuegbar);
+  }
+
   Future<void> _werbeeinstellungenVerwalten() async {
     final verfuegbar = await AdService.zeigeConsentEinstellungen();
     if (!verfuegbar && mounted) {
+      // Sicherheitsnetz: Zwischen dem Aufbau des Screens und diesem Tipp kann
+      // sich der Stand geändert haben (Einwilligung widerrufen, Botschaft in
+      // der Konsole zurückgezogen). Dann verschwindet der Punkt beim nächsten
+      // Aufbau — dieser eine Tipp braucht aber trotzdem eine Antwort.
+      setState(() => _werbeeinstellungenVerfuegbar = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(t('Aktuell keine Werbeeinstellungen verfügbar')),
       ));
@@ -625,6 +648,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Bis zur Wurzel zurück: dort hängt der StartWrapper am Anmeldestand und
     // zeigt von selbst wieder den Anmelde-Screen.
     Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  // ── DEBUG: Einwilligung (nur kDebugMode) ──────────────────────────────────
+  //
+  // Der Ablauf ist sonst genau EINMAL zu sehen — beim allerersten Start nach
+  // der Installation. Neu installieren kostet den ganzen Spielstand, und ohne
+  // Zurücksetzen liesse sich keine Änderung an der AdMob-Konsole nachprüfen.
+  //
+  // Zurücksetzen und danach dieselbe Prüfung wie beim App-Start: So zeigt der
+  // Knopf den echten Ablauf, nicht einen nachgebauten.
+
+  Future<void> _debugConsentZuruecksetzen() async {
+    await AdService.debugConsentZuruecksetzen();
+    await AdService.pruefeUndZeigeConsent();
+    // Die Datenschutzoptionen können danach anders ausfallen — der Punkt
+    // "Werbeeinstellungen verwalten" muss also neu entscheiden, ob er da ist.
+    await _ladeWerbeeinstellungen();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('🐞 Einwilligung zurückgesetzt und neu abgefragt'),
+    ));
+  }
+
+  Future<void> _debugConsentStand() async {
+    final stand = await AdService.debugConsentStand();
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('🐞 Einwilligungs-Stand'),
+        content: Text(stand, style: const TextStyle(fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(t('Schließen')),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── DEBUG: Testkonto löschen (nur kDebugMode) ─────────────────────────────
@@ -1110,6 +1172,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   titleColor: const Color(0xFFB8570A),
                   onTap: _debugStreakZiel,
                 ),
+                _Zeile(
+                  icon: Icons.privacy_tip_outlined,
+                  title: t('Einwilligung zurücksetzen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugConsentZuruecksetzen,
+                ),
+                _Zeile(
+                  icon: Icons.fact_check_outlined,
+                  title: t('Einwilligungs-Stand zeigen (Debug)'),
+                  titleColor: const Color(0xFFB8570A),
+                  onTap: _debugConsentStand,
+                ),
               ]),
               const SizedBox(height: 24),
             ],
@@ -1132,12 +1206,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: t('Version'),
                 subtitle: _appVersion,
               ),
-              const _Trenner(),
-              _Zeile(
-                icon: Icons.privacy_tip_outlined,
-                title: t('Werbeeinstellungen verwalten'),
-                onTap: _werbeeinstellungenVerwalten,
-              ),
+              // Nur dort, wo es etwas zu verwalten gibt — siehe
+              // [_ladeWerbeeinstellungen].
+              if (_werbeeinstellungenVerfuegbar) ...[
+                const _Trenner(),
+                _Zeile(
+                  icon: Icons.privacy_tip_outlined,
+                  title: t('Werbeeinstellungen verwalten'),
+                  onTap: _werbeeinstellungenVerwalten,
+                ),
+              ],
               const _Trenner(),
               _Zeile(
                 icon: Icons.mail_outline_rounded,

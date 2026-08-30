@@ -253,11 +253,64 @@ class AdService {
   /// Beim App-Start aufrufen, bevor AdMob initialisiert wird. Holt den
   /// aktuellen Einwilligungsstatus und zeigt bei Bedarf (Nutzer in
   /// EEA/UK/Schweiz, noch keine Wahl getroffen) das UMP-Consent-Formular.
+  /// Kennung DIESES Testgeräts, wie sie UMP selbst im Log nennt:
+  /// „Use new ConsentDebugSettings.Builder().addTestDeviceHashedId(...)".
+  ///
+  /// Ein anderes Gerät braucht seine eigene — sie steht beim ersten Start im
+  /// Log. Eine falsche Kennung schadet nicht, sie greift dann einfach nicht.
+  static const _kTestGeraet = 'B6B456913B1B00418580FBCF311182D9';
+
+  /// Im Debug-Build: Gerät als Testgerät melden und die Region auf EEA
+  /// festnageln.
+  ///
+  /// Beides ist zum Prüfen nötig. Ohne die Testgeräte-Kennung ignoriert UMP
+  /// die Debug-Region; ohne die Region hängt das Verhalten daran, wo man
+  /// gerade sitzt. Zusammen zeigen sie zuverlässig das, was ein Nutzer in
+  /// Europa sähe.
+  ///
+  /// Im Release ist das null — dort gilt die echte Region des Nutzers.
+  static ConsentDebugSettings? get _debugEinstellungen => kDebugMode
+      ? ConsentDebugSettings(
+          debugGeography: DebugGeography.debugGeographyEea,
+          testIdentifiers: [_kTestGeraet],
+        )
+      : null;
+
+  /// DEBUG: Vergisst die gespeicherte Einwilligung.
+  ///
+  /// Danach steht UMP wieder wie beim allerersten Start da — der Ablauf lässt
+  /// sich also beliebig oft durchspielen, ohne die App neu zu installieren
+  /// (was den ganzen Spielstand kosten würde).
+  ///
+  /// Zeigt selbst KEIN Formular: Der Aufrufer ruft danach
+  /// [pruefeUndZeigeConsent] auf und sieht damit genau den Ablauf, den auch
+  /// der App-Start nimmt.
+  static Future<void> debugConsentZuruecksetzen() async {
+    if (kIsWeb || !kDebugMode) return;
+    await ConsentInformation.instance.reset();
+    debugPrint('[Consent/DEBUG] Einwilligung zurückgesetzt');
+  }
+
+  /// DEBUG: Der Zustand, den UMP gerade meldet — für die Ausgabe im
+  /// Debug-Bereich der Einstellungen.
+  static Future<String> debugConsentStand() async {
+    if (kIsWeb) return 'Web: keine Werbung';
+    final status = await ConsentInformation.instance.getConsentStatus();
+    final optionen = await ConsentInformation.instance
+        .getPrivacyOptionsRequirementStatus();
+    final formular =
+        await ConsentInformation.instance.isConsentFormAvailable();
+    return 'Einwilligung: ${status.name}\n'
+        'Datenschutzoptionen: ${optionen.name}\n'
+        'Formular verfügbar: ${formular ? 'ja' : 'nein'}';
+  }
+
   static Future<void> pruefeUndZeigeConsent() async {
     if (kIsWeb) return;
 
     final completer = Completer<void>();
-    final params = ConsentRequestParameters();
+    final params =
+        ConsentRequestParameters(consentDebugSettings: _debugEinstellungen);
 
     ConsentInformation.instance.requestConsentInfoUpdate(
       params,
@@ -319,12 +372,35 @@ class AdService {
   ///
   /// Gibt zurück, ob ein Formular verfügbar war und angezeigt wurde (false
   /// z.B. außerhalb EU/UK/Schweiz, wo UMP nicht zwingend ist).
+  /// Gibt es für diesen Nutzer überhaupt etwas zu verwalten?
+  ///
+  /// Genau die Bedingung, unter der [zeigeConsentEinstellungen] etwas tut —
+  /// hier nach aussen gelegt, damit die Einstellungen den Punkt gar nicht
+  /// erst anzeigen, wo es nichts zu ändern gibt. Ohne Einwilligungspflicht
+  /// (ausserhalb EEA/UK/Schweiz) stünde dort sonst ein Eintrag, der beim
+  /// Antippen nur bedauert.
+  ///
+  /// UMP beantwortet das erst, wenn [pruefeUndZeigeConsent] beim Start die
+  /// Kontodaten geholt hat. Kam die Abfrage nicht durch — kein Netz, oder in
+  /// der AdMob-Konsole ist für diese App keine Datenschutzbotschaft
+  /// veröffentlicht —, lautet die Antwort "nicht erforderlich", und der Punkt
+  /// bleibt verborgen.
+  static Future<bool> werbeeinstellungenVerfuegbar() async {
+    if (kIsWeb) return false;
+    try {
+      final status = await ConsentInformation.instance
+          .getPrivacyOptionsRequirementStatus();
+      return status == PrivacyOptionsRequirementStatus.required;
+    } catch (e) {
+      debugPrint('Datenschutzoptionen-Status nicht lesbar: $e');
+      return false;
+    }
+  }
+
   static Future<bool> zeigeConsentEinstellungen() async {
     if (kIsWeb) return false;
 
-    final status = await ConsentInformation.instance
-        .getPrivacyOptionsRequirementStatus();
-    if (status != PrivacyOptionsRequirementStatus.required) return false;
+    if (!await werbeeinstellungenVerfuegbar()) return false;
 
     await ConsentForm.showPrivacyOptionsForm((FormError? formError) {
       if (formError != null) {

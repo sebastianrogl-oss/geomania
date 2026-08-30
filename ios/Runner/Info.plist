@@ -51,6 +51,29 @@
 	<true/>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-4580295867570231~8188197920</string>
+	<!-- Text des ATT-Dialogs (App Tracking Transparency), den iOS ab Version 14
+	     vor dem Zugriff auf die Werbe-ID zeigt. OHNE diesen Schlüssel darf die
+	     Abfrage gar nicht erscheinen, und die Werbung bleibt dauerhaft
+	     unpersonalisiert. Bewusst in der Sprache des Nutzens formuliert, nicht
+	     in Rechtsdeutsch: Apple lehnt Texte ab, die nur die Erlaubnis
+	     einfordern, ohne zu sagen, wofür. -->
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Damit dir GeoMania Werbung zeigen kann, die zu dir passt — und die App für dich kostenlos bleibt.</string>
+	<!-- SKAdNetwork-Kennungen der Werbenetzwerke, die Installationen messen
+	     dürfen. HIER STEHT NUR GOOGLE SELBST: Die vollständige Liste der
+	     AdMob-Vermittlungspartner umfasst über hundert Einträge, sie ändert
+	     sich laufend, und sie gehört aus Googles eigener Dokumentation
+	     übernommen (developers.google.com/admob/ios/. Suche nach
+	     SKAdNetworkItems). Eine aus dem Gedächtnis getippte Liste wäre
+	     schlimmer als keine — falsche Kennungen fallen niemandem auf, kosten
+	     aber Zuordnung und damit Umsatz. -->
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

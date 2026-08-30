@@ -115,6 +115,35 @@ const double _kZahlAnteil = 0.32; // 0.40 × 0.8
 /// als einzige kleiner als die beiden anderen.
 const double _kZahlFaktorButton = 1.0;
 
+// ── Wie stark eine Zahl mit jeder Stelle schrumpft ──────────────────────────
+//
+// Eine einstellige Zahl darf gross sein — sie steht allein in der Mitte. Mit
+// jeder weiteren Ziffer wird die Zeile breiter, und irgendwann drückt sie
+// gegen den Rand ihrer Grafik. Die drei Grafiken vertragen dabei
+// UNTERSCHIEDLICH VIEL, deshalb drei Staffeln statt einer:
+//
+// Die Flamme ist die engste. Ihre Zahl sitzt in der schmalen Spitze, und
+// schon zwei Ziffern füllen sie aus — sie schrumpft deshalb als einzige
+// bereits ab der zweiten Stelle, und ein zweites Mal ab der dritten.
+//
+// Münze und Stationsbutton sind runde Flächen mit viel Platz in der Breite;
+// zwei Ziffern stehen dort bequem. Sie schrumpfen erst ab der dritten.
+// (Beim Abzeichen ist die dritte Stelle heute unerreichbar — die Staffel
+// steht trotzdem da, damit die Kachel nicht irgendwann als einzige überläuft.)
+//
+// Die Werte greifen an der SCHRIFTGRÖSSE an, nicht an einer FittedBox: Eine
+// nachträglich gestauchte Zahl wirkt gequetscht, eine kleiner gesetzte nicht.
+// Die FittedBox im [_Zahl] bleibt als Notnagel darunter liegen.
+const Map<int, double> _kZahlStaffelFlamme = {1: 1.0, 2: 0.82, 3: 0.66};
+const Map<int, double> _kZahlStaffelRund = {1: 1.0, 2: 1.0, 3: 0.82};
+
+/// Der Faktor für [zahl] aus einer der Staffeln oben — bei mehr Stellen als
+/// hinterlegt gilt der letzte Eintrag.
+double _zahlFaktor(Map<int, double> staffel, int zahl) {
+  final stellen = zahl.abs().toString().length;
+  return staffel[stellen] ?? staffel[staffel.keys.last]!;
+}
+
 /// Breite, die der Zahl im Kreis zur Verfügung steht, als Anteil des
 /// Durchmessers.
 const double _kZahlBereich = 0.82;
@@ -177,7 +206,7 @@ class StatistikKacheln extends StatelessWidget {
             grafik: (grundmass, zahl) => _Flamme(
               zahl: streak,
               hoehe: grundmass * _kFlammeFaktor,
-              zahlGroesse: zahl,
+              zahlGroesse: zahl * _zahlFaktor(_kZahlStaffelFlamme, streak),
             ),
           ),
         ),
@@ -189,7 +218,8 @@ class StatistikKacheln extends StatelessWidget {
             grafik: (grundmass, zahl) => StatistikStationsButton(
               zahl: stationen,
               durchmesser: grundmass * _kButtonFaktor,
-              zahlGroesse: zahl * _kZahlFaktorButton,
+              zahlGroesse:
+                  zahl * _kZahlFaktorButton * _zahlFaktor(_kZahlStaffelRund, stationen),
             ),
           ),
         ),
@@ -205,7 +235,7 @@ class StatistikKacheln extends StatelessWidget {
                 inhalt: _Zahl(
                   zahl: abzeichen,
                   farbe: kMuenzInhaltFarbe,
-                  groesse: zahl,
+                  groesse: zahl * _zahlFaktor(_kZahlStaffelRund, abzeichen),
                   bereich: muenze * _kZahlBereich,
                 ),
               );

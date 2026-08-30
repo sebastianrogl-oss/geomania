@@ -126,20 +126,74 @@ void main() {
     }
   });
 
-  testWidgets('alle drei Zahlen sind gleich groß', (tester) async {
+  testWidgets('bei GLEICHER Stellenzahl sind alle drei Zahlen gleich groß',
+      (tester) async {
     // Die Zahl im Stationsbutton war zwischenzeitlich absichtlich kleiner
-    // (0.8 wie der Button selbst). Jetzt gilt wieder für alle drei dieselbe
-    // Größe — und zwar die des Buttons, die anderen beiden sind zu ihr
-    // heruntergezogen worden.
-    await baue(tester, const Size(412, 915));
+    // (0.8 wie der Button selbst). Jetzt gilt für alle drei dieselbe Größe —
+    // solange sie gleich viele Stellen haben. Unterschiedlich groß dürfen sie
+    // nur durch die Stellen-Staffel werden, nie durch die Grafik dahinter.
+    await baue(tester, const Size(412, 915),
+        streak: 7, stationen: 8, abzeichen: 9);
     final streak = gerendert(tester, '7');
-    final abzeichen = gerendert(tester, '12');
-    final stationen = gerendert(tester, '128');
+    final stationen = gerendert(tester, '8');
+    final abzeichen = gerendert(tester, '9');
 
     expect(abzeichen, moreOrLessEquals(streak, epsilon: 0.5),
         reason: 'Streak $streak vs. Abzeichen $abzeichen');
     expect(stationen, moreOrLessEquals(streak, epsilon: 0.5),
         reason: 'Streak $streak vs. Stationen $stationen');
+  });
+
+  /// ── Die Stellen-Staffel ───────────────────────────────────────────────
+  ///
+  /// Je mehr Ziffern, desto breiter die Zeile — und desto näher rückt sie an
+  /// den Rand ihrer Grafik. Die drei Grafiken vertragen dabei verschieden
+  /// viel, deshalb zwei Staffeln (siehe statistik_kacheln.dart).
+  ///
+  /// Gemessen wird die GERENDERTE Höhe: Sie folgt der Schriftgröße, und genau
+  /// dort greift die Staffel. Eine nachträgliche Stauchung durch die FittedBox
+  /// würde der Test daneben (»keine Zahl wird nachträglich verkleinert«)
+  /// abfangen.
+
+  testWidgets('Die Flamme schrumpft ab der zweiten und ab der dritten Stelle',
+      (tester) async {
+    // Stationen und Abzeichen bekommen Werte, die mit keiner Streak-Zahl
+    // zusammenfallen — sonst findet der Text-Finder zwei Treffer.
+    await baue(tester, const Size(412, 915),
+        streak: 7, stationen: 555, abzeichen: 44);
+    final eine = gerendert(tester, '7');
+    await baue(tester, const Size(412, 915),
+        streak: 12, stationen: 555, abzeichen: 44);
+    final zwei = gerendert(tester, '12');
+    await baue(tester, const Size(412, 915),
+        streak: 128, stationen: 555, abzeichen: 44);
+    final drei = gerendert(tester, '128');
+
+    expect(zwei, lessThan(eine),
+        reason: 'zweistellig ($zwei) ist nicht kleiner als einstellig ($eine)');
+    expect(drei, lessThan(zwei),
+        reason: 'dreistellig ($drei) ist nicht kleiner als zweistellig ($zwei)');
+  });
+
+  testWidgets('Stationen und Abzeichen schrumpfen erst ab der dritten Stelle',
+      (tester) async {
+    // Geprüft am Stationsbutton; die Münze nutzt dieselbe Staffel.
+    await baue(tester, const Size(412, 915),
+        streak: 7, stationen: 8, abzeichen: 44);
+    final eineStation = gerendert(tester, '8');
+    await baue(tester, const Size(412, 915),
+        streak: 7, stationen: 88, abzeichen: 44);
+    final zweiStellen = gerendert(tester, '88');
+    await baue(tester, const Size(412, 915),
+        streak: 7, stationen: 888, abzeichen: 44);
+    final dreiStellen = gerendert(tester, '888');
+
+    // Zwei Ziffern stehen in den runden Flächen bequem — hier ändert sich
+    // nichts, anders als bei der Flamme.
+    expect(zweiStellen, moreOrLessEquals(eineStation, epsilon: 0.5),
+        reason: 'zweistellig ($zweiStellen) vs. einstellig ($eineStation)');
+    expect(dreiStellen, lessThan(zweiStellen),
+        reason: 'dreistellig ($dreiStellen) ist nicht kleiner');
   });
 
   testWidgets('keine Zahl wird nachträglich verkleinert — ein-, zwei- und '

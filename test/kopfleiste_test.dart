@@ -30,6 +30,10 @@ void main() {
   /// Zeichen (`_kLeisteRand` in home_screen.dart).
   const rand = 16.0;
 
+  /// Abstand zwischen den Zeichen (_kZeichenAbstand in home_screen.dart).
+  /// Kleiner als der Rand, weil die Kaesten breiter sind als ihr Inhalt.
+  const zeichenAbstand = 6.0;
+
   Future<void> baue(WidgetTester tester, Size schirm, {int streak = 7}) async {
     SharedPreferences.setMockInitialValues({
       'lp_streak': streak,
@@ -93,13 +97,32 @@ void main() {
               of: find.byType(ClipOval), matching: find.byType(SizedBox)),
           'Profil-Kasten');
 
-      // Gemessen von Kasten zu Kasten: Wie die Zeichen INNERHALB ihrer Kästen
-      // sitzen, ist eine optische Entscheidung (die Streak-Zahl rückt in den
-      // durchsichtigen Rand der Flamme) und darf hier nicht ausschlagen.
-      expect(flamme.left - emoji.right, moreOrLessEquals(rand, epsilon: 1.0),
+      // BEIDE LÜCKEN GLEICH — und zwar im Layout gleich, weil beide Kästen
+      // ihren Inhalt unterschiedlich weit einrücken. Die Flamme hat rundum
+      // durchsichtigen Rand, die Streak-Zahl ist zusätzlich nach links
+      // gerückt; nur deshalb sehen 6 px hier wie 16 aus.
+      expect(flamme.left - emoji.right,
+          moreOrLessEquals(zeichenAbstand, epsilon: 1.0),
           reason: 'Emoji → Flamme');
-      expect(stern.left - flamme.right, moreOrLessEquals(rand, epsilon: 1.0),
-          reason: 'Flamme → Stern');
+
+      // ZWISCHEN FLAMME UND STERN ZÄHLT DER SICHTBARE ABSTAND, nicht der im
+      // Layout. Die Streak-Zahl ist 10 px nach links in den durchsichtigen
+      // Rand der Flamme gerückt; ihr Kasten endet also 10 px weiter rechts,
+      // als die Ziffer aufhört. Mit dem vollen Seitenrand dazwischen klaffte
+      // sichtbar eine Lücke von 26 px, wo überall sonst 16 stehen.
+      //
+      // Gemessen wird deshalb von der Ziffer zum Sternzeichen — genau das,
+      // was man sieht.
+      final serie = imKopf(tester, find.text('7'), 'Seriezahl');
+      final sternZeichen = imKopf(tester, find.text('⭐'), 'Sternzeichen');
+      expect(sternZeichen.left - serie.right,
+          moreOrLessEquals(rand, epsilon: 1.5),
+          reason: 'Sichtbare Lücke zwischen Serie und Stern');
+      // Der Kasten-Abstand ist entsprechend kleiner — hier steht er, damit
+      // eine Änderung am Versatz nicht unbemerkt beide Werte verschiebt.
+      expect(stern.left - flamme.right,
+          moreOrLessEquals(zeichenAbstand, epsilon: 1.0),
+          reason: 'Flamme → Stern im Layout');
 
       // Das Profilbild steht am rechten Rand, der freie Platz liegt davor.
       expect(breite - profil.right, moreOrLessEquals(rand, epsilon: 1.0),

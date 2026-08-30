@@ -614,6 +614,25 @@ const double _kTippflaeche = 44;
 /// Seitenrand der grünen Kopfleiste, links wie rechts.
 const double _kLeisteRand = 16;
 
+/// Abstand ZWISCHEN den Zeichen der Leiste — deutlich kleiner als der
+/// Seitenrand, und das ist kein Widerspruch.
+///
+/// Die Kästen sind breiter als das, was man in ihnen sieht: Die Flamme hat
+/// rundum durchsichtigen Rand, und die Streak-Zahl ist zusätzlich 10 px nach
+/// links gerückt (siehe [_kStreakZahlVersatz]), ihr Kasten endet also weiter
+/// rechts als die Ziffer. Mit dem vollen Seitenrand dazwischen klafften
+/// sichtbar rund 25 px, wo 16 gemeint waren.
+///
+/// Der Wert ist deshalb am SICHTBAREN Ergebnis gewählt, nicht am Layout —
+/// beide Lücken sollen gleich aussehen, nicht gleich gemessen sein. Eine
+/// dreistellige Zahl schiebt den Stern weiterhin um ihre volle Breite nach
+/// rechts: Gerechnet wird ab dem Kasten.
+const double _kZeichenAbstand = 6;
+
+/// Wie weit die Streak-Zahl optisch nach links rückt, in den durchsichtigen
+/// Rand der Flamme hinein.
+const double _kStreakZahlVersatz = 10;
+
 /// Das Schloss für alles Gesperrte im Lernpfad — Abschnitts-Bänder wie
 /// Welten-Übersicht.
 ///
@@ -737,7 +756,7 @@ class _GreenHeaderState extends State<_GreenHeader> {
           // deren Breite nach rechts, statt dass die Ziffer in ihn hineinläuft
           // oder die Lücken sich neu verteilen.
           Text(widget.weltEmoji, style: const TextStyle(fontSize: 22)),
-          const SizedBox(width: _kLeisteRand),
+          const SizedBox(width: _kZeichenAbstand),
           // Deutlich größer als das frühere Emoji (18): die Flamme trägt die
           // Streak-Anzeige optisch. Die Kopfzeile ist 56px hoch, 45px passen
           // dort hinein, und die Row zentriert ihre Kinder vertikal — der
@@ -791,7 +810,7 @@ class _GreenHeaderState extends State<_GreenHeader> {
                   // rutscht nur in den durchsichtigen Rand der Flamme hinein
                   // — mit einem negativen Abstand ginge das gar nicht.
                   Transform.translate(
-                    offset: const Offset(-10, 0),
+                    offset: const Offset(-_kStreakZahlVersatz, 0),
                     child: Text(
                       '${widget.streak}',
                       style: const TextStyle(
@@ -805,7 +824,7 @@ class _GreenHeaderState extends State<_GreenHeader> {
               ),
             ),
           ),
-          const SizedBox(width: _kLeisteRand),
+          const SizedBox(width: _kZeichenAbstand),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => zeigeSterneErklaerung(context, kErreichbareSterne),

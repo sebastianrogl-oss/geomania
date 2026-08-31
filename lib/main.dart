@@ -16,6 +16,7 @@ import 'services/fortschritt_service.dart';
 import 'services/locale_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/sound_service.dart';
+import 'services/spielstand_sync.dart';
 import 'screens/home_screen.dart';
 import 'screens/rangliste_screen.dart';
 import 'screens/profil_screen.dart';
@@ -145,7 +146,7 @@ class StartWrapper extends StatefulWidget {
   State<StartWrapper> createState() => _StartWrapperState();
 }
 
-class _StartWrapperState extends State<StartWrapper> {
+class _StartWrapperState extends State<StartWrapper> with WidgetsBindingObserver {
   /// null = noch nicht gelesen. Solange bleibt der Bildschirm leer statt für
   /// einen Sekundenbruchteil den Willkommens-Screen zu zeigen, den ein alter
   /// Spieler gar nicht sehen soll.
@@ -164,12 +165,22 @@ class _StartWrapperState extends State<StartWrapper> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ladeOnboardingStand();
     _pruefeName();
-    _anmeldung = AuthService.anmeldeStand.listen((_) {
+    // Kein eigener Aufruf für den Programmstart nötig: authStateChanges
+    // liefert den aktuellen Anmeldestand beim Abonnieren sofort mit. Ein
+    // zusätzlicher Anstoss hier wäre nur ein zweiter Cloud-Zugriff für
+    // dasselbe Ergebnis.
+    _anmeldung = AuthService.anmeldeStand.listen((nutzer) {
       if (!mounted) return;
       setState(() => _nameGewaehlt = null);
       _pruefeName();
+      // Der eigentliche Moment des Zusammenführens. Bewusst ohne await und
+      // ohne Wartefenster in der Oberfläche: Gespielt wird gegen die
+      // SharedPreferences, die Cloud zieht im Hintergrund nach. Ändert sich
+      // dabei etwas, meldet es der Abgleich über FortschrittService.
+      if (nutzer != null) unawaited(SpielstandSync.beimAnmelden());
     });
   }
 
@@ -179,8 +190,22 @@ class _StartWrapperState extends State<StartWrapper> {
     if (mounted) setState(() => _nameGewaehlt = ja);
   }
 
+  /// Der letzte verlässliche Moment, um zu sichern.
+  ///
+  /// Nach `paused` darf das Betriebssystem die App jederzeit beenden, ohne
+  /// noch einmal zu fragen — ein laufender Sammel-Timer käme dann nie mehr
+  /// zum Zug. `detached` kommt auf Android oft gar nicht mehr an, deshalb
+  /// hängt hier nichts daran.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState zustand) {
+    if (zustand == AppLifecycleState.paused) {
+      unawaited(SpielstandSync.jetztSichern());
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _anmeldung?.cancel();
     super.dispose();
   }

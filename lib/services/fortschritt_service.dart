@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/lernpfad_data.dart';
+import 'spielstand_sync.dart';
 
 // ── Snapshot-Klassen ──────────────────────────────────────────────────────────
 
@@ -295,6 +296,11 @@ class FortschrittService {
       await prefs.setInt(_kGesamtRichtig, prevGesamt + vergebeneSterne);
     }
     await prefs.setString(_kLetzteAkt, DateTime.now().toIso8601String());
+    // Der Cloud sagen, dass es etwas zu sichern gibt. Kostet hier nichts: Der
+    // Aufruf setzt nur einen Sammel-Timer, gesichert wird ein paar Sekunden
+    // später am Stück — und spätestens beim Wegschalten der App, siehe
+    // StartWrapper.
+    SpielstandSync.merkeAenderung();
     return vergebeneSterne;
   }
 

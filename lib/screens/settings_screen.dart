@@ -22,6 +22,7 @@ import '../services/locale_service.dart';
 import '../services/onboarding_service.dart';
 import '../services/profilbild_service.dart';
 import '../services/sound_service.dart';
+import '../services/spielstand_sync.dart';
 import '../services/spielzeit_service.dart';
 import '../l10n/uebersetzungen.dart';
 import '../widgets/abzeichen_popup.dart';
@@ -486,8 +487,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t('Bist du sicher?')),
+        // Die Cloud wird ausdrücklich genannt: Der Fortschritt liegt nicht nur
+        // auf diesem Gerät, und ein Zurücksetzen, das ihn auch auf allen
+        // anderen entfernt, darf niemanden überraschen.
         content: Text(t(
-            'Das setzt deinen Lernpfad-Fortschritt zurück (Stationen, Kontinente). Deine Tages-Challenge-Ergebnisse und Ranglisten bleiben davon unberührt.')),
+            'Das setzt deinen Lernpfad-Fortschritt zurück (Stationen, Kontinente) — auf diesem Gerät und in deinem Konto, also auch auf allen anderen Geräten. Deine Tages-Challenge-Ergebnisse und Ranglisten bleiben davon unberührt.')),
         actionsAlignment: MainAxisAlignment.start,
         actions: [
           TextButton(
@@ -502,6 +506,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (bestaetigt != true) return;
+
+    // ERST die Cloud, DANN das Gerät — und die Reihenfolge ist hier keine
+    // Geschmacksfrage.
+    //
+    // Die Zusammenführ-Regeln kennen nur Wachstum: Ein lokal gelöschtes
+    // 'lp_s_done_...' steht in der Cloud weiter auf true. Wer andersherum
+    // vorginge, hätte den Fortschritt beim nächsten Abgleich wieder auf dem
+    // Gerät — der Lernpfad käme zurück, und niemand verstünde, warum.
+    //
+    // Schlägt das Löschen fehl (kein Netz), wird lokal NICHTS angefasst.
+    // Ein halb zurückgesetzter Stand, der sich beim nächsten Start selbst
+    // wieder auffüllt, wäre schlimmer als ein ehrliches "hat nicht geklappt".
+    try {
+      await SpielstandSync.loescheCloudStand();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+            'Zurücksetzen nicht möglich — keine Verbindung. Bitte später noch einmal versuchen.')),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
 
     // NUR der Lernpfad (lokal) — Tages-Challenges/Ranglisten sind davon
     // bewusst unabhängig und bleiben unangetastet (siehe Anfrage: der
@@ -643,6 +670,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (ja != true) return;
+    // Noch schnell sichern, solange die Anmeldung steht: Nach dem Abmelden
+    // gibt es keine uid mehr, und was seit dem letzten Sichern gespielt
+    // wurde, käme nie in der Cloud an. Der lokale Stand bleibt ohnehin
+    // liegen — aber wer sich abmeldet, wechselt oft gerade das Gerät.
+    await SpielstandSync.jetztSichern();
     await AuthService.abmelden();
     if (!mounted) return;
     // Bis zur Wurzel zurück: dort hängt der StartWrapper am Anmeldestand und

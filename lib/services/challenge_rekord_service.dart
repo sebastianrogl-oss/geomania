@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'spielstand_sync.dart';
 
 class ChallengeRekordService {
   static String _rekordKey(String id) => 'ch_rekord_$id';
@@ -97,6 +98,10 @@ class ChallengeRekordService {
 
     await prefs.setInt(_streakKey(id), streak);
     await prefs.setString(_letzterSpieltagKey(id), heute);
+    // Eine gespielte Tages-Challenge ist der zweite Moment, an dem etwas
+    // entsteht, das niemand verlieren möchte. Der Aufruf setzt nur einen
+    // Sammel-Timer, siehe SpielstandSync.
+    SpielstandSync.merkeAenderung();
     return streak;
   }
 

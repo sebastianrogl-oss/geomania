@@ -4,7 +4,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Spieler-Profil: nur der Besitzer darf sein eigenes Dokument lesen/schreiben.
-    match /spieler/{uid} {
+    //
+    // Das {document=**} am Ende ist NICHT kosmetisch: Regeln vererben sich in
+    // Firestore nicht auf Unterkollektionen. Ohne diesen Zusatz wäre
+    // spieler/{uid}/stand/aktuell — die Spielstand-Sicherung — für niemanden
+    // schreibbar, auch nicht für den Besitzer selbst. Das Sichern schlüge
+    // still fehl (permission-denied), und es fiele erst auf, wenn jemand das
+    // Gerät wechselt und nichts vorfindet.
+    match /spieler/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 

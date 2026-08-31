@@ -265,6 +265,23 @@ class AuthService {
 
   /// Meldet ab. Der lokale Spielstand bleibt liegen — er hängt an
   /// SharedPreferences, nicht am Konto.
+  ///
+  /// ══ DAS IST EINE ENTSCHEIDUNG, KEIN VERGESSEN ═══════════════════════════
+  ///
+  /// Seit der Cloud-Synchronisierung hat das eine Nebenwirkung: Meldet sich
+  /// auf demselben Telefon danach ein ANDERES Konto an, wandert der liegen
+  /// gebliebene Fortschritt beim Abgleich in dieses zweite Konto — und von
+  /// dort auf dessen andere Geräte. Naheliegende Gegenmassnahme wäre, hier
+  /// lokal zu löschen.
+  ///
+  /// Bewusst nicht getan. Der häufigere Fall ist nicht "zwei Menschen teilen
+  /// sich ein Handy", sondern "jemand hat sich versehentlich abgemeldet" —
+  /// und der stünde dann vor einem leeren Lernpfad. Ein Spielstand, der beim
+  /// Wiederanmelden einfach wieder da ist, wiegt schwerer als der seltene
+  /// Fall vermischter Konten.
+  ///
+  /// Wer hier später "aufräumen" will: Das ist der Grund, warum es so
+  /// aussieht.
   static Future<void> abmelden() async {
     try {
       await GoogleSignIn.instance.signOut();

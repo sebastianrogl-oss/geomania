@@ -636,14 +636,24 @@ void main() {
     final fruehWerte = <int>[];
     final spaetWerte = <int>[];
 
-    // Zehn Durchläufe, nicht drei. Der geprüfte Effekt ist echt, aber klein:
-    // gemessen liegen die späten Stationen im Schnitt rund 0,085
-    // Schwierigkeitspunkte über den frühen. Mit drei Durchläufen streute das
-    // Ergebnis um etwa ±0,05 und kippte dadurch in jedem fünfzehnten Lauf ins
-    // Negative — der Test schlug fehl, obwohl nichts kaputt war. Mit zehn
-    // Durchläufen lag der Abstand in fünfzehn Messungen zwischen +0,051 und
-    // +0,122 und damit nie mehr an der Null.
-    for (int durchlauf = 0; durchlauf < 10; durchlauf++) {
+    // Zwanzig Durchläufe, nicht drei und nicht zehn. Der geprüfte Effekt ist
+    // echt, aber klein: gemessen liegen die späten Stationen im Schnitt rund
+    // 0,085 Schwierigkeitspunkte über den frühen — geprüft wird gegen die
+    // Null. Ein Test, dessen Aussage so dicht an der Schwelle liegt, lebt von
+    // der Stichprobengröße.
+    //
+    // Mit drei Durchläufen streute das Ergebnis um etwa ±0,05 und kippte in
+    // jedem fünfzehnten Lauf ins Negative. Mit zehn lag der kleinste von
+    // zwölf Messwerten bei +0,034, mit zwanzig der kleinste von fünfzehn bei
+    // +0,051.
+    //
+    // WARUM DER ABSTAND SO KLEIN IST: Die vier Abschnitte ziehen nicht gleich
+    // stark. Gemessen je Abschnitt über zehn Durchläufe: afrika_4 +0,22,
+    // asien_4 +0,11, welt_4 +0,10 — und europa_4 −0,03, also GEGEN den
+    // Trend. Der eine Ausreißer halbiert den gepoolten Abstand. Wer den Test
+    // wieder wackelig findet, sollte dort nachsehen, statt hier weiter an der
+    // Durchlaufzahl zu drehen.
+    for (int durchlauf = 0; durchlauf < 20; durchlauf++) {
       for (final id in abschnittIds) {
         SharedPreferences.setMockInitialValues({});
         final a = abschnittById(id)!;

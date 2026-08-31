@@ -39,6 +39,15 @@ const Map<String, String> uebersetzungenLernpfad = {
   '{tage} Tage': '{tage} days',
   'Kein neues Ziel': 'No new goal',
 
+  // Der Ziel-Bereich in der Serien-Erklärung (widgets/kennzahl_erklaerung.dart)
+  'Dein Ziel': 'Your goal',
+  'Geschafft — {tage} Tage am Stück.': 'Done — {tage} days in a row.',
+  'Noch {n} Tage bis zu deinem Ziel von {tage} Tagen.':
+      '{n} more days to your goal of {tage} days.',
+  'Du kannst dir vornehmen, wie viele Tage am Stück du spielen willst.':
+      'You can set yourself a target for how many days in a row you play.',
+  'Ziel setzen': 'Set a goal',
+
   // ── Neue Modi, vorerst nur ueber den Debug-Bereich erreichbar ───────────
   // Modusnamen (data/lernpfad_data.dart)
   'Flächen-Vergleich': 'Area comparison',

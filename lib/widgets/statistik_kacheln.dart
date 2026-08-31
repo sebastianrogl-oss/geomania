@@ -168,6 +168,16 @@ const double _kKachelAbstand = 8;
 const _kKachelFarbe = Color(0xFFEAEAE5);
 const _kLabelFarbe = Color(0xFF888888);
 
+// Das Streak-Ziel stand hier einmal als eigene Zeile in der Kachel — Balken
+// und "3/14" unter der Beschriftung. Es ist bewusst wieder herausgenommen:
+// Eine Kachel im Profil ist eine Kennzahl auf einen Blick, kein Formular.
+// Das Ziel steht jetzt in der Erklärung, die ein Tipp auf die Kachel öffnet
+// (siehe [StatistikKacheln.onStreakTipp] und widgets/kennzahl_erklaerung.dart).
+//
+// Der Platz dafür musste damals in ALLEN DREI Kacheln reserviert werden, weil
+// sie nebeneinanderstehen und ihre Beschriftungen sonst nicht mehr auf einer
+// Kante gestanden hätten. Mit dem Rückbau ist auch das wieder weg.
+
 /// Die drei Statistik-Kacheln im Profil: Streak, Stationen, Abzeichen.
 ///
 /// Jede trägt ihre Zahl in einem eigenen Element — Streak in der Flamme,
@@ -178,11 +188,19 @@ class StatistikKacheln extends StatelessWidget {
   final int stationen;
   final int abzeichen;
 
+  /// Ein Tipp auf die Streak-Kachel. Ohne Angabe ist sie nicht antippbar.
+  ///
+  /// Nur diese eine Kachel: Zur Serie gibt es etwas zu erklären — wie sie
+  /// entsteht, was sie reissen lässt, und das persönliche Ziel. Stationen und
+  /// Abzeichen erklären sich mit ihrer Zahl bereits selbst.
+  final VoidCallback? onStreakTipp;
+
   const StatistikKacheln({
     super.key,
     required this.streak,
     required this.stationen,
     required this.abzeichen,
+    this.onStreakTipp,
   });
 
   @override
@@ -203,6 +221,7 @@ class StatistikKacheln extends StatelessWidget {
           child: _Kachel(
             labelSkala: labelSkala,
             label: t('Streak'),
+            onTap: onStreakTipp,
             grafik: (grundmass, zahl) => _Flamme(
               zahl: streak,
               hoehe: grundmass * _kFlammeFaktor,
@@ -321,8 +340,15 @@ class _Kachel extends StatelessWidget {
   /// Element davon abweicht, entscheidet sein Faktor am Dateikopf.
   final Widget Function(double grundmass, double zahlGroesse) grafik;
 
-  const _Kachel(
-      {required this.label, required this.labelSkala, required this.grafik});
+  /// Ohne Angabe ist die Kachel reine Anzeige und nimmt keinen Tipp entgegen.
+  final VoidCallback? onTap;
+
+  const _Kachel({
+    required this.label,
+    required this.labelSkala,
+    required this.grafik,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -371,7 +397,15 @@ class _Kachel extends StatelessWidget {
           final hoehe =
               noetigeHoehe > mindestHoehe ? noetigeHoehe : mindestHoehe;
 
-          return Container(
+          // Der Tipp liegt AUSSEN um die Kachel, nicht innen: Die Flamme ist
+          // eine Lottie-Fläche und der Stationsbutton bringt eigene
+          // Zeichenlogik mit — läge die Erkennung darunter, wäre unklar,
+          // welcher Teil der Kachel reagiert. So ist es die ganze Fläche.
+          //
+          // GestureDetector und nicht InkWell: Die Kacheln haben keinen
+          // Material-Untergrund, auf dem eine Welle laufen könnte, und ein
+          // Aufblitzen passt auch nicht zum ruhigen Profil.
+          final kachel = Container(
             height: hoehe,
             padding: EdgeInsets.all(innen),
             decoration: BoxDecoration(
@@ -395,6 +429,15 @@ class _Kachel extends StatelessWidget {
                 ),
               ],
             ),
+          );
+
+          if (onTap == null) return kachel;
+          return GestureDetector(
+            // opaque: Auch die Lücken zwischen Grafik und Beschriftung
+            // nehmen den Tipp entgegen, nicht nur die gezeichneten Teile.
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: kachel,
           );
         },
     );

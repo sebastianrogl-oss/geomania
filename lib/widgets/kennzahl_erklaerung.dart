@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/uebersetzungen.dart';
+import '../services/streak_ziel_service.dart';
 
 // ── Maße ─────────────────────────────────────────────────────────────────────
 //
@@ -27,6 +28,11 @@ Future<void> zeigeKennzahlErklaerung(
   required String symbol,
   required String titel,
   required List<String> absaetze,
+
+  /// Optionaler Baustein unter den Absätzen — heute der Ziel-Fortschritt in
+  /// der Serien-Erklärung. Als Widget statt als weiterer Textabsatz, weil ein
+  /// Balken kein Satz ist.
+  Widget? zusatz,
 }) {
   return showDialog<void>(
     context: context,
@@ -100,6 +106,10 @@ Future<void> zeigeKennzahlErklaerung(
                             ),
                           ),
                         ),
+                      // Innerhalb des Rollbereichs, nicht darunter: Auf einem
+                      // schmalen Schirm mit grosser Systemschrift schöbe der
+                      // Zusatz sonst den Knopf aus dem Bild.
+                      ?zusatz,
                     ],
                   ),
                 ),
@@ -152,8 +162,33 @@ Future<void> zeigeSterneErklaerung(BuildContext context, int gesamtSterne) {
   );
 }
 
-/// Was die Serie ist und wie man sie hält.
-Future<void> zeigeStreakErklaerung(BuildContext context) {
+/// Was die Serie ist und wie man sie hält — und wo das persönliche Ziel steht.
+///
+/// ══ WARUM DAS ZIEL HIER STEHT UND NICHT IN DER KACHEL ═════════════════════
+///
+/// Es stand kurzzeitig als Zeile mit Balken direkt in der Profil-Kachel. Eine
+/// Kachel im Profil ist aber eine Kennzahl auf einen Blick; ein Balken mit
+/// "3/14" darunter macht daraus eine kleine Tabelle. Hier, wo ohnehin erklärt
+/// wird, was die Serie ist, gehört auch hin, was man sich vorgenommen hat.
+///
+/// Das Ziel wird HIER geladen, nicht von aussen hereingereicht.
+///
+/// Es gibt zwei Stellen, an denen die Serie steht: die Flamme in der
+/// Lernpfad-Kopfleiste und die Kachel im Profil. Beide öffnen diese
+/// Erklärung. Käme das Ziel als Parameter, müsste es durch beide Screens
+/// durchgereicht werden — und die eine Stelle, an der man es vergisst, zeigt
+/// dann stillschweigend kein Ziel an, obwohl eines gesetzt ist.
+Future<void> zeigeStreakErklaerung(
+  BuildContext context, {
+  required int streak,
+  VoidCallback? onZielSetzen,
+}) async {
+  final zielTage = await StreakZielService.ziel();
+  final stand = await StreakZielService.stand();
+  if (!context.mounted) return;
+  // "Erledigt, aber kein Ziel" heisst: zweimal vertagt. Nur dieser Spieler
+  // wird nie wieder von selbst gefragt.
+  final zielAbgelehnt = stand == ZielStand.erledigt && zielTage == null;
   return zeigeKennzahlErklaerung(
     context,
     symbol: '🔥',
@@ -167,5 +202,158 @@ Future<void> zeigeStreakErklaerung(BuildContext context) {
           'Lernpfad bleiben unberührt.'),
       t('Für lange Serien gibt es ausserdem Abzeichen.'),
     ],
+    zusatz: _zielBereich(
+      streak: streak,
+      zielTage: zielTage,
+      zielAbgelehnt: zielAbgelehnt,
+      onZielSetzen: onZielSetzen,
+    ),
   );
+}
+
+// ── Der Ziel-Bereich ────────────────────────────────────────────────────────
+
+const double _kZielBalkenHoehe = 6;
+const _kZielSpur = Color(0xFFE0DED4);
+
+/// Die gelaufene Strecke, im Ton der Flamme.
+const _kZielBalken = Color(0xFFB34700);
+
+/// Drei Zustände, drei Antworten:
+///
+///  * Ziel gesetzt      → Balken und Fortschritt.
+///  * Ziel noch offen   → NICHTS. Die App fragt von sich aus nach ein paar
+///                        Stationen; ihr hier vorzugreifen hiesse, dieselbe
+///                        Frage zweimal zu stellen.
+///  * Ziel abgelehnt    → ein Weg zurück. Wer zweimal "Später" gewählt hat,
+///                        wird nie wieder automatisch gefragt — ohne diesen
+///                        Satz käme er an ein Ziel gar nicht mehr heran.
+Widget? _zielBereich({
+  required int? streak,
+  required int? zielTage,
+  required bool zielAbgelehnt,
+  required VoidCallback? onZielSetzen,
+}) {
+  if (zielTage != null && streak != null) {
+    return _ZielFortschritt(streak: streak, ziel: zielTage);
+  }
+  if (zielAbgelehnt && onZielSetzen != null) {
+    return _ZielAngebot(onTap: onZielSetzen);
+  }
+  return null;
+}
+
+class _ZielFortschritt extends StatelessWidget {
+  final int streak;
+  final int ziel;
+
+  const _ZielFortschritt({required this.streak, required this.ziel});
+
+  @override
+  Widget build(BuildContext context) {
+    final anteil = ziel <= 0 ? 0.0 : (streak / ziel).clamp(0.0, 1.0);
+    final geschafft = streak >= ziel;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  t('Dein Ziel'),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: _textDark,
+                  ),
+                ),
+              ),
+              // Der echte Wert, auch über dem Ziel: "20/14" liest sich als
+              // "darüber". Ein bei 14 angehaltener Zähler sähe aus wie ein
+              // Fehler.
+              Text(
+                '$streak/$ziel',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: geschafft ? _kZielBalken : _textDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(_kZielBalkenHoehe / 2),
+            child: LinearProgressIndicator(
+              value: anteil,
+              minHeight: _kZielBalkenHoehe,
+              backgroundColor: _kZielSpur,
+              valueColor: const AlwaysStoppedAnimation<Color>(_kZielBalken),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            geschafft
+                ? t('Geschafft — {tage} Tage am Stück.', {'tage': '$ziel'})
+                : t('Noch {n} Tage bis zu deinem Ziel von {tage} Tagen.',
+                    {'n': '${ziel - streak}', 'tage': '$ziel'}),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _textDark,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Für die, die die Zielfrage seinerzeit abgelehnt haben.
+class _ZielAngebot extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ZielAngebot({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            t('Du kannst dir vornehmen, wie viele Tage am Stück du spielen '
+                'willst.'),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _textDark,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 6),
+          GestureDetector(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                t('Ziel setzen'),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF4A9E4A),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

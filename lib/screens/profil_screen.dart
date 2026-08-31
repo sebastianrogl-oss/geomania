@@ -17,9 +17,11 @@ import '../services/profilbild_service.dart';
 import '../services/rangliste_service.dart';
 import '../utils/portfolio_format.dart';
 import '../widgets/muenzalbum_seite.dart';
+import '../widgets/kennzahl_erklaerung.dart';
 import '../widgets/statistik_kacheln.dart';
 import '../widgets/station_emoji.dart';
 import 'settings_screen.dart';
+import 'streak_ziel_screen.dart';
 import '../theme/app_theme.dart';
 
 const _challengeIds = ['preis', 'higher_lower', 'ranking_game', 'portfolio'];
@@ -49,6 +51,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
   LernpfadSnapshot? _lpSnap;
   SpielstilErgebnis? _spielstil;
   String _profilbild = ProfilbildService.standard;
+
 
   @override
   void initState() {
@@ -90,6 +93,25 @@ class _ProfilScreenState extends State<ProfilScreen> {
         _profilbild = profilbild;
       });
     }
+  }
+
+  /// Ein Tipp auf die Streak-Kachel: dieselbe Erklärung wie an der Flamme im
+  /// Lernpfad-Kopf — mitsamt dem persönlichen Ziel, das sie sich selbst lädt.
+  Future<void> _zeigeStreakErklaerung() async {
+    await zeigeStreakErklaerung(
+      context,
+      streak: _streak,
+      onZielSetzen: () async {
+        // Erst die Erklärung schliessen, dann den Screen öffnen — sonst läge
+        // er unter dem Dialog.
+        Navigator.of(context).pop();
+        await StreakZielScreen.zeigen(context);
+        // Der Ziel-Screen kann ein Ziel gesetzt haben; die Erklärung liest es
+        // beim nächsten Öffnen ohnehin neu, das Profil braucht den frischen
+        // Stand aber auch für seine eigenen Zahlen.
+        if (mounted) _load();
+      },
+    );
   }
 
   int get _streak => _lpSnap?.streak ?? 0;
@@ -285,6 +307,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
               streak: _streak,
               stationen: _totalSeen,
               abzeichen: _freigeschalteteAbzeichen.length,
+              onStreakTipp: _zeigeStreakErklaerung,
             ),
             const SizedBox(height: 24),
 

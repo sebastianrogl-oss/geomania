@@ -18,6 +18,7 @@ import '../widgets/pfad_deko_layer.dart';
 import '../widgets/pfad_maskottchen.dart';
 import '../widgets/kennzahl_erklaerung.dart';
 import '../widgets/streak_flamme.dart';
+import 'streak_ziel_screen.dart';
 import 'challenge_start_screen.dart';
 import 'higher_lower_screen.dart';
 import 'portfolio/portfolio_ergebnis_ansicht_screen.dart';
@@ -776,7 +777,18 @@ class _GreenHeaderState extends State<_GreenHeader> {
           // die Lücke dazwischen mit.
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => zeigeStreakErklaerung(context),
+            // Dieselbe Erklärung wie an der Profil-Kachel, samt Ziel — die
+            // Funktion holt es sich selbst. Der Weg zum Ziel-Screen wird
+            // darin nur dem angeboten, der die Zielfrage endgültig abgelehnt
+            // hat; alle anderen fragt die App ohnehin von selbst.
+            onTap: () => zeigeStreakErklaerung(
+              context,
+              streak: widget.streak,
+              onZielSetzen: () {
+                Navigator.of(context).pop();
+                StreakZielScreen.zeigen(context);
+              },
+            ),
             // Wie beim Stern daneben: die Zeile ist nur 27 px hoch, die
             // Tippfläche wächst auf das Mindestmaß.
             child: SizedBox(

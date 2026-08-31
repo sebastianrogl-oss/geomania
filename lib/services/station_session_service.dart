@@ -2745,8 +2745,31 @@ class FragenGenerator {
     // eindeutige Quartett (sehr kleiner Kontinent) endlos drehen.
     const maxVersuche = 6000;
 
+    // ── Notausfahrt aus der Merkmals-Rotation ────────────────────────────────
+    //
+    // Es gibt genau SECHS Merkmale, und eine Station stellt genau SECHS
+    // Fragen. Bei der letzten ist damit nur noch ein Merkmal unbenutzt — und
+    // ohne diese Notausfahrt wäre die Schleife darauf festgenagelt. Lässt
+    // sich daraus aus den verbliebenen rund 26 Ländern kein eindeutiges 3+1
+    // mehr bauen, dreht sie bis [maxVersuche] und die Station kommt eine
+    // Frage zu kurz.
+    //
+    // Gemessen an je 500 Läufen traf das welt_1_05 zweimal und welt_1_24
+    // einmal; bei JEDEM Ausfall waren alle 6000 Versuche aufgebraucht,
+    // während ein normaler Lauf mit rund 40 auskommt. Mit ausgeschalteter
+    // Rotation: kein einziger Ausfall in 1000 Läufen.
+    //
+    // Die Rotation bleibt trotzdem — sie ist der Grund, warum nicht fünfmal
+    // hintereinander "drei liegen auf derselben Halbkugel" kommt. Sie wird
+    // nur nachgiebig, wenn sie sich festgefahren hat. Der Schwellenwert
+    // liegt weit über dem Normalbedarf (~40 Versuche für SECHS Fragen, also
+    // rund sieben je Frage), greift also nur im Klemmfall.
+    const merkmalNotausfahrt = 50;
+    var seitLetzterFrage = 0;
+
     while (fragen.length < station.fragenAnzahl && versuche < maxVersuche) {
       versuche++;
+      seitLetzterFrage++;
 
       // Gezielt konstruieren statt blind würfeln: erst ein Merkmal wählen,
       // dann drei Länder mit gleichem Wert und eines mit abweichendem. Rein
@@ -2754,7 +2777,9 @@ class FragenGenerator {
       // dann meist gleich mehrere.
       final alle = _merkmale;
       final offen = alle.where((x) => !benutzteMerkmale.contains(x.id)).toList();
-      final auswahl = offen.isEmpty ? alle : offen;
+      final auswahl = (offen.isEmpty || seitLetzterFrage > merkmalNotausfahrt)
+          ? alle
+          : offen;
       final m = auswahl[_rng.nextInt(auswahl.length)];
 
       final nachWert = <String, List<String>>{};
@@ -2789,6 +2814,10 @@ class FragenGenerator {
 
       benutzteLaender.addAll(vier);
       benutzteMerkmale.add(m.id);
+      // Die Notausfahrt gilt je Frage, nicht für die ganze Station: Jede
+      // Frage bekommt ihre eigenen 50 Versuche mit der Rotation, bevor sie
+      // nachgibt.
+      seitLetzterFrage = 0;
       fragen.add(Frage(
         id: '${station.id}_wg_${fragen.length}',
         frage: t('Welches Land passt nicht zu den anderen?'),

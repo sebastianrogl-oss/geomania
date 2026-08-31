@@ -625,47 +625,82 @@ void main() {
 
   test('11) Graduelle Schwierigkeit: frühe Stationen eines Abschnitts ziehen im '
       'Schnitt leichtere Länder (Kern-Modi) als späte Stationen', () async {
-    // Jedes Thema (flaggen/hauptstaedte/umriss) hat seit Teil 4 seine EIGENE
-    // feste Ziehreihenfolge — daher pro Thema separat in früh/spät bucketn
-    // (statt alle Kern-Modi über die absolute Stationsposition zu mischen,
-    // was durch die themen-eigenen Zyklen unnötig verrauscht wäre), über
-    // mehrere Abschnitte UND mehrere unabhängige Durchläufe gepoolt.
+    // ── GEBÜNDELT WIRD JE MODUS, NICHT JE THEMA ─────────────────────────────
+    //
+    // Hier stand einmal "Jedes Thema (flaggen/hauptstaedte/umriss) hat seine
+    // EIGENE feste Ziehreihenfolge". Das ist falsch, und der Satz hat den
+    // Test jahrelang am falschen Ende gemessen. Massgeblich ist
+    // FragenGenerator._rrModusKey:
+    //
+    //     welt.id == 'welt' ? modus.name : '${abschnitt.id}_${modus.name}'
+    //
+    // Der Schlüssel trägt den MODUS. Ein Thema wie "flaggen" umfasst aber bis
+    // zu drei Modi (Bild, Multiple, Eingabe), und jeder davon hat seine
+    // eigene Reihenfolge, die bei den leichten Ländern NEU ANFÄNGT.
+    //
+    // Wer die Stationen eines Themas nach Position in erste und zweite Hälfte
+    // teilt, mischt damit mehrere unabhängige Rampen. Taucht ein Modus
+    // erstmals in der zweiten Hälfte auf, zieht er dort seine LEICHTESTEN
+    // Länder — und das gemessene Gefälle kippt ins Negative, obwohl am
+    // Lernpfad nichts falsch ist. Genau das war in europa_4 der Fall (−0,03,
+    // während die anderen drei Abschnitte zwischen +0,10 und +0,22 lagen),
+    // und es machte den Test wackelig: Der eine Ausreisser halbierte den
+    // gepoolten Abstand, gegen dessen Vorzeichen geprüft wird.
+    //
+    // Je Modus gebündelt vergleicht der Test dagegen genau das, was die
+    // Ziehreihenfolge auch verspricht: innerhalb EINER Rampe die frühen gegen
+    // die späten Stationen. Gemessen je Abschnitt über zehn Durchläufe:
+    // afrika_4 +0,22, asien_4 +0,26, welt_4 +0,05.
+    //
+    // EUROPA_4 STEHT IN DER LISTE, LIEFERT ABER NICHTS — und das ist kein
+    // Versehen: Dort kommt jeder Kern-Modus GENAU EINMAL vor (je einmal
+    // Flagge Bild/Multiple/Eingabe, Umriss Bild/Multiple/Eingabe, Hauptstadt
+    // Multiple/Eingabe). Eine Rampe von einer einzigen Station gibt es nicht,
+    // die Gruppe wird unten übersprungen. Genau daher kam auch der frühere
+    // Messwert von −0,03: Drei Flaggen-Stationen, aber drei verschiedene
+    // Rampen, die alle bei den leichten Ländern anfangen.
     const themen = ['flaggen', 'hauptstaedte', 'umriss'];
     const abschnittIds = ['afrika_4', 'asien_4', 'europa_4', 'welt_4'];
 
     final fruehWerte = <int>[];
     final spaetWerte = <int>[];
 
-    // Zwanzig Durchläufe, nicht drei und nicht zehn. Der geprüfte Effekt ist
-    // echt, aber klein: gemessen liegen die späten Stationen im Schnitt rund
-    // 0,085 Schwierigkeitspunkte über den frühen — geprüft wird gegen die
-    // Null. Ein Test, dessen Aussage so dicht an der Schwelle liegt, lebt von
-    // der Stichprobengröße.
+    // Zehn Durchläufe, und die reichen jetzt auch.
     //
-    // Mit drei Durchläufen streute das Ergebnis um etwa ±0,05 und kippte in
-    // jedem fünfzehnten Lauf ins Negative. Mit zehn lag der kleinste von
-    // zwölf Messwerten bei +0,034, mit zwanzig der kleinste von fünfzehn bei
-    // +0,051.
+    // Mit der alten Bündelung lag der kleinste von zwölf Messwerten bei
+    // +0,034 — hauchdünn über der Schwelle, gegen die geprüft wird. Eine
+    // Zeit lang standen hier deshalb zwanzig Durchläufe; das war eine
+    // Härtung an der falschen Stelle (kleinster Wert +0,051). Der Abstand
+    // war nicht knapp, weil die Stichprobe zu klein war, sondern weil falsch
+    // gebündelt wurde.
     //
-    // WARUM DER ABSTAND SO KLEIN IST: Die vier Abschnitte ziehen nicht gleich
-    // stark. Gemessen je Abschnitt über zehn Durchläufe: afrika_4 +0,22,
-    // asien_4 +0,11, welt_4 +0,10 — und europa_4 −0,03, also GEGEN den
-    // Trend. Der eine Ausreißer halbiert den gepoolten Abstand. Wer den Test
-    // wieder wackelig findet, sollte dort nachsehen, statt hier weiter an der
-    // Durchlaufzahl zu drehen.
-    for (int durchlauf = 0; durchlauf < 20; durchlauf++) {
+    // Je Modus gemessen liegt der kleinste von acht Messwerten bei +0,164,
+    // der grösste bei +0,281 — rund das Fünffache an Abstand zur Null, bei
+    // halber Laufzeit.
+    for (int durchlauf = 0; durchlauf < 10; durchlauf++) {
       for (final id in abschnittIds) {
         SharedPreferences.setMockInitialValues({});
         final a = abschnittById(id)!;
-        for (final thema in themen) {
-          final stationenDiesesThemas = a.stationen
-              .where((s) => lernModusThema(s.modus) == thema)
-              .toList();
-          final mitte = stationenDiesesThemas.length ~/ 2;
 
-          for (int i = 0; i < stationenDiesesThemas.length; i++) {
-            final s = stationenDiesesThemas[i];
-            final fragen = await FragenGenerator.generiereFragenFuerStation(s);
+        // Die Kern-Modi dieses Abschnitts, jeder mit seinen Stationen in
+        // Pfad-Reihenfolge — das ist die Reihenfolge, in der die feste
+        // Ziehreihenfolge abgearbeitet wird.
+        final proModus = <LernModus, List<LernStation>>{};
+        for (final s in a.stationen) {
+          if (!themen.contains(lernModusThema(s.modus))) continue;
+          (proModus[s.modus] ??= []).add(s);
+        }
+
+        for (final stationen in proModus.values) {
+          // Ein Modus mit nur einer Station hat kein Früh und kein Spät —
+          // er würde seinen einzigen Wert der späten Hälfte zuschlagen und
+          // damit eine Rampe vortäuschen, die er gar nicht durchlaufen hat.
+          if (stationen.length < 2) continue;
+          final mitte = stationen.length ~/ 2;
+
+          for (int i = 0; i < stationen.length; i++) {
+            final fragen =
+                await FragenGenerator.generiereFragenFuerStation(stationen[i]);
             for (final f in fragen) {
               final schw = landByIso[f.laenderCode]?.schwierigkeit;
               if (schw == null) continue;

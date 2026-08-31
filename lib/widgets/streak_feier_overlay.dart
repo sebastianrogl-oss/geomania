@@ -7,6 +7,7 @@ import 'package:lottie/lottie.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/haptik_service.dart';
 import '../services/fortschritt_service.dart';
+import '../services/streak_ziel_service.dart';
 
 /// Erhöht den Tages-Streak und zeigt die Feier, falls er dabei gestiegen ist.
 ///
@@ -25,10 +26,19 @@ Future<(int, int)> streakErhoehenUndFeiern(BuildContext context) async {
   // beim ersten abgeschlossenen Level eines neuen Tages. Blockiert, bis der
   // Nutzer sie weggetippt hat.
   if (neuerStreak > alterStreak && context.mounted) {
+    // Ist mit diesem Tag zugleich das persönliche Ziel erreicht? Dann bekommt
+    // DIESELBE Feier einen zweiten Teil — bewusst kein eigenes Overlay
+    // hinterher, siehe StreakZielService.
+    final erreicht = await StreakZielService.zielGeradeErreicht(neuerStreak);
+    // VOR der Feier merken, nicht danach: Bricht dazwischen etwas ab, fällt
+    // eine Feier aus. Andersherum käme sie ab jetzt jeden Tag wieder.
+    if (erreicht != null) await StreakZielService.merkeZielGefeiert(erreicht);
+    if (!context.mounted) return (alterStreak, neuerStreak);
     await StreakFeierOverlay.zeigen(
       context,
       alterStreak: alterStreak,
       neuerStreak: neuerStreak,
+      erreichtesZiel: erreicht,
     );
   }
   return (alterStreak, neuerStreak);
@@ -48,10 +58,19 @@ class StreakFeierOverlay extends StatefulWidget {
   final int alterStreak;
   final int neuerStreak;
 
+  /// Gesetzt, wenn mit diesem Tag zugleich das persönliche Ziel erreicht
+  /// wurde — dann folgt auf die Feier ihr zweiter Teil.
+  ///
+  /// Bewusst ein Zusatz zu DIESEM Overlay und kein zweites dahinter: Zwei
+  /// Vollbild-Momente hintereinander nehmen sich gegenseitig das Gewicht, und
+  /// der zweite wirkt wie ein Dialog, den man wegklicken muss.
+  final int? erreichtesZiel;
+
   const StreakFeierOverlay({
     super.key,
     required this.alterStreak,
     required this.neuerStreak,
+    this.erreichtesZiel,
   });
 
   /// Zeigt die Feier als undurchsichtige Route über dem aktuellen Screen und
@@ -60,6 +79,7 @@ class StreakFeierOverlay extends StatefulWidget {
     BuildContext context, {
     required int alterStreak,
     required int neuerStreak,
+    int? erreichtesZiel,
   }) {
     return Navigator.of(context).push(
       PageRouteBuilder<void>(
@@ -73,6 +93,7 @@ class StreakFeierOverlay extends StatefulWidget {
             StreakFeierOverlay(
               alterStreak: alterStreak,
               neuerStreak: neuerStreak,
+              erreichtesZiel: erreichtesZiel,
             ),
       ),
     );
@@ -96,6 +117,14 @@ const _kZahlPopVersatz = Duration(milliseconds: 150);
 const _kTempoKurve = Duration(milliseconds: 1400);
 const _kZahlWechsel = Duration(milliseconds: 900);
 const _kHinweisEin = Duration(milliseconds: 400);
+
+// ── Zweiter Teil: das erreichte Ziel ─────────────────────────────────────────
+//
+// Kommt NACH der eigentlichen Feier, nicht mit ihr. Die Zahl in der Flamme ist
+// der Moment; die Zielmeldung ist die Einordnung dazu. Beides gleichzeitig
+// einzublenden hiesse, sich selbst ins Wort zu fallen.
+const _kZielPause = Duration(milliseconds: 500);
+const _kZielEin = Duration(milliseconds: 500);
 
 // ── Fall A: eine durchgehende Skalierungskurve ───────────────────────────────
 //
@@ -188,6 +217,8 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
   late final AnimationController _zahlCtrl;
   // Der dezente Hinweis ganz unten, erscheint zuletzt.
   late final AnimationController _hinweisCtrl;
+  // Der zweite Teil: die Zielmeldung samt Anschlussfrage.
+  late final AnimationController _zielCtrl;
 
   // ── Flammen (Lottie) ────────────────────────────────────────────────────
   // Die graue Flamme läuft als schlichte Dauerschleife über ihren eigenen
@@ -243,6 +274,27 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
   /// zweiten Fall verfehlen. `neuerStreak == 1` deckt beide ab: ein Streak
   /// von 1 bedeutet immer "fängt gerade neu an".
   bool get _istNeustart => widget.neuerStreak == 1;
+
+  /// Läuft der zweite Teil schon? Solange er läuft, schliesst ein Tipp die
+  /// Feier NICHT mehr — sonst wischt ein Nutzer, der den Hinweis "Tippen für
+  /// weiter" noch im Kopf hat, die Anschlussfrage weg, bevor er sie gelesen
+  /// hat. Beendet wird von hier an nur noch über die Knöpfe.
+  bool _zielPhase = false;
+
+  /// Die angebotenen Anschlussziele. Leer heisst: keine Frage, nur die
+  /// Meldung — siehe [StreakZielService.naechsteZiele].
+  ///
+  /// Massgeblich ist der GRÖSSERE von erreichtem Ziel und aktueller Serie,
+  /// nicht bloss das Ziel. Der Unterschied fällt nur in einem Fall auf, dafür
+  /// dort deutlich: Wer sich früh 7 Tage vornimmt, dann eine Weile nicht
+  /// spielt und bei Serie 20 wieder einsteigt, hat sein Ziel erreicht — bekäme
+  /// aber 14 angeboten, also weniger als er ohnehin schon hat. Er wäre damit
+  /// am nächsten Tag sofort wieder "am Ziel", ohne etwas dafür getan zu haben.
+  List<int> get _angebote {
+    final ziel = widget.erreichtesZiel ?? 0;
+    final basis = widget.neuerStreak > ziel ? widget.neuerStreak : ziel;
+    return StreakZielService.naechsteZiele(basis);
+  }
 
   Duration get _popDauer => _istNeustart ? _kPopNeustart : _kPopWachstum;
 
@@ -319,6 +371,7 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
     );
     _zahlCtrl = AnimationController(vsync: this, duration: _kZahlWechsel);
     _hinweisCtrl = AnimationController(vsync: this, duration: _kHinweisEin);
+    _zielCtrl = AnimationController(vsync: this, duration: _kZielEin);
     _roteLottieCtrl = AnimationController(vsync: this);
     _graueLottieCtrl = AnimationController(vsync: this);
     _popCtrl = AnimationController(vsync: this, duration: _popDauer);
@@ -474,7 +527,30 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
 
     await _zahlWechselStarten();
     if (!mounted) return;
-    _hinweisCtrl.forward();
+
+    // Ohne erreichtes Ziel endet die Feier hier wie bisher: der dezente
+    // Hinweis erscheint, ein Tipp schliesst.
+    if (widget.erreichtesZiel == null) {
+      _hinweisCtrl.forward();
+      return;
+    }
+
+    // Mit Ziel: kurz Luft holen, dann den zweiten Teil. Der Hinweis "Tippen
+    // für weiter" bleibt aus — hier wird nicht weggetippt, sondern gewählt.
+    await Future.delayed(_kZielPause);
+    if (!mounted) return;
+    setState(() => _zielPhase = true);
+    _zielCtrl.forward();
+    HaptikService.spiele(HaptikArt.mittel);
+  }
+
+  /// Ein neues Ziel gewählt — speichern und die Feier beenden.
+  Future<void> _neuesZiel(int tage) async {
+    await StreakZielService.setzeZiel(tage);
+    // Das neue Ziel gilt als noch nicht gefeiert: Es liegt über dem gerade
+    // erreichten, und merkeZielGefeiert hat nur diesen Wert gespeichert.
+    // Erreicht der Spieler auch das neue, feiert es erneut.
+    if (mounted) await _schliessen();
   }
 
   Future<void> _zahlWechselStarten() {
@@ -504,6 +580,7 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
     _einblendCtrl.dispose();
     _zahlCtrl.dispose();
     _hinweisCtrl.dispose();
+    _zielCtrl.dispose();
     _roteLottieCtrl.dispose();
     _graueLottieCtrl.dispose();
     _popCtrl.dispose();
@@ -535,7 +612,11 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
         // opaque: der ganze Screen nimmt den Tap entgegen, nicht nur der
         // Inhalt.
         behavior: HitTestBehavior.opaque,
-        onTap: _schliessen,
+        // In der Ziel-Phase nimmt der Hintergrund keinen Tipp mehr entgegen:
+        // Wer eben noch "Tippen für weiter" gelesen hat, würde die
+        // Anschlussfrage sonst wegwischen, bevor er sie überhaupt gesehen
+        // hat. Beendet wird von dort an über die Knöpfe.
+        onTap: _zielPhase ? null : _schliessen,
         child: FadeTransition(
           opacity: _einblendCtrl,
           child: Container(
@@ -560,29 +641,122 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
                     ],
                   ),
                 ),
+                // Die untere Zone gehört entweder dem dezenten Hinweis oder —
+                // wenn ein Ziel erreicht wurde — dem zweiten Teil der Feier.
+                // Nie beiden: Ein "Tippen für weiter" unter einer Frage mit
+                // Knöpfen wäre eine widersprüchliche Aufforderung.
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: FadeTransition(
-                    opacity: _hinweisCtrl,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 40),
-                      // Formulierung, Größe und Deckkraft identisch zum
-                      // Abzeichen-Popup (widgets/abzeichen_popup.dart), damit
-                      // sich beide Overlays gleich anfühlen.
-                      child: Text(
-                        t('Tippen für weiter'),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withValues(alpha: 0.5),
+                  child: _zielPhase
+                      ? FadeTransition(
+                          opacity: _zielCtrl,
+                          child: _zielTeil(),
+                        )
+                      : FadeTransition(
+                          opacity: _hinweisCtrl,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 40),
+                            // Formulierung, Größe und Deckkraft identisch zum
+                            // Abzeichen-Popup (widgets/abzeichen_popup.dart),
+                            // damit sich beide Overlays gleich anfühlen.
+                            child: Text(
+                              t('Tippen für weiter'),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Der zweite Teil: was erreicht wurde, und die Frage nach dem nächsten.
+  ///
+  /// Steht unten, wo sonst der Hinweis steht — die Flamme mit ihrer Zahl
+  /// bleibt oben unangetastet stehen. Sie ist der Moment; hier steht nur, was
+  /// er bedeutet.
+  Widget _zielTeil() {
+    final ziel = widget.erreichtesZiel!;
+    final angebote = _angebote;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 0, 28, 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            t('Ziel erreicht!'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            t('{tage} Tage am Stück.', {'tage': '$ziel'}),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.white.withValues(alpha: 0.75),
+            ),
+          ),
+          // Am oberen Ende der Leiter gibt es nichts mehr anzubieten. Dann
+          // bleibt es bei der Meldung und einem Knopf zum Weitermachen —
+          // besser als ein ausgedachtes Ziel, nur damit die Frage kommt.
+          if (angebote.isNotEmpty) ...[
+            const SizedBox(height: 26),
+            Text(
+              t('Neues Ziel?'),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Wrap statt Row: Bei grosser Systemschrift oder dreistelligen
+            // Zielen ("365 Tage") passen drei Knöpfe nicht mehr
+            // nebeneinander — sie rutschen dann in die nächste Zeile, statt
+            // überzulaufen.
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final tage in angebote)
+                  _ZielKnopf(
+                    beschriftung:
+                        // Zahl und Wort zusammen im Schlüssel: Im Englischen
+                        // steht "days" hinter der Zahl, aber eine Sprache mit
+                        // anderer Stellung liesse sich sonst nicht abbilden.
+                        t('{tage} Tage', {'tage': '$tage'}),
+                    onTap: () => _neuesZiel(tage),
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 18),
+          // Der Ausweg. Ohne ihn wäre die Feier eine Sackgasse, in der man
+          // sich etwas vornehmen MUSS, um weiterzukommen.
+          TextButton(
+            onPressed: _schliessen,
+            child: Text(
+              angebote.isEmpty ? t('Weiter') : t('Kein neues Ziel'),
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.white.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -723,6 +897,46 @@ class _StreakFeierOverlayState extends State<StreakFeierOverlay>
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Ein Knopf der Zielauswahl im zweiten Teil der Feier.
+///
+/// Heller Umriss auf dunklem Grund statt gefüllter Fläche: Die Feier lebt von
+/// der Flamme, und drei kräftige Flächen darunter würden ihr den Blick
+/// abziehen. Gefüllt wäre ausserdem eine Empfehlung — hier soll aber keines
+/// der Ziele das naheliegende sein.
+class _ZielKnopf extends StatelessWidget {
+  final String beschriftung;
+  final VoidCallback onTap;
+
+  const _ZielKnopf({required this.beschriftung, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+          ),
+          child: Text(
+            beschriftung,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
         ),
       ),

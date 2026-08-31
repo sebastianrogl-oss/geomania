@@ -31,6 +31,14 @@ const Map<String, String> uebersetzungenLernpfad = {
   // (widgets/abzeichen_popup.dart) — bewusst derselbe Text in beiden.
   'Tippen für weiter': 'Tap to continue',
 
+  // Zweiter Teil der Streak-Feier: das erreichte Ziel und die Frage nach dem
+  // nächsten. {tage} steht in beiden Sprachen für die Zahl.
+  'Ziel erreicht!': 'Goal reached!',
+  '{tage} Tage am Stück.': '{tage} days in a row.',
+  'Neues Ziel?': 'A new goal?',
+  '{tage} Tage': '{tage} days',
+  'Kein neues Ziel': 'No new goal',
+
   // ── Neue Modi, vorerst nur ueber den Debug-Bereich erreichbar ───────────
   // Modusnamen (data/lernpfad_data.dart)
   'Flächen-Vergleich': 'Area comparison',

@@ -2103,6 +2103,137 @@ class FragenGenerator {
       _hauptstaedteMultiple(
           station, pool, _kontinent(station), station.schwierigkeitsgrad);
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // Paare ziehen — die gemeinsame Stelle für Flächen-Vergleich und
+  // Nachbarschafts-Kette
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Beide Modi stellen eine Frage aus ZWEI Ländern und dürfen kein Land
+  // zweimal verwenden. Sie hatten dieselbe Schleife doppelt stehen — und
+  // damit auch denselben Fehler zweimal.
+  //
+  // ── WARUM EIN DURCHLAUF NICHT GENÜGT ──────────────────────────────────────
+  //
+  // Hier stand einmal "Ein Durchlauf über die gemischte Kandidatenliste
+  // genügt: fällt ein Land aus, rückt einfach das nächste nach." Das stimmt
+  // nicht, und der Satz hat den Fehler jahrelang plausibel aussehen lassen.
+  //
+  // Die Paarbildung geht gierig vor: Jedes Land nimmt sich den erstbesten
+  // freien Partner. Eine frühe Paarung kann damit einem später betrachteten
+  // Land seinen EINZIGEN möglichen Partner wegnehmen — das Land findet dann
+  // keinen mehr, wird übersprungen, und am Ende fehlt eine Frage. Gemessen
+  // an 60 Durchgängen über den ganzen Lernpfad traf das afrika_2_10
+  // (Flächen-Vergleich, 7 Fragen aus 18 Ländern — also 14 der 18 müssen
+  // paarweise aufgehen) in 4 Fällen und suedamerika_2_11
+  // (Nachbarschafts-Kette) in einem. An den Daten liegt es nicht: dieselbe
+  // Station geht in den übrigen Durchgängen auf, es entscheidet allein die
+  // Ziehreihenfolge.
+  //
+  // ── WARUM DER ZWEITE DURCHLAUF EIN PAAR AUFTRENNT ────────────────────────
+  //
+  // Ein schlichter zweiter Durchlauf über die übrig gebliebenen Länder
+  // brächte nachweislich nichts. Ein übersprungenes Land bleibt frei; bei
+  // jedem später betrachteten Land wurde es also bereits mitgeprüft und für
+  // unpassend befunden. Übrig gebliebene Länder sind damit UNTEREINANDER
+  // unverträglich — ein zweiter Durchlauf über sie fände dieselbe leere
+  // Menge wie der erste.
+  //
+  // Es hilft nur, eine bestehende Paarung aufzutrennen: Findet sich für ein
+  // übrig gebliebenes X ein bereits vergebenes A, das zu X passt, und kommt
+  // As bisheriger Partner B mit einem anderen übrig gebliebenen Y zusammen,
+  // dann werden aus einem Paar zwei. Genau das macht [_paareZiehen] in
+  // seinem zweiten Durchlauf.
+  //
+  // WER HIER AUFRÄUMT: Der zweite Durchlauf ist kein Sicherheitsnetz für
+  // einen selten gewordenen Fall, sondern der Grund, warum die betroffenen
+  // Stationen überhaupt ihre volle Fragenzahl liefern. keine_doppelten_-
+  // fragen_test.dart ("Keine Station verliert dabei Fragen") fällt ohne ihn
+  // in rund jedem achten Lauf um.
+
+  /// Zieht Paare aus [kandidaten], bis [anzahl] Stück beisammen sind.
+  ///
+  /// [partnerFuer] liefert alle Länder, die zu `erster` passen — ohne die
+  /// bereits vergebenen und ohne `erster` selbst. Die Reihenfolge darin ist
+  /// egal, gemischt wird hier.
+  ///
+  /// [baue] darf null liefern, wenn sich aus dem Paar doch keine Frage bauen
+  /// lässt; dann wird der nächste Partner probiert, statt das ganze Land
+  /// fallen zu lassen.
+  static List<T> _paareZiehen<T>({
+    required List<String> kandidaten,
+    required int anzahl,
+    required List<String> Function(String erster, Set<String> vergeben)
+        partnerFuer,
+    required T? Function(String erster, String zweiter, int index) baue,
+  }) {
+    // Erst die PAARE bilden, die Fragen erst ganz am Ende. Ein Paar
+    // aufzutrennen heisst sonst, in einer Liste schon gebauter Fragen die
+    // richtige wiederzufinden und zu ersetzen — Indexrechnerei, bei der ein
+    // Fehler still eine falsche Frage entfernt.
+    final paare = <List<String>>[];
+    final vergeben = <String>{};
+
+    // ── Erster Durchlauf: gierig ────────────────────────────────────────────
+    for (final erster in List<String>.from(kandidaten)..shuffle(_rng)) {
+      if (paare.length >= anzahl) break;
+      if (vergeben.contains(erster)) continue;
+      final moeglich = partnerFuer(erster, vergeben)..shuffle(_rng);
+      if (moeglich.isEmpty) continue;
+      paare.add([erster, moeglich.first]);
+      vergeben.addAll([erster, moeglich.first]);
+    }
+
+    // ── Zweiter Durchlauf: ein Paar auftrennen ──────────────────────────────
+    if (paare.length < anzahl) {
+      final uebrig = kandidaten.where((c) => !vergeben.contains(c)).toList()
+        ..shuffle(_rng);
+
+      for (final x in uebrig) {
+        if (paare.length >= anzahl) break;
+        if (vergeben.contains(x)) continue;
+
+        // Wer passt zu X? Unter den FREIEN hat der erste Durchlauf schon
+        // nachgesehen und nichts gefunden — es bleiben die vergebenen.
+        final passendeZuX = partnerFuer(x, const <String>{})
+            .where(vergeben.contains)
+            .toList()
+          ..shuffle(_rng);
+
+        for (final a in passendeZuX) {
+          final idx = paare.indexWhere((p) => p.contains(a));
+          if (idx < 0) continue;
+          final b = paare[idx][0] == a ? paare[idx][1] : paare[idx][0];
+
+          // Wäre (A,B) aufgetrennt: A ginge zu X. Findet B dann noch einen
+          // anderen Übriggebliebenen, sind aus einem Paar zwei geworden.
+          final gesperrt = {...vergeben}
+            ..removeAll([a, b])
+            ..add(x)
+            ..add(a);
+          final fuerB = partnerFuer(b, gesperrt)..shuffle(_rng);
+          if (fuerB.isEmpty) continue;
+
+          paare[idx] = [x, a];
+          paare.add([b, fuerB.first]);
+          vergeben.addAll([x, fuerB.first]);
+          break;
+        }
+      }
+    }
+
+    // ── Und jetzt erst die Fragen ───────────────────────────────────────────
+    final raus = <T>[];
+    for (final paar in paare) {
+      if (raus.length >= anzahl) break;
+      // null heisst: aus diesem Paar liess sich doch keine Frage bauen. Das
+      // ist eine Absicherung, kein Normalfall — [partnerFuer] soll solche
+      // Paare gar nicht erst anbieten.
+      final gebaut = baue(paar[0], paar[1], raus.length);
+      if (gebaut != null) raus.add(gebaut);
+    }
+    return raus;
+  }
+
   static Future<List<Frage>> _flaechenVergleich(
       LernStation station, List<String> pool) async {
     // Nur Länder mit Flächendaten UND brauchbarem Umriss: der Modus zeigt
@@ -2115,35 +2246,24 @@ class FragenGenerator {
     if (kandidaten.length < 2) return _ausweichHauptstaedte(station, pool);
 
     final flaeche = {for (final c in kandidaten) c: _ranking(c)!.area!};
-    final fragen = <Frage>[];
+
     // Innerhalb einer Station kommt jedes Land höchstens EINMAL vor — egal ob
     // als großes oder als kleines. Damit kann sich auch keine Paarung
     // wiederholen, und es fällt nicht auf, dass zweimal dasselbe Land die
-    // Vorlage gibt.
-    final benutzt = <String>{};
-
-    // Ein Durchlauf über die gemischte Kandidatenliste genügt: fällt ein Land
-    // aus (schon benutzt, kein passender Partner mehr frei), rückt einfach
-    // das nächste nach.
-    final reihenfolge = List<String>.from(kandidaten)..shuffle(_rng);
-    for (final gross in reihenfolge) {
-      {
-        if (fragen.length >= station.fragenAnzahl) break;
-        if (benutzt.contains(gross)) continue;
-        final grossFlaeche = flaeche[gross]!;
-
-        final partner = kandidaten.where((k) {
-          if (k == gross || benutzt.contains(k)) return false;
-          final f = grossFlaeche / flaeche[k]!;
-          return f >= _kVergleichMinFaktor && f <= _kVergleichMaxFaktor;
-        }).toList()
-          ..shuffle(_rng);
-        if (partner.isEmpty) continue;
-
-        final klein = partner.first;
-        benutzt.add(gross);
-        benutzt.add(klein);
-        final echt = _rundeVergleichswert(grossFlaeche / flaeche[klein]!);
+    // Vorlage gibt. Wie die Paare gebildet werden — und warum ein Durchlauf
+    // dafür nicht reicht — steht bei [_paareZiehen].
+    return _paareZiehen<Frage>(
+      kandidaten: kandidaten,
+      anzahl: station.fragenAnzahl,
+      // Der Partner ist immer das KLEINERE Land: der Faktor ist gross/klein
+      // und muss mindestens 2 sein.
+      partnerFuer: (gross, vergeben) => kandidaten.where((k) {
+        if (k == gross || vergeben.contains(k)) return false;
+        final f = flaeche[gross]! / flaeche[k]!;
+        return f >= _kVergleichMinFaktor && f <= _kVergleichMaxFaktor;
+      }).toList(),
+      baue: (gross, klein, index) {
+        final echt = _rundeVergleichswert(flaeche[gross]! / flaeche[klein]!);
         final optionen = [
           '$echt×',
           ..._vergleichsAblenker(echt).map((v) => '$v×'),
@@ -2151,8 +2271,8 @@ class FragenGenerator {
 
         final grossCo = _country(gross);
         final kleinCo = _country(klein);
-        fragen.add(Frage(
-          id: '${station.id}_fv_${fragen.length}',
+        return Frage(
+          id: '${station.id}_fv_$index',
           frage: t('Wie oft passt {klein} in {gross}?', {
             'klein': kleinCo?.name ?? landByIso[klein]?.name ?? klein,
             'gross': grossCo?.name ?? landByIso[gross]?.name ?? gross,
@@ -2165,10 +2285,9 @@ class FragenGenerator {
           // über meta dazu — Frage trägt nur ein laenderCode-Feld.
           laenderCode: gross,
           meta: {'kleinesLand': klein, 'verhaeltnis': echt},
-        ));
-      }
-    }
-    return fragen;
+        );
+      },
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -2924,56 +3043,56 @@ class FragenGenerator {
     final kandidaten = pool.where(g.containsKey).toList()..shuffle(_rng);
     if (kandidaten.isEmpty) return _ausweichHauptstaedte(station, pool);
 
-    final fragen = <Frage>[];
     // Kein Land zweimal in einer Station — weder als Start noch als Ziel.
-    final benutzt = <String>{};
-
-    for (final start in kandidaten) {
-      if (fragen.length >= station.fragenAnzahl) break;
-      if (benutzt.contains(start)) continue;
-
-      final d = _distanzen(start);
-      final ziele = d.entries
+    // Dieselbe Paarbildung wie beim Flächen-Vergleich, samt zweitem
+    // Durchlauf; die Begründung steht bei [_paareZiehen].
+    final fragen = _paareZiehen<Frage>(
+      kandidaten: kandidaten,
+      anzahl: station.fragenAnzahl,
+      // Ziele sind alle Länder in passender Entfernung — nicht nur die aus
+      // dem Pool: Der Weg darf über die ganze Karte führen, gefragt wird
+      // nach der Verbindung, nicht nach dem Abschnitt.
+      partnerFuer: (start, vergeben) => _distanzen(start)
+          .entries
           .where((e) =>
               e.value >= kKetteMinSchritte &&
               e.value <= kKetteMaxSchritte &&
-              !benutzt.contains(e.key) &&
+              !vergeben.contains(e.key) &&
               e.key != start)
           .map((e) => e.key)
-          .toList()
-        ..shuffle(_rng);
-      if (ziele.isEmpty) continue;
+          .toList(),
+      baue: (start, ziel, index) {
+        // Bei endlicher Entfernung gibt es immer einen Weg — die Prüfung ist
+        // eine Absicherung, kein erwarteter Fall.
+        final weg = kuerzesterWeg(start, ziel);
+        if (weg == null) return null;
 
-      final ziel = ziele.first;
-      final weg = kuerzesterWeg(start, ziel);
-      if (weg == null) continue;
-
-      benutzt.add(start);
-      benutzt.add(ziel);
-      final startCo = _country(start), zielCo = _country(ziel);
-      fragen.add(Frage(
-        id: '${station.id}_nk_${fragen.length}',
-        frage: t('Finde einen Weg von {start} nach {ziel} — nur über Nachbarländer.',
-            {
-              'start': startCo?.name ?? start,
-              'ziel': zielCo?.name ?? ziel,
-            }),
-        // Der kürzeste Weg als Zeichenkette. Verglichen wird damit NICHT:
-        // die Prüfung ist strukturell (siehe _ketteFertig im Quiz-Screen).
-        // Das Feld trägt hier den Referenzwert, so wie es beim Preis-Schätzen
-        // den Zielwert und beim Länder-Ranking den Rangplatz trägt.
-        richtigeAntwort: weg.join('>'),
-        antwortOptionen: const [],
-        modus: LernModus.nachbarschaftsKette,
-        laenderCode: start,
-        meta: {
-          'startIso': start,
-          'zielIso': ziel,
-          'optimum': weg.length - 1,
-          'optimalerWeg': weg,
-        },
-      ));
-    }
+        final startCo = _country(start), zielCo = _country(ziel);
+        return Frage(
+          id: '${station.id}_nk_$index',
+          frage: t(
+              'Finde einen Weg von {start} nach {ziel} — nur über Nachbarländer.',
+              {
+                'start': startCo?.name ?? start,
+                'ziel': zielCo?.name ?? ziel,
+              }),
+          // Der kürzeste Weg als Zeichenkette. Verglichen wird damit NICHT:
+          // die Prüfung ist strukturell (siehe _ketteFertig im Quiz-Screen).
+          // Das Feld trägt hier den Referenzwert, so wie es beim Preis-Schätzen
+          // den Zielwert und beim Länder-Ranking den Rangplatz trägt.
+          richtigeAntwort: weg.join('>'),
+          antwortOptionen: const [],
+          modus: LernModus.nachbarschaftsKette,
+          laenderCode: start,
+          meta: {
+            'startIso': start,
+            'zielIso': ziel,
+            'optimum': weg.length - 1,
+            'optimalerWeg': weg,
+          },
+        );
+      },
+    );
     // Kein einziges brauchbares Paar: In Ozeanien hat genau ein Land eine
     // Landgrenze, in Südamerika liegen zwischen zwei beliebigen Ländern
     // höchstens 3 Grenzübertritte. Statt einer leeren Fragenliste — die eine

@@ -24,6 +24,15 @@ enum AnzeigenameErgebnis { erfolgreich, bereitsVergeben, fehler }
 /// Code statt in der Konsole.
 enum AnmeldeErgebnis { erfolgreich, abgebrochen, nichtEingerichtet, fehler }
 
+/// Ausgang eines Löschversuchs für ein ECHTES Konto.
+///
+/// [erneutAnmelden] ist kein Fehler, sondern eine Zwischenstation: Firebase
+/// verlangt für das Löschen eines Kontos eine frische Anmeldung
+/// ('requires-recent-login'). Wer seit Wochen angemeldet ist, muss sich also
+/// einmal neu ausweisen — und der Nutzer muss erfahren, WARUM plötzlich
+/// wieder ein Google-Dialog aufgeht.
+enum KontoLoeschErgebnis { erfolgreich, erneutAnmelden, fehler }
+
 /// Interner Signal-Typ, um "Name bereits von jemand anderem vergeben" aus
 /// der Transaktion nach außen zu tragen — runTransaction() propagiert
 /// geworfene Exceptions unverändert (keine automatischen Retries dafür,
@@ -318,6 +327,78 @@ class AuthService {
       return true;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Löscht das Konto des angemeldeten Spielers — endgültig.
+  ///
+  /// ══ WARUM ES DAS GEBEN MUSS ═════════════════════════════════════════════
+  ///
+  /// Apple verlangt es in Guideline 5.1.1(v), Google Play in den
+  /// Datenlöschungs-Vorgaben: Wer in einer App ein Konto anlegen kann, muss es
+  /// dort auch wieder löschen können — nicht bloss abmelden, und nicht über
+  /// einen Umweg per E-Mail. Ohne diese Funktion wird die App abgelehnt.
+  ///
+  /// ══ DIE REIHENFOLGE IST NICHT BELIEBIG ══════════════════════════════════
+  ///
+  /// Erst alles, was NUR der Besitzer löschen darf, zuletzt das Konto selbst:
+  ///
+  ///   1. Namens-Reservierung — sonst bliebe der Name für immer belegt und
+  ///      niemand könnte ihn je wieder wählen.
+  ///   2. Spieler-Dokument (Rangliste, Anzeigename).
+  ///   3. Cloud-Spielstand unter spieler/{uid}/stand/aktuell.
+  ///   4. Das Auth-Konto.
+  ///
+  /// Andersherum wäre man nach Schritt 4 nicht mehr angemeldet, und die
+  /// Firestore-Regeln liessen das Aufräumen nicht mehr zu: Alles unter
+  /// spieler/{uid} verlangt `request.auth.uid == uid`. Übrig bliebe
+  /// verwaister Datenmüll, den niemand mehr wegbekommt — genau das, was die
+  /// Vorgaben verhindern sollen.
+  ///
+  /// Die lokalen SharedPreferences bleiben unangetastet: Sie hängen am Gerät,
+  /// nicht am Konto (siehe [abmelden]). Wer die App danach neu einrichtet,
+  /// findet seinen Fortschritt am Gerät wieder — in der Cloud liegt nichts
+  /// mehr.
+  static Future<KontoLoeschErgebnis> kontoLoeschen() async {
+    final u = _auth.currentUser;
+    if (u == null) return KontoLoeschErgebnis.fehler;
+    try {
+      final name = u.displayName;
+      if (name != null && _normalisiereName(name).isNotEmpty) {
+        await _db
+            .collection('anzeigenamen_reserviert')
+            .doc(_normalisiereName(name))
+            .delete();
+      }
+      // Der Spielstand liegt in einer UNTERkollektion. Ein Dokument zu
+      // löschen räumt seine Unterkollektionen NICHT mit weg — das ist eine
+      // der bekanntesten Fallen in Firestore. Deshalb ausdrücklich zuerst.
+      await _db
+          .collection('spieler')
+          .doc(u.uid)
+          .collection('stand')
+          .doc('aktuell')
+          .delete();
+      await _db.collection('spieler').doc(u.uid).delete();
+      await u.delete();
+      // Die Google-Sitzung bleibt sonst am Gerät stehen und der nächste
+      // Anmeldeversuch nimmt sie wortlos wieder — der Spieler landete dann
+      // in einem Konto, das er gerade gelöscht hat.
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (_) {
+        // War kein Google-Konto.
+      }
+      return KontoLoeschErgebnis.erfolgreich;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        return KontoLoeschErgebnis.erneutAnmelden;
+      }
+      debugPrint('Kontolöschung fehlgeschlagen: ${e.code}');
+      return KontoLoeschErgebnis.fehler;
+    } catch (e) {
+      debugPrint('Kontolöschung fehlgeschlagen: $e');
+      return KontoLoeschErgebnis.fehler;
     }
   }
 

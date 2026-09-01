@@ -682,6 +682,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  // ── Konto löschen ─────────────────────────────────────────────────────────
+  //
+  // Zwei Rückfragen, wie beim Zurücksetzen des Fortschritts: Die erste nennt
+  // die Folgen, die zweite verlangt eine bewusste Bestätigung. Ein einzelner
+  // Tipp neben "Abmelden" darf kein Konto vernichten.
+  Future<void> _kontoLoeschen() async {
+    final erste = await showDialog<bool>(
+      context: context,
+      builder: (kontext) => AlertDialog(
+        title: Text(t('Konto löschen?')),
+        content: Text(t(
+            'Dein Konto wird endgültig gelöscht: dein Name, dein Platz in den '
+            'Ranglisten und dein in der Cloud gesicherter Spielstand. Das '
+            'lässt sich nicht rückgängig machen.')),
+        actionsAlignment: MainAxisAlignment.start,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(kontext, false),
+            child: Text(t('Abbrechen')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(kontext, true),
+            child: Text(t('Weiter'),
+                style: const TextStyle(color: Color(0xFFD32F2F))),
+          ),
+        ],
+      ),
+    );
+    if (erste != true || !mounted) return;
+
+    final zweite = await showDialog<bool>(
+      context: context,
+      builder: (kontext) => AlertDialog(
+        title: Text(t('Bist du sicher?')),
+        // Der zweite Dialog nennt ausdrücklich, was BLEIBT. Sonst glaubt
+        // jemand, mit dem Konto sei auch das Spiel auf diesem Gerät weg —
+        // und bricht aus Angst ab, obwohl er löschen wollte.
+        content: Text(t(
+            'Dein Fortschritt auf diesem Gerät bleibt erhalten. Alles in der '
+            'Cloud — Konto, Name und Rangliste — ist danach unwiderruflich '
+            'weg.')),
+        actionsAlignment: MainAxisAlignment.start,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(kontext, false),
+            child: Text(t('Abbrechen')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(kontext, true),
+            child: Text(t('Endgültig löschen'),
+                style: const TextStyle(color: Color(0xFFD32F2F))),
+          ),
+        ],
+      ),
+    );
+    if (zweite != true || !mounted) return;
+
+    final ergebnis = await AuthService.kontoLoeschen();
+    if (!mounted) return;
+
+    switch (ergebnis) {
+      case KontoLoeschErgebnis.erfolgreich:
+        // Bis zur Wurzel: Dort hängt der StartWrapper am Anmeldestand und
+        // zeigt von selbst wieder den Anmelde-Screen.
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      case KontoLoeschErgebnis.erneutAnmelden:
+        // KEIN Fehler, sondern eine Sicherheitsvorkehrung von Firebase. Der
+        // Nutzer muss erfahren, was er tun soll — "Es ist ein Fehler
+        // aufgetreten" liesse ihn hier hängen.
+        await showDialog<void>(
+          context: context,
+          builder: (kontext) => AlertDialog(
+            title: Text(t('Bitte neu anmelden')),
+            content: Text(t(
+                'Aus Sicherheitsgründen ist das Löschen nur kurz nach einer '
+                'Anmeldung möglich. Melde dich einmal ab und wieder an, dann '
+                'klappt es.')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(kontext),
+                child: Text(t('Alles klar')),
+              ),
+            ],
+          ),
+        );
+      case KontoLoeschErgebnis.fehler:
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t('Löschen nicht möglich — bitte später noch einmal '
+              'versuchen.')),
+          backgroundColor: Colors.red,
+        ));
+    }
+  }
+
   // ── DEBUG: Streak-Zahl springen lassen (nur kDebugMode) ───────────────────
   //
   // Reihum 8 → 23 → 101: ein-, zwei-, dreistellig. Der Knopf daneben
@@ -1065,6 +1159,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.logout_rounded,
                 title: t('Abmelden'),
                 onTap: _abmelden,
+              ),
+              const _Trenner(),
+              // Pflicht, nicht Kür: Apple 5.1.1(v) und die Google-Play-
+              // Vorgaben zur Datenlöschung verlangen, dass ein in der App
+              // angelegtes Konto dort auch löschbar ist. Bewusst unter
+              // "Abmelden" und in Rot — wer nur aussteigen will, trifft
+              // zuerst das Harmlose.
+              _Zeile(
+                icon: Icons.person_remove_rounded,
+                title: t('Konto löschen'),
+                titleColor: const Color(0xFFD32F2F),
+                onTap: _kontoLoeschen,
               ),
             ]),
             const SizedBox(height: 24),

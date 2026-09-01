@@ -339,6 +339,25 @@ const Map<String, String> uebersetzungenOnboarding = {
       'Your progress on this device is kept. You will need to sign in again to '
           'keep playing.',
 
+  // Konto löschen (screens/settings_screen.dart). Pflicht nach Apple
+  // 5.1.1(v) und den Google-Play-Vorgaben zur Datenlöschung.
+  'Konto löschen': 'Delete account',
+  'Konto löschen?': 'Delete account?',
+  'Dein Konto wird endgültig gelöscht: dein Name, dein Platz in den Ranglisten und dein in der Cloud gesicherter Spielstand. Das lässt sich nicht rückgängig machen.':
+      'Your account will be deleted for good: your name, your place in the '
+          'leaderboards and the progress backed up in the cloud. This cannot '
+          'be undone.',
+  'Dein Fortschritt auf diesem Gerät bleibt erhalten. Alles in der Cloud — Konto, Name und Rangliste — ist danach unwiderruflich weg.':
+      'Your progress on this device is kept. Everything in the cloud — '
+          'account, name and leaderboard entry — is gone for good.',
+  'Endgültig löschen': 'Delete for good',
+  'Bitte neu anmelden': 'Please sign in again',
+  'Aus Sicherheitsgründen ist das Löschen nur kurz nach einer Anmeldung möglich. Melde dich einmal ab und wieder an, dann klappt es.':
+      'For security reasons, deleting only works shortly after signing in. '
+          'Sign out and back in once, then it will work.',
+  'Löschen nicht möglich — bitte später noch einmal versuchen.':
+      'Could not delete — please try again later.',
+
   // ── Debug ──────────────────────────────────────────────────────────────────
   'Onboarding zurücksetzen (Debug)': 'Reset onboarding (debug)',
 };

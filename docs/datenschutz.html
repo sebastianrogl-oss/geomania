@@ -16,51 +16,99 @@
     h1 { color: #4A9E4A; }
     h2 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 8px; }
     a { color: #4A9E4A; }
+    .sprache { text-align: right; font-size: 0.9em; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #e5e5e5; padding: 8px 10px; text-align: left;
+             vertical-align: top; }
+    th { background: #f7f7f5; font-weight: 600; }
   </style>
 </head>
 <body>
+  <p class="sprache"><a href="privacy.html">English version</a></p>
+
   <h1>🌍 Datenschutzerklärung</h1>
   <p><strong>GeoMania — Geografie-Quiz App</strong><br>
-  Letzte Aktualisierung: Juli 2026</p>
+  Letzte Aktualisierung: September 2026</p>
 
   <h2>1. Allgemeines</h2>
   <p>GeoMania ist eine kostenlose Geografie-Quiz-App für Android und iOS, entwickelt von Northlight Apps (Sebastian Rogl, Österreich). Wir nehmen den Schutz deiner persönlichen Daten ernst und behandeln deine Daten vertraulich und entsprechend der gesetzlichen Datenschutzvorschriften (DSGVO).</p>
 
-  <h2>2. Welche Daten wir erfassen</h2>
+  <h2>2. Anmeldung mit Google oder Apple</h2>
+  <p>Um GeoMania zu spielen, meldest du dich mit deinem Google-Konto (Android) oder deiner Apple-ID (iOS) an. Eine Anmeldung ohne Konto ist nicht vorgesehen, weil Rangliste und Spielstand-Sicherung ein Konto voraussetzen.</p>
+  <p>Von deinem Google- bzw. Apple-Konto werden dabei übernommen:</p>
+  <table>
+    <tr><th>Daten</th><th>Wofür</th></tr>
+    <tr>
+      <td><strong>Konto-Kennung (Nutzer-ID)</strong></td>
+      <td>Eindeutige Zuordnung deines Spielstands und deines Ranglisten-Eintrags. Diese Kennung wird von Firebase vergeben und ist nur innerhalb von GeoMania gültig.</td>
+    </tr>
+    <tr>
+      <td><strong>E-Mail-Adresse</strong></td>
+      <td>Wird von Firebase Authentication zu deinem Konto gespeichert, damit du dich auf einem anderen Gerät wieder mit demselben Konto anmelden kannst. Wir speichern sie <strong>nicht</strong> zusätzlich in unserer Datenbank, zeigen sie nirgends an und versenden keine E-Mails an sie.</td>
+    </tr>
+    <tr>
+      <td><strong>Name des Kontos</strong></td>
+      <td>Wird von Google bzw. Apple bei der Anmeldung mitgeliefert. GeoMania übernimmt ihn <strong>nicht</strong> als Anzeigenamen — bis du selbst einen Namen wählst, steht in der Rangliste ein Platzhalter. Dein Klarname erscheint also nicht ungefragt öffentlich.</td>
+    </tr>
+  </table>
+  <p>Bei der Anmeldung mit Apple kannst du „E-Mail verbergen“ wählen. Dann erhalten wir statt deiner echten Adresse eine anonyme Weiterleitungsadresse von Apple.</p>
+
+  <h2>3. Welche Daten wir speichern</h2>
 
   <h3>a) Anzeigename</h3>
-  <p>Beim ersten Start der App wählst du einen Anzeigenamen. Dieser wird in unserer Datenbank (Firebase Firestore) gespeichert und ist in der Rangliste für andere Spieler sichtbar.</p>
+  <p>Du wählst einen Anzeigenamen selbst. Er wird in unserer Datenbank (Firebase Firestore) gespeichert und ist <strong>in der Rangliste für andere Spieler öffentlich sichtbar</strong>. Damit kein Name doppelt vorkommt, wird er zusätzlich in einer Liste vergebener Namen reserviert. Du kannst ihn jederzeit in der App unter Einstellungen → Anzeigename ändern; die alte Reservierung wird dabei freigegeben.</p>
 
-  <h3>b) Spielergebnisse</h3>
-  <p>Deine täglichen Ergebnisse in den Tages-Challenges werden anonym mit deiner Nutzer-ID in Firebase Firestore gespeichert und für die Rangliste verwendet.</p>
+  <h3>b) Spielergebnisse und Rangliste</h3>
+  <p>Deine Ergebnisse in den Tages-Challenges werden mit deiner Nutzer-ID in Firebase Firestore gespeichert und für die Rangliste verwendet. Ein Ranglisten-Eintrag enthält: Nutzer-ID, Anzeigename, erreichte Punkte, das von dir gewählte Profilbild (ein Symbol aus der App, kein Foto), deine angezeigten Abzeichen und den Zeitpunkt. Ranglisten-Einträge sind für alle angemeldeten Spieler lesbar und werden nach 14 Tagen entfernt.</p>
 
-  <h3>c) Anonyme Nutzer-ID</h3>
-  <p>Beim ersten Start wird automatisch eine anonyme Nutzer-ID erstellt (Firebase Anonymous Authentication). Diese ID ist nicht mit deinem Namen, deiner E-Mail oder anderen persönlichen Daten verknüpft.</p>
+  <h3>c) Spielstand in der Cloud</h3>
+  <p>Dein Spielstand wird deinem Konto zugeordnet in Firebase Firestore gesichert, damit er bei einem Gerätewechsel oder einer Neuinstallation erhalten bleibt. Gesichert werden Fortschritt im Lernpfad, Sterne, Abzeichen, Serien, Rekorde und dein Portfolio-Stand.</p>
+  <p>Nicht gesichert werden Einstellungen, die zum Gerät gehören: Ton, Vibration, Sprache und Erinnerungen bleiben ausschließlich lokal. Dein Spielstand liegt zusätzlich immer auch auf dem Gerät selbst; die Cloud ist eine Sicherung, nicht der Hauptspeicher. Diese Sicherung ist nur für dich lesbar — Sicherheitsregeln lassen den Zugriff ausschließlich für das eigene Konto zu.</p>
 
   <h3>d) Gerätedaten und Werbung</h3>
   <p>Für die Anzeige von Werbung verwendet die App Google AdMob. AdMob kann dabei gerätebezogene Daten erfassen, darunter Geräte-ID, IP-Adresse, ungefährer Standort und Nutzungsverhalten.</p>
 
-  <h3>e) Lernfortschritt</h3>
-  <p>Dein Lernfortschritt im Lernpfad wird ausschließlich lokal auf deinem Gerät gespeichert und nicht an unsere Server übertragen.</p>
-
-  <h2>3. Werbung (Google AdMob)</h2>
-  <p>Die App verwendet Google AdMob zur Anzeige von Werbung. Beim ersten Start wirst du gefragt ob du personalisierter Werbung zustimmst (DSGVO-Consent). Du kannst deine Werbeeinstellungen jederzeit in der App unter Einstellungen → Werbeeinstellungen verwalten ändern.</p>
+  <h2>4. Werbung (Google AdMob)</h2>
+  <p>Die App verwendet Google AdMob zur Anzeige von Werbung. Beim ersten Start wirst du gefragt, ob du personalisierter Werbung zustimmst (DSGVO-Consent). Du kannst deine Werbeeinstellungen jederzeit in der App unter Einstellungen → Werbeeinstellungen verwalten ändern.</p>
   <p>Weitere Informationen: <a href="https://policies.google.com/privacy">Google Datenschutzrichtlinie</a></p>
 
-  <h2>4. Firebase (Google)</h2>
-  <p>Wir verwenden Firebase von Google für anonyme Authentifizierung und Speicherung von Ranglisten-Daten.</p>
+  <h2>5. Firebase und Firestore (Google) als Dienstleister</h2>
+  <p>Für Anmeldung, Rangliste und Spielstand-Sicherung nutzen wir Firebase, einen Dienst von Google. Im Einzelnen:</p>
+  <ul>
+    <li><strong>Firebase Authentication</strong> — verwaltet dein Konto (Nutzer-ID, E-Mail-Adresse, Anmeldeanbieter).</li>
+    <li><strong>Cloud Firestore</strong> — speichert Anzeigename, Ranglisten-Einträge und den gesicherten Spielstand.</li>
+  </ul>
+  <p><strong>Serverstandort:</strong> Unsere Firestore-Datenbank liegt in der Region <code>europe-west3</code> — Frankfurt am Main, Deutschland. Die Daten aus Anzeigename, Rangliste und Spielstand werden dort gespeichert.</p>
+  <p>Google verarbeitet daneben technische Daten zum Betrieb des Dienstes und kann dabei auch Server ausserhalb der EU einsetzen. Für Google AdMob (Abschnitt 4) gilt das ohnehin.</p>
   <p><a href="https://firebase.google.com/support/privacy">Firebase Datenschutzrichtlinie</a></p>
 
-  <h2>5. Deine Rechte (DSGVO)</h2>
-  <p>Du hast das Recht auf Auskunft, Löschung und Widerspruch bezüglich deiner gespeicherten Daten. Um deine Daten zu löschen: öffne die App, gehe zu Einstellungen → Fortschritt zurücksetzen.</p>
+  <h2>6. Konto löschen</h2>
+  <p>Du kannst dein Konto jederzeit direkt in der App löschen: <strong>Einstellungen → Konto löschen</strong>. Nach zwei Rückfragen wird endgültig gelöscht:</p>
+  <ul>
+    <li>die Reservierung deines Anzeigenamens (der Name wird wieder frei),</li>
+    <li>dein in der Cloud gesicherter Spielstand,</li>
+    <li>dein Spieler-Dokument mit Anzeigename und Portfolio-Werten,</li>
+    <li>dein Konto bei Firebase Authentication samt Nutzer-ID und E-Mail-Adresse.</li>
+  </ul>
+  <p>Der Vorgang lässt sich nicht rückgängig machen. <strong>Dein Spielstand auf dem Gerät bleibt dabei erhalten</strong> — er liegt lokal und hängt nicht am Konto.</p>
+  <p>Aus Sicherheitsgründen erlaubt Firebase das Löschen nur kurz nach einer Anmeldung. Liegt deine letzte Anmeldung länger zurück, meldet die App das und bittet dich, dich einmal ab- und wieder anzumelden.</p>
+  <p>Bereits veröffentlichte Ranglisten-Einträge verschwinden spätestens mit dem 14-Tage-Fenster (Abschnitt 3b). Möchtest du sie früher entfernt haben, schreib uns kurz an die Adresse unter Punkt 10.</p>
 
-  <h2>6. Datensicherheit</h2>
-  <p>Alle Daten werden über verschlüsselte Verbindungen (HTTPS/TLS) übertragen. Firebase-Daten sind durch Sicherheitsregeln geschützt.</p>
+  <h2>7. Deine Rechte (DSGVO)</h2>
+  <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch. Zwei Wege stehen dir direkt in der App offen:</p>
+  <ul>
+    <li><strong>Einstellungen → Fortschritt zurücksetzen</strong> — setzt deinen Lernpfad-Fortschritt zurück, auf diesem Gerät und in der Cloud. Konto und Rangliste bleiben bestehen.</li>
+    <li><strong>Einstellungen → Konto löschen</strong> — entfernt dein Konto und alle zugehörigen Daten (siehe Abschnitt 6).</li>
+  </ul>
+  <p>Für Auskunft oder andere Anliegen erreichst du uns unter der Adresse in Punkt 10.</p>
 
-  <h2>7. Kinder</h2>
+  <h2>8. Datensicherheit</h2>
+  <p>Alle Daten werden über verschlüsselte Verbindungen (HTTPS/TLS) übertragen. Der Zugriff auf die Datenbank ist durch Sicherheitsregeln beschränkt: Auf dein Spieler-Dokument und deinen gesicherten Spielstand kann ausschliesslich dein eigenes Konto zugreifen.</p>
+
+  <h2>9. Kinder</h2>
   <p>Die App richtet sich nicht gezielt an Kinder unter 13 Jahren. Wir erfassen wissentlich keine Daten von Kindern unter 13 Jahren.</p>
 
-  <h2>8. Kontakt</h2>
+  <h2>10. Kontakt</h2>
   <p>Northlight Apps<br>
   Sebastian Rogl<br>
   Österreich<br>

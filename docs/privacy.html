@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — GeoMania</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #4A9E4A; }
+    h2 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+    a { color: #4A9E4A; }
+    .sprache { text-align: right; font-size: 0.9em; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #e5e5e5; padding: 8px 10px; text-align: left;
+             vertical-align: top; }
+    th { background: #f7f7f5; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <p class="sprache"><a href="datenschutz.html">Deutsche Fassung</a></p>
+
+  <h1>🌍 Privacy Policy</h1>
+  <p><strong>GeoMania — geography quiz app</strong><br>
+  Last updated: September 2026</p>
+
+  <h2>1. General</h2>
+  <p>GeoMania is a free geography quiz app for Android and iOS, developed by Northlight Apps (Sebastian Rogl, Austria). We take the protection of your personal data seriously and handle it confidentially and in accordance with data protection law (GDPR).</p>
+
+  <h2>2. Signing in with Google or Apple</h2>
+  <p>To play GeoMania you sign in with your Google account (Android) or your Apple ID (iOS). There is no way to play without an account, because the leaderboard and the progress backup both require one.</p>
+  <p>The following is taken from your Google or Apple account:</p>
+  <table>
+    <tr><th>Data</th><th>Purpose</th></tr>
+    <tr>
+      <td><strong>Account identifier (user ID)</strong></td>
+      <td>Links your progress and your leaderboard entry to you. This identifier is issued by Firebase and is only valid within GeoMania.</td>
+    </tr>
+    <tr>
+      <td><strong>Email address</strong></td>
+      <td>Stored with your account by Firebase Authentication so that you can sign in to the same account on another device. We do <strong>not</strong> store it separately in our database, we do not display it anywhere, and we do not send email to it.</td>
+    </tr>
+    <tr>
+      <td><strong>Account name</strong></td>
+      <td>Supplied by Google or Apple during sign-in. GeoMania does <strong>not</strong> adopt it as your display name — until you choose a name yourself, a placeholder is shown in the leaderboard. Your real name therefore never becomes public without you choosing it.</td>
+    </tr>
+  </table>
+  <p>When signing in with Apple you can choose “Hide My Email”. In that case we receive an anonymous relay address from Apple instead of your real one.</p>
+
+  <h2>3. What we store</h2>
+
+  <h3>a) Display name</h3>
+  <p>You choose a display name yourself. It is stored in our database (Firebase Firestore) and is <strong>publicly visible to other players in the leaderboard</strong>. To keep names unique, it is also reserved in a list of taken names. You can change it at any time under Settings → Change display name; the previous reservation is released when you do.</p>
+
+  <h3>b) Game results and leaderboard</h3>
+  <p>Your results in the daily challenges are stored in Firebase Firestore together with your user ID and used for the leaderboard. A leaderboard entry contains: user ID, display name, score, the profile picture you selected (an icon from the app, not a photo), your displayed badges, and a timestamp. Leaderboard entries are readable by all signed-in players and are removed after 14 days.</p>
+
+  <h3>c) Progress backup in the cloud</h3>
+  <p>Your progress is backed up to Firebase Firestore, linked to your account, so that it survives a change of device or a reinstall. The backup covers learning-path progress, stars, badges, streaks, records and your portfolio balance.</p>
+  <p>Settings that belong to the device are not backed up: sound, vibration, language and reminders stay on the device only. Your progress is always also kept on the device itself — the cloud is a backup, not the primary storage. That backup is readable only by you; security rules restrict access to your own account.</p>
+
+  <h3>d) Device data and advertising</h3>
+  <p>The app uses Google AdMob to display ads. AdMob may collect device-related data, including device ID, IP address, approximate location and usage behaviour.</p>
+
+  <h2>4. Advertising (Google AdMob)</h2>
+  <p>The app uses Google AdMob to display ads. On first launch you are asked whether you consent to personalised advertising (GDPR consent). You can change your ad settings at any time in the app under Settings → Manage ad settings.</p>
+  <p>More information: <a href="https://policies.google.com/privacy">Google Privacy Policy</a></p>
+
+  <h2>5. Firebase and Firestore (Google) as our service provider</h2>
+  <p>For sign-in, the leaderboard and the progress backup we use Firebase, a service by Google. Specifically:</p>
+  <ul>
+    <li><strong>Firebase Authentication</strong> — manages your account (user ID, email address, sign-in provider).</li>
+    <li><strong>Cloud Firestore</strong> — stores the display name, leaderboard entries and the progress backup.</li>
+  </ul>
+  <p><strong>Server location:</strong> our Firestore database is located in the region <code>europe-west3</code> — Frankfurt am Main, Germany. Display name, leaderboard entries and progress backup are stored there.</p>
+  <p>Google additionally processes technical data to operate the service and may use servers outside the EU for that. The same applies to Google AdMob (section 4).</p>
+  <p><a href="https://firebase.google.com/support/privacy">Firebase Privacy Policy</a></p>
+
+  <h2>6. Deleting your account</h2>
+  <p>You can delete your account at any time directly in the app: <strong>Settings → Delete account</strong>. After two confirmation prompts the following is permanently deleted:</p>
+  <ul>
+    <li>the reservation of your display name (the name becomes available again),</li>
+    <li>your progress backup in the cloud,</li>
+    <li>your player document containing display name and portfolio values,</li>
+    <li>your Firebase Authentication account including user ID and email address.</li>
+  </ul>
+  <p>This cannot be undone. <strong>Your progress on the device is kept</strong> — it is stored locally and is not tied to the account.</p>
+  <p>For security reasons Firebase only allows deletion shortly after signing in. If your last sign-in was longer ago, the app tells you so and asks you to sign out and back in once.</p>
+  <p>Leaderboard entries that have already been published disappear at the latest with the 14-day window (section 3b). If you would like them removed sooner, just write to us at the address in section 10.</p>
+
+  <h2>7. Your rights (GDPR)</h2>
+  <p>You have the right to access, rectification, erasure, restriction of processing, data portability and objection. Two routes are available directly in the app:</p>
+  <ul>
+    <li><strong>Settings → Reset progress</strong> — resets your learning-path progress, both on this device and in the cloud. Your account and leaderboard entries remain.</li>
+    <li><strong>Settings → Delete account</strong> — removes your account and all data belonging to it (see section 6).</li>
+  </ul>
+  <p>For access requests or any other matter you can reach us at the address in section 10.</p>
+
+  <h2>8. Data security</h2>
+  <p>All data is transmitted over encrypted connections (HTTPS/TLS). Access to the database is restricted by security rules: only your own account can access your player document and your progress backup.</p>
+
+  <h2>9. Children</h2>
+  <p>The app is not directed at children under 13. We do not knowingly collect data from children under 13.</p>
+
+  <h2>10. Contact</h2>
+  <p>Northlight Apps<br>
+  Sebastian Rogl<br>
+  Austria<br>
+  Email: <a href="mailto:northlightapps@gmx.at">northlightapps@gmx.at</a></p>
+</body>
+</html>

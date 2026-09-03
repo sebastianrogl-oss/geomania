@@ -17,6 +17,7 @@ import 'services/locale_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/sound_service.dart';
 import 'services/spielstand_sync.dart';
+import 'services/urgestein_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/rangliste_screen.dart';
 import 'screens/profil_screen.dart';
@@ -60,6 +61,16 @@ void main() async {
   // Auf Web ein No-op, siehe SoundService.verfuegbar.
   await SoundService.initialisieren();
   await HaptikService.initialisieren();
+
+  // Urgestein an alle, die schon vor diesem Update gespielt haben.
+  //
+  // MUSS VOR runApp() LAUFEN, und das ist der Kern der Sache: Erst danach
+  // gibt es eine Oberfläche, auf der jemand spielen könnte. Zu diesem
+  // Zeitpunkt hat eine frische Installation garantiert keinen Fortschritt —
+  // und genau daran wird der Bestandsspieler erkannt. Liefe die Prüfung
+  // später, könnte ein Neuling seine erste Station abgeschlossen haben und
+  // erschiene als Alt-Nutzer. Begründung im Einzelnen: [UrgesteinService].
+  await UrgesteinService.pruefeBeimStart();
 
   runApp(const GeoManiaApp());
 

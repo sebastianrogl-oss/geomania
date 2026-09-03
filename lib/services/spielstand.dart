@@ -183,6 +183,16 @@ const List<String> nurGeraetPraefixe = [
   'dc_',
   'progress_',
   'lernen_days_',
+  // Die Urgestein-Prüfung beim ersten Start nach dem Update. Sie beantwortet
+  // eine Frage über DIESES Gerät ("lag hier schon Fortschritt, bevor die neue
+  // Version kam") und muss deshalb je Gerät einzeln laufen. Das Abzeichen
+  // selbst wandert ohnehin über 'abzeichen_freigeschaltet' in die Cloud.
+  //
+  // Würde der Merker mitwandern, übersprünge ein zweites Gerät die Prüfung —
+  // was hier zwar folgenlos wäre, weil das Abzeichen schon vergeben ist, aber
+  // die Bedeutung des Schlüssels verfälscht.
+  'urgestein_geprueft',
+  'urgestein_popup_offen',
   // Einmalige Oberflächen-Hinweise und Debug.
   'abzeichen_swipe_hinweis_gezeigt',
   'debug_alles_frei',

@@ -12,6 +12,9 @@ import '../services/portfolio_service.dart';
 import '../services/profilbild_service.dart';
 import '../services/knopf_rueckmeldung.dart';
 import '../services/station_session_service.dart';
+import '../services/urgestein_service.dart';
+import '../data/abzeichen_data.dart';
+import '../widgets/abzeichen_popup.dart';
 import '../widgets/kontinent_hintergrund.dart';
 import '../widgets/level_skip_button.dart';
 import '../widgets/pfad_deko_layer.dart';
@@ -129,6 +132,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     FortschrittService.resetSignal.addListener(_onResetSignal);
     ChallengePanelSignal.oeffnen.addListener(_onChallengePanelOeffnenSignal);
     ProfilbildService.geaendert.addListener(_ladeProfilbild);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _zeigeUrgestein());
+  }
+
+  /// Das Urgestein-Popup für Bestandsspieler.
+  ///
+  /// HIER und nicht in `main()`, obwohl die Verleihung dort passiert: Ein
+  /// Bestandsspieler kommt nach dem Update erst über Anmeldung, Namenswahl
+  /// und Willkommens-Screen hierher (siehe StartWrapper). Ein Popup direkt
+  /// beim Start läge über dem Anmelde-Screen.
+  ///
+  /// Kollidiert mit nichts: Die beiden anderen Erststart-Abfragen —
+  /// Erinnerungs-Erlaubnis und Streak-Ziel — hängen am STATIONSABSCHLUSS
+  /// (station_quiz_screen.dart), nicht am Programmstart. Sie können also
+  /// frühestens auftreten, wenn dieses Popup längst weg ist.
+  ///
+  /// Der offene Zustand steht in den Einstellungen, nicht in einer Variablen:
+  /// Wer die App zwischen Verleihung und Ankunft hier schliesst, bekommt das
+  /// Popup beim nächsten Mal — sonst läge das Abzeichen still im Album.
+  Future<void> _zeigeUrgestein() async {
+    if (!await UrgesteinService.popupOffen()) return;
+    final abzeichen = abzeichenById('urgestein');
+    if (abzeichen == null || !mounted) return;
+    await AbzeichenPopup.zeigen(context, [abzeichen]);
+    await UrgesteinService.popupErledigt();
   }
 
   // HomeScreen bleibt dank IndexedStack dauerhaft am Leben (kein initState()

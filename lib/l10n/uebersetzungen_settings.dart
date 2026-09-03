@@ -39,5 +39,11 @@ const Map<String, String> uebersetzungenSettings = {
 
   'Kein Mail-Programm gefunden': 'No mail app found',
 
+  // Datenschutzerklärung (Einstellungen → ÜBER DIE APP). Der Eintrag öffnet
+  // je nach App-Sprache die deutsche oder die englische Fassung auf GitHub
+  // Pages.
+  'Datenschutzerklärung': 'Privacy Policy',
+  'Kein Browser gefunden': 'No browser found',
+
   'Einstellungen': 'Settings',
 };

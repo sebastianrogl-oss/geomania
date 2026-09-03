@@ -572,6 +572,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  // ── Datenschutzerklärung ──────────────────────────────────────────────────
+  //
+  // Pflicht, nicht Kür: Google Play verlangt den Link zur
+  // Datenschutzerklärung nicht nur im Store-Eintrag, sondern auch IN der App,
+  // sobald personenbezogene Daten verarbeitet werden. Auf GeoMania trifft das
+  // seit der Kontoanmeldung und der Cloud-Sicherung des Spielstands zu.
+  //
+  // Die Seite liegt zweisprachig auf GitHub Pages (docs/ im Repository).
+
+  static const _kDatenschutzDe =
+      'https://sebastianrogl-oss.github.io/geomania/datenschutz.html';
+  static const _kDatenschutzEn =
+      'https://sebastianrogl-oss.github.io/geomania/privacy.html';
+
+  Future<void> _datenschutzOeffnen() async {
+    // Massgeblich ist die in der APP gewählte Sprache, nicht die des Geräts:
+    // Wer die App auf Englisch gestellt hat, soll die englische Fassung
+    // bekommen, auch auf einem deutschen Telefon.
+    final uri = Uri.parse(
+        LocaleService.istEnglisch ? _kDatenschutzEn : _kDatenschutzDe);
+    // externalApplication statt der Voreinstellung: Eine
+    // Datenschutzerklärung soll im richtigen Browser stehen, mit sichtbarer
+    // Adresszeile — nicht in einem eingebetteten Fenster, dem man nicht
+    // ansieht, wo man gerade ist.
+    final erfolg = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!erfolg && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('Kein Browser gefunden')),
+      ));
+    }
+  }
+
   // ── Feedback ─────────────────────────────────────────────────────────────
 
   Future<void> _feedbackGeben() async {
@@ -1437,6 +1469,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _werbeeinstellungenVerwalten,
                 ),
               ],
+              const _Trenner(),
+              _Zeile(
+                icon: Icons.shield_outlined,
+                title: t('Datenschutzerklärung'),
+                onTap: _datenschutzOeffnen,
+              ),
               const _Trenner(),
               _Zeile(
                 icon: Icons.mail_outline_rounded,

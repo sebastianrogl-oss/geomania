@@ -16,7 +16,11 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.0+2
+# Die Buildnummer (+11) liegt bewusst ueber allen bisher vergebenen: Der
+# Verlauf ging bis 1.0.0+10, danach sprang er auf 1.0.1+1 zurueck. Google Play
+# verlangt aber einen echt hoeheren versionCode als bei JEDEM je hochgeladenen
+# Paket — eine kleinere Zahl wird abgewiesen. Nur nach oben zaehlen.
+version: 1.1.0+11
 
 environment:
   sdk: ^3.12.1

@@ -24,6 +24,30 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- Rueckweg aus der Google-Anmeldung in die App.
+
+	     Der Wert ist die REVERSED_CLIENT_ID aus GoogleService-Info.plist
+	     (dieselbe Datei, die im Resources-Build-Schritt liegt) — also die
+	     umgedrehte CLIENT_ID. Ohne diesen URL-Typ oeffnet sich zwar der
+	     Google-Dialog, aber das Ergebnis findet nicht zurueck: Die Anmeldung
+	     bricht ab und die App meldet "hat nicht geklappt".
+
+	     WER DIE PLIST AUSTAUSCHT, MUSS HIER VORBEI: Bei einem neuen
+	     OAuth-Client aendert sich der Wert, und eine veraltete Zeile faellt
+	     nicht beim Bauen auf, sondern erst beim Anmeldeversuch auf dem
+	     Geraet. ios_anmeldung_test.dart vergleicht beide Dateien deshalb
+	     gegeneinander. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.514970095088-3gf2nh141ahlummjltc0n2gpohoeia34</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

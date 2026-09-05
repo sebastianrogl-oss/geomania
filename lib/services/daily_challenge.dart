@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'ad_service.dart';
 import 'challenge_rekord_service.dart';
+import 'fortschritt_service.dart';
 
 class DailyChallenge {
   /// Anzahl aller Tages-Challenges (Preis schätzen, Higher-or-Lower,
@@ -32,6 +33,27 @@ class DailyChallenge {
     await ChallengeRekordService.besteStreakAktualisieren(id, streak);
     await ChallengeRekordService.spieltagVermerken(id);
     await ChallengeRekordService.spielGezaehlt(id);
+
+    // ── Der App-Streak zählt JEDE Aktivität ─────────────────────────────
+    //
+    // Die Flamme steht für "heute gespielt", nicht für "heute eine Station
+    // im Lernpfad gespielt". Wer nur eine Tages-Challenge macht, hat den Tag
+    // genauso bespielt — bekam bis hierher aber keinen Streak-Tag, weil der
+    // App-Streak ausschliesslich am Stationsabschluss hing.
+    //
+    // DIESELBE Funktion wie dort (station_quiz_screen -> streakErhoehenUnd-
+    // Feiern -> FortschrittService.streakAktualisieren), keine zweite
+    // Rechnung: Ein nachgebauter Tagesvergleich wäre die Stelle, an der die
+    // beiden Wege irgendwann auseinanderlaufen.
+    //
+    // EIN TAG ZÄHLT NUR EINMAL, und das regelt die Funktion selbst: Liegt
+    // die letzte Aktivität am selben Kalendertag, kehrt sie unverändert
+    // zurück (`if (diff == 0)`). Wer Station UND Challenge an einem Tag
+    // spielt, bekommt einen Streak-Tag, nicht zwei.
+    //
+    // Die Serien-Zähler der einzelnen Challenges oben bleiben davon
+    // unberührt — das sind eigene Werte mit eigener Bedeutung.
+    await FortschrittService.streakAktualisieren();
 
     // Interstitial nach der zweiten und nach der letzten Tages-Challenge
     // des Tages (der AdService entscheidet selbst, ob die Schwelle heute

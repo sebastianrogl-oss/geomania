@@ -26,6 +26,7 @@ import 'widgets/gradnetz.dart';
 import 'screens/anzeigename_screen.dart';
 import 'screens/willkommen_screen.dart';
 import 'theme/app_theme.dart';
+import 'theme/scroll_verhalten.dart';
 import 'l10n/uebersetzungen.dart';
 
 void main() async {
@@ -126,6 +127,9 @@ class GeoManiaApp extends StatelessWidget {
           title: 'GeoMania',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.theme,
+          // Einheitliches Nachfedern statt der Plattform-Voreinstellung —
+          // die Begründung im Einzelnen steht bei [AppScrollVerhalten].
+          scrollBehavior: const AppScrollVerhalten(),
           // OHNE const, und das ist der ganze Unterschied zwischen einem
           // Sprachwechsel, der durchschlägt, und einem, der nur den
           // Umschalter selbst umfärbt.

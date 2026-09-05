@@ -16,11 +16,16 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-# Die Buildnummer (+11) liegt bewusst ueber allen bisher vergebenen: Der
-# Verlauf ging bis 1.0.0+10, danach sprang er auf 1.0.1+1 zurueck. Google Play
-# verlangt aber einen echt hoeheren versionCode als bei JEDEM je hochgeladenen
-# Paket — eine kleinere Zahl wird abgewiesen. Nur nach oben zaehlen.
-version: 1.1.0+11
+# NUR NACH OBEN ZAEHLEN — beide Stores verlangen das, aus je eigenem Grund:
+#
+#   Google Play: der versionCode muss echt hoeher sein als bei JEDEM je
+#   hochgeladenen Paket. Der Verlauf ging bis 1.0.0+10 und sprang danach auf
+#   1.0.1+1 zurueck; +11 hat das wieder eingeholt.
+#
+#   Apple: fuer jeden weiteren Upload DERSELBEN Version braucht es eine
+#   hoehere CFBundleVersion. Build 11 liegt bereits bei TestFlight, deshalb
+#   +12.
+version: 1.1.0+12
 
 environment:
   sdk: ^3.12.1

@@ -8,6 +8,7 @@ import 'auth_service.dart';
 import 'fortschritt_service.dart';
 import 'spielstand.dart';
 import 'spielstand_speicher.dart';
+import 'update_neustart_service.dart';
 
 /// Der Spielstand in der Cloud.
 ///
@@ -102,6 +103,27 @@ class SpielstandSync {
     if (dok == null) return false;
 
     try {
+      // ZUERST die Notiz des Neustarts abarbeiten — VOR jedem Zusammenführen.
+      //
+      // Der Neustart beim Update auf 1.1.0 raeumt lokal ab, kann das
+      // Cloud-Dokument aber nicht mitloeschen: Er laeuft in main() vor der
+      // Anmeldung, es gibt dort noch keine uid. Ohne diesen Block holte der
+      // Abgleich hier den alten Stand aus der Cloud zurueck — die
+      // Zusammenfuehrung kennt nur Wachstum, "leer + voll" ergibt "voll".
+      //
+      // Genau das ist einem TestFlight-Tester passiert: Der Neustart lief,
+      // und Sekundenbruchteile spaeter stand alles wieder da.
+      //
+      // Geloescht wird ueber [loescheCloudStand] — denselben Weg, den auch
+      // "Fortschritt zuruecksetzen" in den Einstellungen nimmt. Wirft er,
+      // bleibt die Notiz stehen und der naechste Anmeldeversuch holt es nach.
+      if (await UpdateNeustartService.cloudLoeschenOffen()) {
+        await loescheCloudStand();
+        await UpdateNeustartService.cloudGeloescht();
+        // Lokal ist bereits leer, es gibt nichts zurueckzuschreiben.
+        return false;
+      }
+
       final cloud = await _lies(dok);
       final lokal = await SpielstandSpeicher.lesen();
       final zusammen = spielstandZusammenfuehren(lokal, cloud);

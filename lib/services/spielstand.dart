@@ -199,6 +199,11 @@ const List<String> nurGeraetPraefixe = [
   // er sich beim Aufräumen selbst entfernen und beim nächsten Start erneut
   // laufen.
   'neustart_110_erledigt',
+  // Die offene Notiz "Cloud-Stand noch loeschen". Sie MUSS am Geraet
+  // bleiben: Sie beschreibt eine Aufgabe, die genau dieses Geraet noch zu
+  // erledigen hat. Und sie darf beim Aufraeumen nicht selbst mitgeloescht
+  // werden — sonst wuesste danach niemand mehr, dass die Cloud noch dran ist.
+  'neustart_110_cloud_offen',
   // Einmalige Oberflächen-Hinweise und Debug.
   'abzeichen_swipe_hinweis_gezeigt',
   'debug_alles_frei',

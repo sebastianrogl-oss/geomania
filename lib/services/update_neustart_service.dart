@@ -55,6 +55,30 @@ class UpdateNeustartService {
   /// ohne dass jemand einen bestehenden Merker löschen müsste.
   static const _kErledigt = 'neustart_110_erledigt';
 
+  /// Der Cloud-Stand muss noch weg.
+  ///
+  /// ══ WARUM DAS NICHT SOFORT GEHT ═══════════════════════════════════════
+  ///
+  /// Der Neustart läuft in `main()` vor `runApp()` — also bevor die
+  /// Anmeldung steht. Ohne uid gibt es kein Cloud-Dokument, das man löschen
+  /// könnte. Ein Versuch an dieser Stelle liefe ins Leere, und der Merker
+  /// stünde danach trotzdem auf erledigt.
+  ///
+  /// Deshalb hinterlässt der Neustart hier eine Notiz, und der erste
+  /// Anmelde-Abgleich arbeitet sie ab: Er LÖSCHT das Dokument, statt es
+  /// zusammenzuführen (siehe [SpielstandSync.beimAnmelden]).
+  ///
+  /// ══ WARUM ER NUR BEI ECHTEM ALTSTAND GESETZT WIRD ═════════════════════
+  ///
+  /// Weil er sonst Daten vernichtet, die niemand vernichten wollte: Wer die
+  /// App frisch auf einem NEUEN Gerät installiert, hat lokal nichts — der
+  /// Neustart findet nichts vor und räumt nichts weg. Stünde die Notiz
+  /// trotzdem, würde beim ersten Anmelden die Cloud-Sicherung gelöscht, mit
+  /// der dieser Spieler gerade seinen Fortschritt vom alten Gerät holen
+  /// wollte. Aus einer Absicherung würde der schlimmste Datenverlust, den
+  /// diese App kennt.
+  static const _kCloudOffen = 'neustart_110_cloud_offen';
+
   /// Einmaliger Neustart. Muss NACH [UrgesteinService.pruefeBeimStart]
   /// laufen — siehe Klassenkommentar.
   static Future<void> pruefeBeimStart() async {
@@ -66,9 +90,16 @@ class UpdateNeustartService {
     final hatUrgestein =
         (await AbzeichenService.getFreigeschaltete()).contains('urgestein');
 
+    // Lag hier überhaupt ein Stand? Ausser 'version' steht in einem frisch
+    // installierten Gerät nichts. Nur wenn wirklich etwas weggeräumt wird,
+    // darf die Cloud-Notiz gesetzt werden — die Begründung bei [_kCloudOffen].
+    final vorher = await SpielstandSpeicher.lesen();
+    final hatteStand = vorher.keys.any((k) => k != 'version');
+
     await SpielstandSpeicher.loescheSyncSchluessel();
 
     if (hatUrgestein) await AbzeichenService.verleihen('urgestein');
+    if (hatteStand) await prefs.setBool(_kCloudOffen, true);
 
     // ZULETZT. Bricht etwas dazwischen ab, läuft der Neustart beim nächsten
     // Start noch einmal — auf einem schon geleerten Stand ist das folgenlos,
@@ -76,9 +107,28 @@ class UpdateNeustartService {
     await prefs.setBool(_kErledigt, true);
   }
 
+  /// Steht die Cloud-Notiz noch offen?
+  ///
+  /// Gefragt wird vom Anmelde-Abgleich, bevor er zusammenführt.
+  static Future<bool> cloudLoeschenOffen() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kCloudOffen) ?? false;
+  }
+
+  /// Das Cloud-Dokument ist weg — Notiz abhaken.
+  ///
+  /// Erst NACH der erfolgreichen Löschung aufzurufen. Schlägt sie fehl (kein
+  /// Netz), bleibt die Notiz stehen und der nächste Anmelde-Abgleich holt es
+  /// nach. Andersherum wäre der Altstand für immer in der Cloud.
+  static Future<void> cloudGeloescht() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kCloudOffen);
+  }
+
   /// Nur für Tests und den Debug-Bereich.
   static Future<void> debugZuruecksetzen() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kErledigt);
+    await prefs.remove(_kCloudOffen);
   }
 }

@@ -129,6 +129,67 @@ void main() {
     });
   });
 
+  group('Der Cloud-Stand wird mitgelöscht', () {
+    test('nach einem echten Neustart steht die Notiz', () async {
+      // Der Neustart kann das Cloud-Dokument nicht selbst loeschen — er
+      // laeuft vor der Anmeldung, es gibt keine uid. Also hinterlaesst er
+      // eine Notiz, die der erste Anmelde-Abgleich abarbeitet.
+      SharedPreferences.setMockInitialValues(altStand());
+      await appStart();
+      expect(await UpdateNeustartService.cloudLoeschenOffen(), isTrue);
+    });
+
+    test('OHNE Altstand steht sie NICHT', () async {
+      // DER GEFÄHRLICHE FALL. Wer die App frisch auf einem NEUEN Gerät
+      // installiert, hat lokal nichts — der Neustart raeumt nichts weg.
+      // Stuende die Notiz trotzdem, loeschte der erste Anmelde-Abgleich die
+      // Cloud-Sicherung, mit der dieser Spieler seinen Fortschritt vom alten
+      // Geraet holen wollte. Aus der Absicherung wuerde der schlimmste
+      // Datenverlust, den diese App kennt.
+      await appStart(); // leere Einstellungen
+      expect(await UpdateNeustartService.cloudLoeschenOffen(), isFalse);
+    });
+
+    test('die Notiz bleibt, bis sie abgehakt wird', () async {
+      SharedPreferences.setMockInitialValues(altStand());
+      await appStart();
+      await appStart(); // App neu gestartet, Anmeldung war noch nicht dran
+      expect(await UpdateNeustartService.cloudLoeschenOffen(), isTrue,
+          reason: 'Ohne Netz muss der naechste Versuch es nachholen');
+
+      await UpdateNeustartService.cloudGeloescht();
+      expect(await UpdateNeustartService.cloudLoeschenOffen(), isFalse);
+    });
+
+    test('sie überlebt das Aufräumen des Neustarts', () async {
+      // Die Notiz gehoert zu den Geraete-Schluesseln. Stuende sie unter den
+      // Cloud-Schluesseln, wuerde der Neustart sie im selben Atemzug
+      // wegraeumen, in dem er sie setzt.
+      final quelle = File('lib/services/spielstand.dart').readAsStringSync();
+      expect(quelle.indexOf("'neustart_110_cloud_offen'"),
+          greaterThan(quelle.indexOf('nurGeraetPraefixe')));
+    });
+
+    test('Der Abgleich löscht, statt zusammenzuführen', () {
+      // Die Reihenfolge im Code: Die Notiz muss VOR dem Lesen und
+      // Zusammenfuehren abgearbeitet werden. Danach waere der Altstand
+      // laengst zurueck — die Zusammenfuehrung kennt nur Wachstum.
+      final quelle =
+          File('lib/services/spielstand_sync.dart').readAsStringSync();
+      final ab = quelle.indexOf('static Future<bool> beimAnmelden');
+      final rumpf = quelle.substring(ab, ab + 2500);
+      final notiz = rumpf.indexOf('cloudLoeschenOffen()');
+      final zusammen = rumpf.indexOf('spielstandZusammenfuehren');
+      expect(notiz, greaterThan(0), reason: 'Die Notiz wird nicht geprüft');
+      expect(notiz, lessThan(zusammen),
+          reason: 'Erst zusammenführen, dann löschen — damit ist der '
+              'Altstand schon zurück');
+      expect(rumpf.contains('loescheCloudStand()'), isTrue,
+          reason: 'Es soll derselbe Weg sein wie bei "Fortschritt '
+              'zurücksetzen"');
+    });
+  });
+
   test('Die Reihenfolge in main() stimmt', () {
     // Der Test oben prüft die Kette über die Dienste. Er würde aber grün
     // bleiben, wenn jemand die beiden Zeilen in main() vertauscht — deshalb

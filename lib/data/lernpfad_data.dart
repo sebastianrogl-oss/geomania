@@ -549,6 +549,21 @@ List<LernModus> erzeugeModusSequenz(
   /// Station kein Modus mit eigener Bedienung sein — siehe
   /// [kNichtAlsWelteinstieg].
   bool istErsterAbschnittDerWelt = false,
+
+  /// Wie viele Abfrage-Stationen nach diesem Abschnitt noch FEST eingeplant
+  /// sind, bevor wieder ein Spiel kommen kann.
+  ///
+  /// Gebraucht wird das an den Weltgrenzen: Die erste Station jeder Welt ist
+  /// fest ein Flaggen-Quiz, also eine Abfrage. Endete der Abschnitt davor mit
+  /// vier Abfragen, waere sie die fuenfte in Folge — die Vierer-Regel waere
+  /// gebrochen, und zwar genau an der Naht, an der solche Ketten schon einmal
+  /// entstanden sind.
+  ///
+  /// Mit einer Reserve von 1 greift die Regel eine Station frueher: Der
+  /// Abschnitt endet mit hoechstens drei Abfragen, das angepinnte Flaggen-Quiz
+  /// macht vier. Die Regel bleibt damit unangetastet, statt fuer den Einstieg
+  /// aufgeweicht zu werden.
+  int ketteReserve = 0,
 }) {
   final gesperrt = weltId == null
       ? const <LernModus>{}
@@ -570,8 +585,23 @@ List<LernModus> erzeugeModusSequenz(
   var kette = ketteVorher;
 
   for (int i = 0; i < stationsAnzahl; i++) {
-    // Allererste Station im ganzen Pfad: immer flaggenQuizBild.
-    if (istAllerErsterAbschnitt && i == 0) {
+    // ERSTE STATION JEDER WELT: immer flaggenQuizBild.
+    //
+    // Vorher galt das nur fuer die allererste Station des GANZEN Pfads.
+    // Jede weitere Welt begann mit dem, was der Round-Robin gerade uebrig
+    // hatte — gemessen: Suedamerika mit Hauptstaedten, Nordamerika mit dem
+    // Waehrungsquiz, Asien mit einem Umriss-Quiz, Ozeanien mit Zwei
+    // Wahrheiten, Welt mit Waehrung-zu-Land.
+    //
+    // Eine neue Welt ist aber jedes Mal ein Anfang: andere Laender, nichts
+    // davon schon geuebt. Der Umriss eines unbekannten Landes ist dafuer der
+    // denkbar haerteste Einstieg, die Flagge der leichteste — sie ist bunt,
+    // einpraegsam und braucht kein Vorwissen.
+    //
+    // Das ersetzt die Auswahl, nicht die Regel darunter: [kNichtAlsWelteinstieg]
+    // haelt weiterhin Modi mit eigener Bedienung von Position 0 fern, falls
+    // hier je etwas anderes stehen sollte.
+    if ((istAllerErsterAbschnitt || istErsterAbschnittDerWelt) && i == 0) {
       sequenz.add(LernModus.flaggenQuizBild);
       letzter = LernModus.flaggenQuizBild;
       letztesThema = 'flaggen';
@@ -620,7 +650,7 @@ List<LernModus> erzeugeModusSequenz(
     // naechste ein Spiel sein. Greift NACH allen Sperren — ist unter den
     // erlaubten Kandidaten kein Spiel-Modus, wird die Regel gelockert statt
     // die Sequenz zu blockieren.
-    if (kette >= kMaxAbfrageKette) {
+    if (kette + ketteReserve >= kMaxAbfrageKette) {
       final spiele = kandidaten.where(istSpielModus).toList();
       if (spiele.isNotEmpty) {
         kandidaten = spiele;
@@ -793,6 +823,9 @@ List<LernStation> _baueAbschnitt(
 
   /// Abweichendes Gewicht je Einsatz — siehe [erzeugeModusSequenz].
   Map<LernModus, double> gewichtProEinsatz = const {},
+
+  /// Reserve für die Vierer-Regel — siehe [erzeugeModusSequenz].
+  int ketteReserve = 0,
 }) {
   final polster = anzahl == 0 ? 0 : ((1 - anzahl) % 4 + 4) % 4;
   final gesamt = anzahl + polster;
@@ -803,7 +836,8 @@ List<LernStation> _baueAbschnitt(
       ketteNachher: (k) => _laufendeKette = k,
       istErsterAbschnittDerWelt: istErsterAbschnittDerWelt,
       freigabe: freigabe,
-      gewichtProEinsatz: gewichtProEinsatz);
+      gewichtProEinsatz: gewichtProEinsatz,
+      ketteReserve: ketteReserve);
   return [
     for (int i = 0; i < gesamt; i++)
       _st(wid, stufe, i + 1, modi[i], laender, fragenProStation),
@@ -836,7 +870,8 @@ Map<String, List<LernStation>> _baueAlleAbschnitte() {
       int fragen = 8,
       int? poolLevel,
       Set<LernModus> freigabe = const {},
-      Map<LernModus, double> gewichtProEinsatz = const {}}) {
+      Map<LernModus, double> gewichtProEinsatz = const {},
+      bool letzterDerWelt = false}) {
     // Der erste Aufruf je Welt ist deren Einstiegs-Abschnitt.
     final ersterDerWelt = weltenGesehen.add(wid);
     r['${wid}_$stufe'] = _baueAbschnitt(wid, stufe, laender, anzahl,
@@ -845,7 +880,11 @@ Map<String, List<LernStation>> _baueAlleAbschnitte() {
         fragenProStation: fragen,
         modusPoolLevel: poolLevel,
         freigabe: freigabe,
-        gewichtProEinsatz: gewichtProEinsatz);
+        gewichtProEinsatz: gewichtProEinsatz,
+        // Die nächste Welt beginnt fest mit einem Flaggen-Quiz, also einer
+        // Abfrage. Dieser Abschnitt muss ihr dafür Platz in der Vierer-Regel
+        // lassen — sonst wäre der Welteinstieg die fünfte Abfrage in Folge.
+        ketteReserve: letzterDerWelt ? 1 : 0);
   }
 
   bau('europa', 1, _europaBlockA, 21, erster: true);
@@ -863,30 +902,31 @@ Map<String, List<LernStation>> _baueAlleAbschnitte() {
   // 46-Laender-Pool 6 von 6 Fragen in 50 von 50 Durchlaeufen.
   bau('europa', 4, _europaAll, 29,
       freigabe: {LernModus.flaechenVergleich},
-      gewichtProEinsatz: {LernModus.zweiWahrheiten: 0.2});
+      gewichtProEinsatz: {LernModus.zweiWahrheiten: 0.2},
+      letzterDerWelt: true);
 
   bau('suedamerika', 1, _suedamBlockA, 10, fragen: 6);
   bau('suedamerika', 2, _suedamBlockB, 12, fragen: 6);
-  bau('suedamerika', 3, _suedamAll, 14, fragen: 6);
+  bau('suedamerika', 3, _suedamAll, 14, fragen: 6, letzterDerWelt: true);
 
   bau('nordamerika', 1, _nordamBlockA, 12);
   bau('nordamerika', 2, _nordamBlockB, 14);
   bau('nordamerika', 3, _nordamBlockC, 18);
-  bau('nordamerika', 4, _nordamAll, 20);
+  bau('nordamerika', 4, _nordamAll, 20, letzterDerWelt: true);
 
   bau('afrika', 1, _afrikaBlockA, 18, fragen: 9);
   bau('afrika', 2, _afrikaBlockB, 22, fragen: 9);
   bau('afrika', 3, _afrikaBlockC, 26, fragen: 9);
-  bau('afrika', 4, _afrikaAll, 30, fragen: 9);
+  bau('afrika', 4, _afrikaAll, 30, fragen: 9, letzterDerWelt: true);
 
   bau('asien', 1, _asienBlockA, 20);
   bau('asien', 2, _asienBlockB, 20);
   bau('asien', 3, _asienBlockC, 24);
-  bau('asien', 4, _asienAll, 28);
+  bau('asien', 4, _asienAll, 28, letzterDerWelt: true);
 
   bau('ozeanien', 1, _ozeanienBlockA, 10, fragen: 7);
   bau('ozeanien', 2, _ozeanienBlockB, 12, fragen: 7);
-  bau('ozeanien', 3, _ozeanienAll, 14, fragen: 7);
+  bau('ozeanien', 3, _ozeanienAll, 14, fragen: 7, letzterDerWelt: true);
 
   bau('welt', 1, _weltA1, 25, poolLevel: 4);
   bau('welt', 2, _weltA2, 30, poolLevel: 4);

@@ -27,7 +27,11 @@ void main() {
     // laufen.
     // 3988 vor der Europa-Erweiterung: Der Meister-Abschnitt wuchs von 25 auf
     // 29 Stationen und brachte 26 Sterne mit.
-    expect(kErreichbareSterne, 4014,
+    // 4014 davor: Seit die erste Station JEDER Welt fest ein Flaggen-Quiz ist
+    // (statt nur die allererste des Pfads), verschob sich die Modus-Verteilung
+    // um zwei Sterne nach unten. Die Anteils-Prüfungen darunter blieben dabei
+    // im Rahmen — nachgezogen wird deshalb nur die Rechengrundlage.
+    expect(kErreichbareSterne, 4012,
         reason: 'Die erreichbaren Sterne haben sich geändert — Preise prüfen');
   });
 

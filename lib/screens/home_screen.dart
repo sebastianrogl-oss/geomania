@@ -11,6 +11,7 @@ import '../services/fortschritt_service.dart';
 import '../services/portfolio_service.dart';
 import '../services/profilbild_service.dart';
 import '../services/knopf_rueckmeldung.dart';
+import '../services/scroll_signal.dart';
 import '../services/station_session_service.dart';
 import '../services/urgestein_service.dart';
 import '../data/abzeichen_data.dart';
@@ -1383,13 +1384,19 @@ class _Pfad extends StatelessWidget {
 
     return KontinentHintergrund(
       kontinentId: welt.id,
-      child: SingleChildScrollView(
-        controller: scrollController,
-        padding: const EdgeInsets.only(bottom: 40),
-        child: SizedBox(
-          width: double.infinity,
-          height: totalH,
-          child: Stack(clipBehavior: Clip.none, children: overlays),
+      // Auch hier, obwohl die Flamme in der KOPFLEISTE sitzt und nicht
+      // mitscrollt: Sie liegt trotzdem im selben Fenster und wird bei jedem
+      // Animationsframe neu gebaut, während darunter der Pfad läuft. Siehe
+      // [ScrollSignal].
+      child: ScrollSignal.beobachte(
+        child: SingleChildScrollView(
+          controller: scrollController,
+          padding: const EdgeInsets.only(bottom: 40),
+          child: SizedBox(
+            width: double.infinity,
+            height: totalH,
+            child: Stack(clipBehavior: Clip.none, children: overlays),
+          ),
         ),
       ),
     );

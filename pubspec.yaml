@@ -23,8 +23,9 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 #   1.0.1+1 zurueck; +11 hat das wieder eingeholt.
 #
 #   Apple: fuer jeden weiteren Upload DERSELBEN Version braucht es eine
-#   hoehere CFBundleVersion. Bei TestFlight liegen bereits 11 und 12.
-version: 1.1.0+13
+#   hoehere CFBundleVersion. Bei TestFlight liegen 11, 12 und 13; die 14 ist
+#   durch einen Wegwerf-Testbuild verbraucht.
+version: 1.1.0+15
 
 environment:
   sdk: ^3.12.1

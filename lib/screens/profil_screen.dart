@@ -15,6 +15,7 @@ import '../services/haptik_service.dart';
 import '../services/knopf_rueckmeldung.dart';
 import '../services/profilbild_service.dart';
 import '../services/rangliste_service.dart';
+import '../services/scroll_signal.dart';
 import '../utils/portfolio_format.dart';
 import '../widgets/muenzalbum_seite.dart';
 import '../widgets/kennzahl_erklaerung.dart';
@@ -174,7 +175,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: SingleChildScrollView(
+      // Meldet Beginn und Ende jeder Scroll-Bewegung. Die Streak-Flamme in
+      // den Kacheln hält daraufhin ihre Animation an — siehe [ScrollSignal].
+      child: ScrollSignal.beobachte(
+        child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,6 +440,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
             ],
           ],
         ),
+      ),
       ),
     );
   }

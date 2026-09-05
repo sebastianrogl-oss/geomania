@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
+import '../services/scroll_signal.dart';
+
 /// Die animierte Streak-Flamme für kleine Anzeigen (Lernpfad-Header,
 /// Profil-Kachel).
 ///
@@ -109,16 +111,40 @@ class StreakFlamme extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Lottie.asset(
-              datei,
-              width: g,
-              height: g,
-              repeat: true,
-              fit: BoxFit.contain,
-              // Fällt die Datei aus, bleibt das Emoji als Rückfall — die
-              // Anzeige verliert dadurch nichts an Aussage.
-              errorBuilder: (context, fehler, stack) => Center(
-                child: Text('🔥', style: TextStyle(fontSize: g * 0.8)),
+            // WÄHREND DES SCROLLENS STEHT DIE FLAMME STILL.
+            //
+            // Das Lottie-Widget baut sich bei jedem Animationsframe neu auf
+            // (siehe [ScrollSignal]). Beim Überziehen am Listenende trifft
+            // dieser Neubau auf den federnd verschobenen Inhalt — das
+            // Ergebnis war ein sichtbares Zittern, nachgewiesen mit einem
+            // Versuchs-Build ohne Animation.
+            //
+            // `animate: false` hält den internen Ticker an; es entstehen dann
+            // keine Frames und damit auch keine Neubauten. Das Bild bleibt
+            // stehen, es verschwindet nichts.
+            //
+            // Dass eine Flamme für den Moment einer Scroll-Geste nicht
+            // flackert, sieht man kaum — sie ist ohnehin unruhig, und der
+            // Blick hängt am bewegten Inhalt. Das Zittern dagegen fällt sofort
+            // auf.
+            //
+            // Der ValueListenableBuilder sitzt so eng wie möglich am Lottie:
+            // Ein Wechsel baut nur diesen Ausschnitt neu, nicht die Kachel
+            // und schon gar nicht den Screen.
+            ValueListenableBuilder<bool>(
+              valueListenable: ScrollSignal.laeuft,
+              builder: (context, scrollt, _) => Lottie.asset(
+                datei,
+                width: g,
+                height: g,
+                repeat: true,
+                animate: !scrollt,
+                fit: BoxFit.contain,
+                // Fällt die Datei aus, bleibt das Emoji als Rückfall — die
+                // Anzeige verliert dadurch nichts an Aussage.
+                errorBuilder: (context, fehler, stack) => Center(
+                  child: Text('🔥', style: TextStyle(fontSize: g * 0.8)),
+                ),
               ),
             ),
             if (zahl != null)

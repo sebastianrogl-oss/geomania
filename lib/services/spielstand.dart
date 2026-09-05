@@ -193,6 +193,12 @@ const List<String> nurGeraetPraefixe = [
   // die Bedeutung des Schlüssels verfälscht.
   'urgestein_geprueft',
   'urgestein_popup_offen',
+  // Der einmalige Neustart beim Update auf 1.1.0. Aus demselben Grund am
+  // Gerät wie die beiden darüber — und aus einem zweiten: Der Neustart
+  // LÖSCHT alle Cloud-Schlüssel. Stünde sein eigener Merker darunter, würde
+  // er sich beim Aufräumen selbst entfernen und beim nächsten Start erneut
+  // laufen.
+  'neustart_110_erledigt',
   // Einmalige Oberflächen-Hinweise und Debug.
   'abzeichen_swipe_hinweis_gezeigt',
   'debug_alles_frei',

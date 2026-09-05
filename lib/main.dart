@@ -17,6 +17,7 @@ import 'services/locale_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/sound_service.dart';
 import 'services/spielstand_sync.dart';
+import 'services/update_neustart_service.dart';
 import 'services/urgestein_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/rangliste_screen.dart';
@@ -72,6 +73,12 @@ void main() async {
   // später, könnte ein Neuling seine erste Station abgeschlossen haben und
   // erschiene als Alt-Nutzer. Begründung im Einzelnen: [UrgesteinService].
   await UrgesteinService.pruefeBeimStart();
+
+  // DIESE REIHENFOLGE IST NICHT VERTAUSCHBAR. Der Neustart raeumt genau den
+  // Fortschritt weg, an dem die Zeile darueber den Bestandsspieler erkennt.
+  // Andersherum saehe die App lauter frische Installationen und niemand
+  // bekaeme das Urgestein. Siehe [UpdateNeustartService].
+  await UpdateNeustartService.pruefeBeimStart();
 
   runApp(const GeoManiaApp());
 

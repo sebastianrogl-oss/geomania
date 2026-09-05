@@ -129,6 +129,39 @@ void main() {
     });
   });
 
+  test('DIE GANZE KETTE: Altstand lokal UND in der Cloud', () async {
+    // Der Fall, der auf dem TestFlight-Geraet schiefging.
+    //
+    // Die Cloud wird hier nachgestellt, nicht angesprochen: Firestore
+    // braeuchte eine Anmeldung, und die gibt es im Test nicht. Geprueft wird
+    // deshalb der Zustand, der die Loeschung ausloest — die Notiz — und
+    // dass alles Lokale weg ist. Dass der Abgleich sie vor dem
+    // Zusammenfuehren abarbeitet, sichert der Test weiter unten ueber die
+    // Reihenfolge im Code.
+    SharedPreferences.setMockInitialValues(altStand());
+
+    await appStart();
+
+    // 1. Lokal ist alles weg.
+    final prefs = await SharedPreferences.getInstance();
+    for (final k in [
+      'lp_s_done_europa_1_01',
+      'lp_gesamt_richtig',
+      'lp_streak',
+      'ch_rekord_preis',
+      'pf_kapital',
+    ]) {
+      expect(prefs.get(k), isNull, reason: '$k liegt noch da');
+    }
+
+    // 2. Die Cloud ist vorgemerkt — der naechste Anmelde-Abgleich loescht
+    //    das Dokument, statt es zurueckzuholen.
+    expect(await UpdateNeustartService.cloudLoeschenOffen(), isTrue);
+
+    // 3. Das Urgestein hat beides ueberlebt.
+    expect(await abzeichen(), {'urgestein'});
+  });
+
   group('Der Cloud-Stand wird mitgelöscht', () {
     test('nach einem echten Neustart steht die Notiz', () async {
       // Der Neustart kann das Cloud-Dokument nicht selbst loeschen — er
@@ -159,6 +192,23 @@ void main() {
 
       await UpdateNeustartService.cloudGeloescht();
       expect(await UpdateNeustartService.cloudLoeschenOffen(), isFalse);
+    });
+
+    test('der Neustart läuft nach der Umbenennung noch einmal', () async {
+      // Geraete, die Build 13 bis 16 schon gestartet haben, tragen den ALTEN
+      // Merker. Mit dem neuen Namen greift der Neustart dort erneut — und
+      // diesmal mit Cloud-Notiz.
+      SharedPreferences.setMockInitialValues({
+        ...altStand(),
+        'neustart_110_erledigt': true, // der alte Name
+      });
+      await appStart();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getInt('lp_gesamt_richtig'), isNull,
+          reason: 'Der alte Merker hat den Neustart blockiert');
+      expect(await UpdateNeustartService.cloudLoeschenOffen(), isTrue);
+      expect(prefs.getBool('neustart_110b_erledigt'), isTrue);
     });
 
     test('sie überlebt das Aufräumen des Neustarts', () async {
@@ -210,7 +260,7 @@ void main() {
     // erneut laufen.
     final quelle = File('lib/services/spielstand.dart').readAsStringSync();
     final geraet = quelle.indexOf('nurGeraetPraefixe');
-    expect(quelle.indexOf("'neustart_110_erledigt'"), greaterThan(geraet),
+    expect(quelle.indexOf("'neustart_110b_erledigt'"), greaterThan(geraet),
         reason: 'Der Merker steht nicht in nurGeraetPraefixe');
   });
 }

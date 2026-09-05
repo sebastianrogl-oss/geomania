@@ -198,7 +198,7 @@ const List<String> nurGeraetPraefixe = [
   // LÖSCHT alle Cloud-Schlüssel. Stünde sein eigener Merker darunter, würde
   // er sich beim Aufräumen selbst entfernen und beim nächsten Start erneut
   // laufen.
-  'neustart_110_erledigt',
+  'neustart_110b_erledigt',
   // Die offene Notiz "Cloud-Stand noch loeschen". Sie MUSS am Geraet
   // bleiben: Sie beschreibt eine Aufgabe, die genau dieses Geraet noch zu
   // erledigen hat. Und sie darf beim Aufraeumen nicht selbst mitgeloescht

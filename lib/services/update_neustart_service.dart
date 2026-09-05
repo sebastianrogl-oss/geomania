@@ -53,7 +53,25 @@ class UpdateNeustartService {
   /// Trägt die Version im Namen: Ein späterer Neustart bei 1.2.0 bekäme
   /// einen eigenen Schlüssel und liefe dadurch von selbst noch einmal,
   /// ohne dass jemand einen bestehenden Merker löschen müsste.
-  static const _kErledigt = 'neustart_110_erledigt';
+  /// ── WARUM DAS "b" IM NAMEN STEHT ────────────────────────────────────────
+  ///
+  /// Der Schlüssel hiess zuerst 'neustart_110_erledigt'. Damals räumte der
+  /// Neustart nur lokal ab — lag ein Cloud-Dokument vor, holte der erste
+  /// Anmelde-Abgleich alles zurück, und der Merker stand trotzdem auf
+  /// erledigt. Genau das ist auf einem TestFlight-Gerät passiert.
+  ///
+  /// Mit dem neuen Namen läuft der Neustart auf diesen Geräten noch einmal —
+  /// diesmal samt Cloud-Notiz. Ein Umschreiben des alten Merkers hätte
+  /// dasselbe bewirkt, aber ein neuer Name sagt beim Lesen, WARUM.
+  ///
+  /// Der alte Schlüssel bleibt als toter Eintrag in den Einstellungen
+  /// stehen; er wird nirgends mehr gelesen. Ein späterer Neustart bei 1.2.0
+  /// bekäme wieder einen eigenen Namen und liefe dadurch von selbst.
+  ///
+  /// Unbedenklich ist das, weil 1.1.0 noch nicht veröffentlicht ist:
+  /// Betroffen sind ausschliesslich Tester, deren Stand ohnehin
+  /// zurückgesetzt gehört. Kein echter Spieler verliert dadurch etwas.
+  static const _kErledigt = 'neustart_110b_erledigt';
 
   /// Der Cloud-Stand muss noch weg.
   ///

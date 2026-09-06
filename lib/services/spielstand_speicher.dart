@@ -125,14 +125,47 @@ class SpielstandSpeicher {
     return false;
   }
 
+  /// Präfix der Rotations-Tracker der Fragenauswahl.
+  ///
+  /// Dieselbe Zeichenkette wie [FortschrittService._rrPrefix]; hier
+  /// wiederholt, weil dieser Dienst bewusst nichts aus dem Fortschritt
+  /// importiert. Ein Test hält beide Seiten zusammen.
+  static const _kRotationsPraefix = 'lp_rr_';
+
   /// Löscht alles, was in die Cloud gehört — für "Fortschritt zurücksetzen".
   ///
-  /// Bewusst NUR die Cloud-Schlüssel: Ton, Sprache und Erinnerungen sollen
-  /// ein Zurücksetzen des Fortschritts überleben.
+  /// Ton, Sprache und Erinnerungen überleben es: Sie gehören ans Gerät.
+  ///
+  /// ══ UND DIE ROTATIONS-TRACKER, OBWOHL SIE ANS GERÄT GEHÖREN ═════════════
+  ///
+  /// `lp_rr_*` merkt sich, welche Länder je Welt und Modus schon abgefragt
+  /// wurden. Beim GERÄTEWECHSEL bleiben diese Schlüssel zu Recht liegen
+  /// (siehe [geraeteSchluessel] in spielstand.dart) — sie sind JSON-Text, den
+  /// eine Vereinigung zerstören würde, und ein neu begonnener Zyklus kostet
+  /// nichts.
+  ///
+  /// Beim LÖSCHEN ist das anders, und das war ein echter Fehler: Ein Zeiger
+  /// auf einen abgearbeiteten Zyklus ohne den zugehörigen Fortschritt ist ein
+  /// Widerspruch. Und er bleibt nicht folgenlos — sobald ein Kern-Modus
+  /// (Flagge, Umriss, Hauptstadt) laut Tracker jedes Land des Pools schon
+  /// gebracht hat, gilt er als pensioniert, und
+  /// [FragenGenerator.ermittleTatsaechlichenModus] ersetzt ihn zur
+  /// Spielzeit durch einen Unterhaltungs-Modus.
+  ///
+  /// Am Gerät gesehen: Nach dem einmaligen Neustart stand als erste Station
+  /// des Lernpfads ein Nachbarland-Quiz statt des angepinnten Flaggen-Quiz.
+  /// Der Pfad selbst war unverändert — nur der stehen gebliebene Tracker
+  /// sagte weiterhin "Europa Block A, Flaggen: alles durch".
+  ///
+  /// `allesDatenZuruecksetzen()` räumte sie schon immer mit weg (es geht über
+  /// das `lp_`-Präfix). Der Neustart und die Kontolöschung tun es jetzt auch.
   static Future<void> loescheSyncSchluessel() async {
     final prefs = await SharedPreferences.getInstance();
     for (final schluessel in prefs.getKeys().toList()) {
-      if (gehoertInDieCloud(schluessel)) await prefs.remove(schluessel);
+      if (gehoertInDieCloud(schluessel) ||
+          schluessel.startsWith(_kRotationsPraefix)) {
+        await prefs.remove(schluessel);
+      }
     }
   }
 }

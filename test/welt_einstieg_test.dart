@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:geomania/data/lernpfad_data.dart';
+import 'package:geomania/services/station_session_service.dart';
 
 /// Die erste Station jeder Welt.
 ///
@@ -21,11 +23,26 @@ import 'package:geomania/data/lernpfad_data.dart';
 /// schon geübt. Der Umriss eines unbekannten Landes ist dafür der härteste
 /// Einstieg, die Flagge der leichteste.
 void main() {
-  test('Jede Welt beginnt mit einem Flaggen-Quiz', () {
+  test('Jede Welt beginnt mit einem Flaggen-Quiz', () async {
+    // ══ ZWEIMAL GEPRÜFT, UND DAS IST DER PUNKT ═══════════════════════════
+    //
+    // Dieser Test sah nur auf station.modus — den Modus im PFAD. Am Gerät
+    // stand trotzdem ein Nachbarland-Quiz an erster Stelle, und der Test
+    // blieb grün.
+    //
+    // Denn was gespielt (und im Stations-Blatt angezeigt) wird, entscheidet
+    // ermittleTatsaechlichenModus: Ein Kern-Modus, der laut Rotations-Tracker
+    // jedes Land seines Pools schon gebracht hat, gilt als pensioniert und
+    // wird zur Spielzeit ersetzt. Das ist die Sicht, die der Spieler sieht —
+    // also muss sie mitgeprüft werden.
+    SharedPreferences.setMockInitialValues({});
     for (final welt in lernwelten) {
       final erste = welt.abschnitte.first.stationen.first;
       expect(erste.modus, LernModus.flaggenQuizBild,
-          reason: '${welt.id} beginnt mit ${erste.modus.name}');
+          reason: 'Pfad: ${welt.id} beginnt mit ${erste.modus.name}');
+      expect(await FragenGenerator.ermittleTatsaechlichenModus(erste),
+          LernModus.flaggenQuizBild,
+          reason: 'Laufzeit: ${welt.id} wird als etwas anderes gespielt');
     }
   });
 

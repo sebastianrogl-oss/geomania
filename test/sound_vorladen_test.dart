@@ -68,28 +68,66 @@ void main() {
   });
 
   group('Die iOS-Audio-Sitzung läuft vor dem ersten Tipp an', () {
-    test('Jeder Spieler wird beim Laden lautlos angestossen', () {
-      expect(dienst.contains('await _warmlaufen(p)'), isTrue,
-          reason: 'Ohne Anlauf fällt der erste Ton in die Lücke, in der iOS '
-              'die Audio-Sitzung noch hochfährt');
+    // Aus dem TestFlight-Test (Build 20): Im ersten Level blieb es stumm, bis
+    // der Halbzeit-Moment kam — ab da klang alles. In audioplayers_darwin
+    // 6.5.0 gibt es genau eine Stelle, die AVAudioSession.setActive anfasst
+    // (controlAudioSession), und genau einen Aufrufer dafür:
+    // onSoundComplete(), also das natürliche ENDE eines Klangs. resume()
+    // aktiviert nichts. Der erste Klang, der wirklich durchläuft, schaltet
+    // die Sitzung scharf.
+    final ab = dienst.indexOf('static Future<void> _sitzungAnschieben');
+    final rumpf = ab < 0
+        ? ''
+        : dienst.substring(ab, dienst.indexOf('\n  static ', ab + 40));
+
+    test('Es gibt einen Anstoss beim Laden', () {
+      expect(ab, greaterThan(0),
+          reason: 'Ohne ihn fällt alles bis zum ersten durchgelaufenen Klang '
+              'in die stumme Phase');
+      expect(dienst.contains('await _sitzungAnschieben();'), isTrue);
     });
 
-    test('Der Anlauf ist unhörbar und lässt die Lautstärke stehen', () {
+    test('Der Klang läuft zu ENDE, statt sofort gestoppt zu werden', () {
+      // Genau daran scheiterte der erste Anlauf: Ein gestoppter Klang meldet
+      // kein Ende (AVPlayerItemDidPlayToEndTime bleibt aus), und ohne Ende
+      // wird die Sitzung nie aktiviert. Derselbe Kreis wie im Spiel.
+      expect(rumpf.contains('onPlayerComplete.first'), isTrue,
+          reason: 'Der Anstoss wartet nicht auf das Ende — dann aktiviert er '
+              'die Sitzung auch nicht');
+      final abo = rumpf.indexOf('onPlayerComplete.first');
+      final start = rumpf.indexOf('p.resume()');
+      expect(abo, lessThan(start),
+          reason: 'Bei 157 ms wäre das Ende durch, bevor jemand hinhört');
+    });
+
+    test('Er ist unhörbar und lässt die Lautstärke stehen', () {
       // _Klangspur.lautstaerken geht von 1.0 aus. Bliebe der Spieler nach
-      // dem Anlauf auf 0, wäre er für immer stumm — und nichts würde es
+      // dem Anstoss auf 0, wäre er für immer stumm — und nichts würde es
       // melden, weil der Aufruf auf dem heissen Pfad ja gerade entfällt.
-      final ab = dienst.indexOf('static Future<void> _warmlaufen');
-      expect(ab, greaterThan(0));
-      final rumpf = dienst.substring(ab, dienst.indexOf('\n  static ', ab + 30));
       expect(rumpf.indexOf('setVolume(0)'), greaterThan(0));
       expect(rumpf.indexOf('setVolume(1)'),
           greaterThan(rumpf.indexOf('setVolume(0)')));
     });
 
-    test('Nur auf iOS', () {
-      // Auf Android läuft lowLatency über SoundPool, ganz ohne Audio-Sitzung
-      // — und stop() ist dort der teuerste Aufruf im ganzen Ablauf.
-      expect(dienst.contains('if (kIsWeb || !Platform.isIOS) return;'), isTrue);
+    test('Er hängt nicht, wenn das Ende ausbleibt', () {
+      expect(rumpf.contains('onTimeout'), isTrue,
+          reason: 'Ohne Notausgang bliebe das Laden daran stehen');
+    });
+
+    test('Genau einmal, und nur auf iOS', () {
+      // Die Sitzung gilt für die ganze App — einer genügt. Auf Android läuft
+      // lowLatency über SoundPool, ganz ohne Sitzung.
+      expect(rumpf.contains('!Platform.isIOS || _sitzungAngeschoben'), isTrue);
+      expect(rumpf.contains('_sitzungAngeschoben = true;'), isTrue);
+    });
+
+    test('Erst die Sitzung, dann das Nachreichen', () {
+      // Ein nachgereichter Klang, der in die stumme Phase fällt, wäre für
+      // den Spieler dasselbe wie gar keiner.
+      final sitzung = dienst.indexOf('await _sitzungAnschieben();');
+      final nachreichen = dienst.indexOf('_nachreichenAlle();');
+      expect(sitzung, greaterThan(0));
+      expect(sitzung, lessThan(nachreichen));
     });
   });
 

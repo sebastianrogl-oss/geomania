@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:audioplayers/audioplayers.dart';
@@ -190,30 +191,39 @@ class _Klangspur {
 ///   mixWithOthers darf dabei nicht gesetzt werden — das Paket verbietet sie
 ///   ausdrücklich für ambient, weil sie dort schon gilt.
 ///
-/// ── Warum jeder Spieler auf iOS einmal lautlos anläuft ────────────────────
+/// ── Warum auf iOS ein Klang lautlos ZU ENDE gespielt wird ─────────────────
 ///
-/// Gemeldet vom iPhone: Im ersten halben Level nach dem Start kommt kein Ton,
-/// danach schon. Nachgesehen in audioplayers_darwin 6.5.0, und dort steht es
-/// schwarz auf weiss:
+/// Gemeldet vom iPhone: Im ersten Level bleibt es stumm, bis der
+/// Halbzeit-Moment kommt — ab da klingt alles. Der Vergleich sagt, warum, und
+/// er steht in audioplayers_darwin 6.5.0 schwarz auf weiss:
 ///
-///   * `WrappedMediaPlayer.resume()` startet den AVPlayer und ruft dabei
-///     NICHT `controlAudioSession()` auf. Diese Methode ist die einzige
-///     Stelle im ganzen Plugin, die `AVAudioSession.setActive` anfasst — und
-///     ihr einziger Aufrufer ist `onSoundComplete()`, also das ENDE eines
-///     Klangs, wo sie die Sitzung wieder abschaltet.
-///   * Es gibt also im Abspielweg kein `setActive(true)`. Jede Wiedergabe
-///     verlässt sich darauf, dass iOS die Sitzung von selbst aktiviert.
+///   * `controlAudioSession()` ist die EINZIGE Stelle im ganzen Plugin, die
+///     `AVAudioSession.setActive` anfasst.
+///   * Sie hat genau EINEN Aufrufer: `WrappedMediaPlayer.onSoundComplete()`,
+///     also das natürliche ENDE eines Klangs. Dort steht `isPlaying` noch auf
+///     true — zurückgesetzt wird es erst danach —, `anyIsPlaying` ist damit
+///     wahr, und die Sitzung wird AKTIVIERT.
+///   * `resume()` ruft sie nicht auf. Im Startweg gibt es kein
+///     `setActive(true)`.
 ///
-/// Diese stillschweigende Aktivierung passiert nicht sofort:
-/// `playImmediately(atRate:)` wartet nicht auf sie. Beim allerersten Start
-/// nach einem Kaltstart fällt genau in diese Lücke, was der Spieler hören
-/// sollte. Auf Android stellt sich die Frage nicht — dort läuft lowLatency
-/// über SoundPool, ganz ohne Sitzung.
+/// Daraus folgt genau das gemeldete Bild: Jede Wiedergabe verlässt sich
+/// darauf, dass iOS die Sitzung von selbst hochfährt, und
+/// `playImmediately(atRate:)` wartet nicht darauf. Erst der erste Klang, der
+/// WIRKLICH bis zum Ende durchläuft, schaltet die Sitzung scharf — ab da
+/// klingt alles. Auf Android stellt sich die Frage nicht: dort läuft
+/// lowLatency über SoundPool, ganz ohne Sitzung.
 ///
-/// Gegenmassnahme: Jeder Spieler wird beim Laden einmal mit Lautstärke 0
-/// angestossen und wieder gestoppt. Das ist unhörbar, kostet nichts auf dem
-/// heissen Pfad und bringt die Audio-Sitzung hoch, bevor der erste Tipp
-/// kommt.
+/// Hier stand deshalb zuerst ein Anstoss, der jeden Spieler kurz startete und
+/// sofort wieder stoppte. Er konnte nicht helfen, und aus demselben Grund:
+/// Ein gestoppter Klang meldet kein Ende (AVPlayerItemDidPlayToEndTime bleibt
+/// aus), also lief er in denselben Kreis wie das Spiel — kein Ende, keine
+/// Sitzung, kein Ton.
+///
+/// Jetzt wird EIN Klang mit Lautstärke 0 abgespielt und auf sein Ende
+/// gewartet. Unhörbar, dauert so lange wie der kürzeste Klang (157 ms), läuft
+/// im Hintergrund — und geht genau den einen Weg, der die Sitzung aktiviert.
+/// Ein zusätzliches Paket nur fürs Aktivieren (audio_session) braucht es
+/// dafür nicht.
 class SoundService {
   static final Map<Klang, _Klangspur> _spuren = {};
 
@@ -261,6 +271,9 @@ class SoundService {
   /// Das Laden ist durch. Bis dahin werden Auslöser gemerkt statt verworfen.
   static bool _geladen = false;
 
+  /// Die iOS-Audio-Sitzung wurde einmal scharf geschaltet.
+  static bool _sitzungAngeschoben = false;
+
   /// Auf Web spielt das Paket zwar, aber ohne Nutzergeste verweigern Browser
   /// die Wiedergabe und werfen dabei. Da die App im Browser ohnehin nur zum
   /// Prüfen läuft, bleibt der Ton dort ganz aus.
@@ -305,9 +318,17 @@ class SoundService {
     // sich nicht in die Quere kommen, und nacheinander dauerte es auf iOS ein
     // Vielfaches.
     await Future.wait(zuerstGeladen.map((k) => _ladeKlang(k, kontext)));
+
+    // ERST die Sitzung, DANN das Nachreichen: Ein nachgereichter Klang, der
+    // in die stumme Phase fällt, wäre für den Spieler dasselbe wie gar
+    // keiner.
+    await _sitzungAnschieben();
+    _nachreichenAlle();
+
     await Future.wait(Klang.values
         .where((k) => !zuerstGeladen.contains(k))
         .map((k) => _ladeKlang(k, kontext)));
+    _nachreichenAlle();
 
     _geladen = true;
     // Was jetzt noch offen steht, kam entweder zu früh und ist längst
@@ -328,11 +349,9 @@ class SoundService {
         await p.setAudioContext(kontext);
         await p.setSource(AssetSource('sounds/${klang.datei}'));
         await p.setReleaseMode(ReleaseMode.stop);
-        await _warmlaufen(p);
         spieler.add(p);
       }
       _spuren[klang] = _Klangspur(spieler);
-      _nachreichen(klang);
     } catch (e) {
       // Ein fehlender oder defekter Klang darf die App nicht aufhalten —
       // er fällt dann einfach aus.
@@ -340,34 +359,59 @@ class SoundService {
     }
   }
 
-  /// Stösst den Spieler einmal lautlos an — nur auf iOS.
+  /// Schaltet die iOS-Audio-Sitzung scharf — einmal je Programmlauf.
   ///
-  /// Der Grund steht ausführlich am Klassenkommentar: Im Abspielweg von
-  /// audioplayers_darwin gibt es kein `AVAudioSession.setActive(true)`. Jede
-  /// Wiedergabe verlässt sich darauf, dass iOS die Sitzung von selbst
-  /// hochbringt, und `playImmediately(atRate:)` wartet nicht darauf. Dieser
-  /// Anlauf legt die Wartezeit ins Laden statt in den ersten Tipp.
+  /// Der Grund steht ausführlich am Klassenkommentar: Im Plugin aktiviert
+  /// ausschliesslich `onSoundComplete()` die Sitzung, also das natürliche
+  /// ENDE eines Klangs. Deshalb wird hier einer WIRKLICH zu Ende gespielt und
+  /// nicht bloss angetippt — ein gestoppter Klang meldet kein Ende, und genau
+  /// daran scheiterte der erste Anlauf.
   ///
   /// Auf Android bewusst nicht: Dort läuft lowLatency über SoundPool, ganz
-  /// ohne Audio-Sitzung — und `stop()` ist der teuerste Aufruf im ganzen
-  /// Ablauf (am Gerät 137 bis 880 ms je Spieler).
-  static Future<void> _warmlaufen(AudioPlayer p) async {
-    if (kIsWeb || !Platform.isIOS) return;
-    await p.setVolume(0);
-    await p.resume();
-    await p.stop();
-    // Zurück auf volle Stärke, denn genau davon geht _Klangspur.lautstaerken
-    // aus — sonst bliebe der Klang für immer stumm, ohne dass es jemand
-    // sähe.
-    await p.setVolume(1);
+  /// ohne Audio-Sitzung.
+  static Future<void> _sitzungAnschieben() async {
+    if (kIsWeb || !Platform.isIOS || _sitzungAngeschoben) return;
+    if (_spuren.isEmpty) return;
+    _sitzungAngeschoben = true;
+
+    // Der kürzeste geladene Klang. Die Sitzung gilt für die ganze App, einer
+    // genügt — und der kürzeste hält das Laden am wenigsten auf (knopf,
+    // 157 ms).
+    final klang = _spuren.keys.reduce((a, b) => a.laenge <= b.laenge ? a : b);
+    final p = _spuren[klang]!.spieler.first;
+    try {
+      // Das Abonnement MUSS vor resume() stehen: Bei 32 bis 157 ms wäre das
+      // Ende sonst womöglich schon durch, bevor jemand hinhört.
+      final ende = p.onPlayerComplete.first;
+      await p.setVolume(0);
+      await p.resume();
+      // Notausgang. Kommt das Ende nicht, darf das Laden nicht daran hängen
+      // bleiben — dann ist die Sitzung eben nicht angeschoben, und schlimmer
+      // als vorher wird es dadurch nicht.
+      await ende.timeout(klang.laenge * 3 + const Duration(seconds: 2),
+          onTimeout: () {});
+      await p.stop();
+    } catch (e) {
+      debugPrint('[Sound] Audio-Sitzung nicht angeschoben: $e');
+    } finally {
+      // Zurück auf volle Stärke, denn genau davon geht
+      // _Klangspur.lautstaerken aus — sonst bliebe dieser eine Spieler für
+      // immer stumm, ohne dass es jemand sähe.
+      try {
+        await p.setVolume(1);
+      } catch (_) {}
+    }
   }
 
-  /// Holt einen Klang nach, der ausgelöst wurde, bevor er bereit war.
-  static void _nachreichen(Klang klang) {
-    final ausgeloest = _verpasst.remove(klang);
-    if (ausgeloest == null) return;
-    if (DateTime.now().difference(ausgeloest) > nachreichFenster) return;
-    spiele(klang);
+  /// Holt nach, was ausgelöst wurde, bevor es bereit war.
+  static void _nachreichenAlle() {
+    for (final klang in _verpasst.keys.toList()) {
+      if (!_spuren.containsKey(klang)) continue;
+      final ausgeloest = _verpasst.remove(klang);
+      if (ausgeloest == null) continue;
+      if (DateTime.now().difference(ausgeloest) > nachreichFenster) continue;
+      spiele(klang);
+    }
   }
 
   /// Übernimmt den Schalter aus den Einstellungen.

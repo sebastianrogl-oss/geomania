@@ -355,8 +355,13 @@ const Map<String, String> uebersetzungenOnboarding = {
   'Aus Sicherheitsgründen ist das Löschen nur kurz nach einer Anmeldung möglich. Melde dich einmal ab und wieder an, dann klappt es.':
       'For security reasons, deleting only works shortly after signing in. '
           'Sign out and back in once, then it will work.',
+  'Löschen fehlgeschlagen': 'Deletion failed',
   'Löschen nicht möglich — bitte später noch einmal versuchen.':
       'Could not delete — please try again later.',
+  // Überschrift über dem technischen Befund (Stufe der Löschkette +
+  // Firebase-Code). Der Befund selbst wird bewusst NICHT übersetzt: Er ist
+  // für einen Fehlerbericht, nicht für den Spieler.
+  'Das meldet das Gerät:': 'What the device reports:',
 
   // ── Debug ──────────────────────────────────────────────────────────────────
   'Onboarding zurücksetzen (Debug)': 'Reset onboarding (debug)',

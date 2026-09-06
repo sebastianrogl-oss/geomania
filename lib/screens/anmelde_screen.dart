@@ -34,13 +34,25 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
   bool _laeuft = false;
   String? _fehler;
 
-  Future<void> _versuche(Future<AnmeldeErgebnis> Function() anmeldung) async {
+  /// Der Rohtext des letzten Fehlschlags — 'apple/notHandled',
+  /// 'firebase/invalid-credential' und dergleichen.
+  ///
+  /// Er steht klein und grau unter der freundlichen Meldung. Der Spieler
+  /// braucht ihn nicht; wer einen Fehlerbericht schreibt, braucht ausser ihm
+  /// nichts. Ohne diesen Text bedeutet "noch nicht eingerichtet" gleichzeitig
+  /// "Entitlement fehlt", "Profil ist zu alt", "Anbieter nicht freigeschaltet"
+  /// und "Client-ID passt nicht" — vier Ursachen, ein Satz, kein Anhaltspunkt.
+  String? _befund;
+
+  Future<void> _versuche(Future<AnmeldeAusgang> Function() anmeldung) async {
     if (_laeuft) return;
     setState(() {
       _laeuft = true;
       _fehler = null;
+      _befund = null;
     });
-    final ergebnis = await anmeldung();
+    final ausgang = await anmeldung();
+    final ergebnis = ausgang.ergebnis;
     // Der Erfolgsfall steht bewusst VOR der mounted-Prüfung: Sobald die
     // Anmeldung durch ist, meldet authStateChanges das dem StartWrapper, der
     // tauscht diesen Screen sofort aus — und dieses State-Objekt ist bereits
@@ -68,6 +80,7 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
           _laeuft = false;
           _fehler = t('Die Anmeldung ist noch nicht eingerichtet. '
               'Bitte versuch es später noch einmal.');
+          _befund = ausgang.befund;
         });
         return;
       case AnmeldeErgebnis.fehler:
@@ -75,6 +88,7 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
           _laeuft = false;
           _fehler = t('Die Anmeldung hat nicht geklappt — '
               'bitte versuch es erneut.');
+          _befund = ausgang.befund;
         });
         return;
     }
@@ -181,6 +195,22 @@ class _AnmeldeScreenState extends State<AnmeldeScreen> {
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                                 fontSize: 13, color: Color(0xFFCC0000)),
+                          ),
+                        ],
+                        // Auswählbar, damit sich der Text auf dem Gerät
+                        // markieren und weiterschicken lässt. Ein Fehlercode,
+                        // den man abtippen muss, kommt falsch an oder gar
+                        // nicht.
+                        if (_befund != null) ...[
+                          const SizedBox(height: 6),
+                          SelectableText(
+                            _befund!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              height: 1.35,
+                              color: Color(0xFF888888),
+                            ),
                           ),
                         ],
                       ],

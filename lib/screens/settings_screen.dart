@@ -774,7 +774,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ergebnis = await AuthService.kontoLoeschen();
     if (!mounted) return;
 
-    switch (ergebnis) {
+    switch (ergebnis.ergebnis) {
       case KontoLoeschErgebnis.erfolgreich:
         // Bis zur Wurzel: Dort hängt der StartWrapper am Anmeldestand und
         // zeigt von selbst wieder den Anmelde-Screen.
@@ -783,29 +783,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // KEIN Fehler, sondern eine Sicherheitsvorkehrung von Firebase. Der
         // Nutzer muss erfahren, was er tun soll — "Es ist ein Fehler
         // aufgetreten" liesse ihn hier hängen.
-        await showDialog<void>(
-          context: context,
-          builder: (kontext) => AlertDialog(
-            title: Text(t('Bitte neu anmelden')),
-            content: Text(t(
-                'Aus Sicherheitsgründen ist das Löschen nur kurz nach einer '
-                'Anmeldung möglich. Melde dich einmal ab und wieder an, dann '
-                'klappt es.')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(kontext),
-                child: Text(t('Alles klar')),
-              ),
-            ],
-          ),
+        await _zeigeLoeschBefund(
+          titel: t('Bitte neu anmelden'),
+          text: t('Aus Sicherheitsgründen ist das Löschen nur kurz nach einer '
+              'Anmeldung möglich. Melde dich einmal ab und wieder an, dann '
+              'klappt es.'),
+          befund: ergebnis.technischerText,
         );
       case KontoLoeschErgebnis.fehler:
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(t('Löschen nicht möglich — bitte später noch einmal '
-              'versuchen.')),
-          backgroundColor: Colors.red,
-        ));
+        await _zeigeLoeschBefund(
+          titel: t('Löschen fehlgeschlagen'),
+          text: t('Löschen nicht möglich — bitte später noch einmal '
+              'versuchen.'),
+          befund: ergebnis.technischerText,
+        );
     }
+  }
+
+  /// Meldung samt technischem Befund.
+  ///
+  /// ══ WARUM EIN DIALOG UND KEIN SNACKBAR ══════════════════════════════════
+  ///
+  /// Vorher stand hier ein roter Snackbar mit "Löschen nicht möglich". Er
+  /// verschwindet nach vier Sekunden, lässt sich nicht markieren und nennt
+  /// keinen Grund — im TestFlight-Test kam davon nur "es passiert nichts"
+  /// zurück. Ein Dialog bleibt stehen, bis er weggetippt wird, und der Befund
+  /// darin ist auswählbar: Stufe der Löschkette plus Firebase-Code, also
+  /// genau das, was zwischen "Regeln", "Verbindung" und "zu lange her"
+  /// unterscheidet.
+  Future<void> _zeigeLoeschBefund({
+    required String titel,
+    required String text,
+    required String befund,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (kontext) => AlertDialog(
+        title: Text(titel),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(text),
+            if (befund.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                t('Das meldet das Gerät:'),
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF888888)),
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                befund,
+                style: const TextStyle(
+                    fontSize: 12, height: 1.35, color: Color(0xFF888888)),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(kontext),
+            child: Text(t('Alles klar')),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── DEBUG: Streak-Zahl springen lassen (nur kDebugMode) ───────────────────

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:math';
@@ -24,6 +25,34 @@ enum AnzeigenameErgebnis { erfolgreich, bereitsVergeben, fehler }
 /// Code statt in der Konsole.
 enum AnmeldeErgebnis { erfolgreich, abgebrochen, nichtEingerichtet, fehler }
 
+/// Ausgang eines Anmeldeversuchs — samt dem, was das Gerät WIRKLICH gemeldet
+/// hat.
+///
+/// ══ WARUM DER TECHNISCHE TEXT MIT DURCH MUSS ════════════════════════════════
+///
+/// [AnmeldeErgebnis] ist eine grobe Einteilung für die Oberfläche, und für die
+/// Oberfläche reicht sie auch. Für die Fehlersuche aus der Ferne reicht sie
+/// nicht: "nicht eingerichtet" deckt ein fehlendes Entitlement, ein zu altes
+/// Provisioning-Profil, einen in Firebase nicht freigeschalteten Anbieter und
+/// eine unpassende Client-ID gleichermassen ab. Wer nur diesen Satz gemeldet
+/// bekommt, kann die vier Fälle nicht auseinanderhalten und rät.
+///
+/// [befund] ist deshalb der Rohtext: 'apple/notHandled',
+/// 'firebase/invalid-credential', 'google/clientConfigurationError'. Er steht
+/// klein unter der freundlichen Meldung, ist absichtlich NICHT übersetzt und
+/// absichtlich nicht schön — er wird abfotografiert und weitergeschickt.
+class AnmeldeAusgang {
+  final AnmeldeErgebnis ergebnis;
+
+  /// null nur bei Erfolg und beim Abbruch durch den Nutzer.
+  final String? befund;
+
+  const AnmeldeAusgang(this.ergebnis, {this.befund});
+
+  static const erfolgreich = AnmeldeAusgang(AnmeldeErgebnis.erfolgreich);
+  static const abgebrochen = AnmeldeAusgang(AnmeldeErgebnis.abgebrochen);
+}
+
 /// Ausgang eines Löschversuchs für ein ECHTES Konto.
 ///
 /// [erneutAnmelden] ist kein Fehler, sondern eine Zwischenstation: Firebase
@@ -32,6 +61,46 @@ enum AnmeldeErgebnis { erfolgreich, abgebrochen, nichtEingerichtet, fehler }
 /// einmal neu ausweisen — und der Nutzer muss erfahren, WARUM plötzlich
 /// wieder ein Google-Dialog aufgeht.
 enum KontoLoeschErgebnis { erfolgreich, erneutAnmelden, fehler }
+
+/// Die Stufen der Löschkette, in genau der Reihenfolge, in der sie ablaufen.
+///
+/// Steht mit im Fehlertext auf dem Gerät. Ohne diese Angabe ist ein
+/// 'permission-denied' nicht zu deuten: Es könnte die Namens-Reservierung
+/// sein, der Cloud-Spielstand oder das Spieler-Dokument — drei verschiedene
+/// Regeln, drei verschiedene Ursachen.
+enum KontoLoeschSchritt {
+  reservierung('1 Namens-Reservierung'),
+  spielstand('2 Cloud-Spielstand'),
+  spielerDokument('3 Spieler-Dokument'),
+  konto('4 Auth-Konto');
+
+  const KontoLoeschSchritt(this.bezeichnung);
+
+  /// Bewusst unübersetzt: Dieser Text ist für einen Fehlerbericht, nicht für
+  /// den Spieler.
+  final String bezeichnung;
+}
+
+/// Ausgang eines Löschversuchs — mit Stufe und Fehlercode.
+class KontoLoeschAusgang {
+  final KontoLoeschErgebnis ergebnis;
+
+  /// Woran es lag. null bei Erfolg.
+  final KontoLoeschSchritt? schritt;
+
+  /// Der Rohtext des Fehlers, siehe [AnmeldeAusgang.befund].
+  final String? befund;
+
+  const KontoLoeschAusgang(this.ergebnis, {this.schritt, this.befund});
+
+  static const erfolgreich = KontoLoeschAusgang(KontoLoeschErgebnis.erfolgreich);
+
+  /// Was im Dialog steht: "2 Cloud-Spielstand · firestore/permission-denied".
+  String get technischerText {
+    final teile = <String>[schritt?.bezeichnung ?? '', befund ?? ''];
+    return teile.where((s) => s.isNotEmpty).join(' · ');
+  }
+}
 
 /// Interner Signal-Typ, um "Name bereits von jemand anderem vergeben" aus
 /// der Transaktion nach außen zu tragen — runTransaction() propagiert
@@ -145,13 +214,13 @@ class AuthService {
   /// Gerät, Neuinstallation), meldet Firebase 'credential-already-in-use'.
   /// Dann ist die Anmeldung dort richtig, und das leere anonyme Konto wird
   /// aufgegeben.
-  static Future<AnmeldeErgebnis> _anmeldenOderVerknuepfen(
+  static Future<AnmeldeAusgang> _anmeldenOderVerknuepfen(
       AuthCredential zugangsdaten) async {
     final aktuell = _auth.currentUser;
     if (aktuell != null && aktuell.isAnonymous) {
       try {
         await aktuell.linkWithCredential(zugangsdaten);
-        return AnmeldeErgebnis.erfolgreich;
+        return AnmeldeAusgang.erfolgreich;
       } on FirebaseAuthException catch (e) {
         const schonVergeben = {
           'credential-already-in-use',
@@ -162,25 +231,73 @@ class AuthService {
       }
     }
     await _auth.signInWithCredential(zugangsdaten);
-    return AnmeldeErgebnis.erfolgreich;
+    return AnmeldeAusgang.erfolgreich;
   }
 
   /// Übersetzt Firebase-Fehlercodes in die grobe Einteilung von
   /// [AnmeldeErgebnis]. Die drei Codes unten bedeuten alle dasselbe: In der
   /// Konsole fehlt noch etwas.
-  static AnmeldeErgebnis _deute(Object fehler) {
+  ///
+  /// Der Rohtext geht IMMER mit — auch wenn die Einteilung ihn verschluckt.
+  static AnmeldeAusgang _deute(Object fehler) {
+    final befund = befundVon(fehler);
     if (fehler is FirebaseAuthException) {
       const konsole = {
         'operation-not-allowed',
         'invalid-credential',
         'configuration-not-found',
       };
-      if (konsole.contains(fehler.code)) return AnmeldeErgebnis.nichtEingerichtet;
+      if (konsole.contains(fehler.code)) {
+        return AnmeldeAusgang(AnmeldeErgebnis.nichtEingerichtet,
+            befund: befund);
+      }
     }
-    return AnmeldeErgebnis.fehler;
+    return AnmeldeAusgang(AnmeldeErgebnis.fehler, befund: befund);
   }
 
-  static Future<AnmeldeErgebnis> mitGoogleAnmelden() async {
+  /// Der Rohtext eines Fehlers, kurz genug für einen Bildschirm.
+  ///
+  /// Jede der vier Quellen bringt ihren eigenen Code mit, und genau der wird
+  /// gebraucht:
+  ///
+  ///   * `apple/notHandled` gegen `apple/unknown` — das erste zeigt auf ein
+  ///     Provisioning-Profil ohne das Sign-in-Recht, das zweite eher auf den
+  ///     Anbieter in Firebase.
+  ///   * `firebase/invalid-credential` heisst, dass Apple geliefert hat und
+  ///     Firebase das Token abgelehnt hat — dann ist das Profil in Ordnung
+  ///     und die Konsole nicht.
+  ///   * `google/clientConfigurationError` zeigt auf die plist, nicht auf die
+  ///     Konsole.
+  ///
+  /// Absichtlich unübersetzt: Der Text ist für einen Fehlerbericht.
+  ///
+  /// Öffentlich, damit ein Test echte Ausnahmen hindurchschicken kann statt
+  /// nur den Quelltext danach abzusuchen.
+  static String befundVon(Object fehler) {
+    final text = switch (fehler) {
+      FirebaseAuthException e => 'firebase/${e.code}${_zusatz(e.message)}',
+      FirebaseException e => '${e.plugin}/${e.code}${_zusatz(e.message)}',
+      SignInWithAppleAuthorizationException e =>
+        'apple/${e.code.name}${_zusatz(e.message)}',
+      SignInWithAppleNotSupportedException e =>
+        'apple/nicht-unterstuetzt${_zusatz(e.message)}',
+      SignInWithAppleCredentialsException e =>
+        'apple/credentials${_zusatz(e.message)}',
+      GoogleSignInException e =>
+        'google/${e.code.name}${_zusatz(e.description)}',
+      TimeoutException _ => 'zeitueberschreitung',
+      _ => '${fehler.runtimeType}: $fehler',
+    };
+    // Eine Meldung, die über den Rand hinausläuft, ist keine Meldung mehr.
+    return text.length <= 160 ? text : '${text.substring(0, 157)}...';
+  }
+
+  static String _zusatz(String? meldung) {
+    final m = (meldung ?? '').trim();
+    return m.isEmpty ? '' : ' — $m';
+  }
+
+  static Future<AnmeldeAusgang> mitGoogleAnmelden() async {
     try {
       // Ohne Argumente: Auf Android holt sich das Plugin die Web-Client-ID aus
       // der von google-services.json erzeugten String-Ressource
@@ -194,23 +311,25 @@ class AuthService {
         // Genau der Fall "google-services.json enthält keinen oauth_client mit
         // client_type 3" — die Anmeldung selbst klappt, aber ohne Token ist
         // Firebase nichts anzubieten.
-        return AnmeldeErgebnis.nichtEingerichtet;
+        return const AnmeldeAusgang(AnmeldeErgebnis.nichtEingerichtet,
+            befund: 'google/kein-idToken');
       }
       return await _anmeldenOderVerknuepfen(
           GoogleAuthProvider.credential(idToken: idToken));
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) {
-        return AnmeldeErgebnis.abgebrochen;
+        return AnmeldeAusgang.abgebrochen;
       }
       // "serverClientId must be provided on Android" landet hier.
-      return AnmeldeErgebnis.nichtEingerichtet;
+      return AnmeldeAusgang(AnmeldeErgebnis.nichtEingerichtet,
+          befund: befundVon(e));
     } catch (e) {
       return _deute(e);
     }
   }
 
   /// Nur auf Apple-Plattformen aufrufen — siehe [appleVerfuegbar].
-  static Future<AnmeldeErgebnis> mitAppleAnmelden() async {
+  static Future<AnmeldeAusgang> mitAppleAnmelden() async {
     try {
       // Firebase verlangt den Nonce doppelt: Apple bekommt den SHA-256-Abdruck
       // zu sehen, Firebase den Klartext. Nur so lässt sich prüfen, dass das
@@ -225,15 +344,38 @@ class AuthService {
         nonce: sha256.convert(utf8.encode(roh)).toString(),
       );
       final token = apple.identityToken;
-      if (token == null) return AnmeldeErgebnis.fehler;
+      if (token == null) {
+        return const AnmeldeAusgang(AnmeldeErgebnis.fehler,
+            befund: 'apple/kein-identityToken');
+      }
       return await _anmeldenOderVerknuepfen(
         OAuthProvider('apple.com').credential(idToken: token, rawNonce: roh),
       );
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
-        return AnmeldeErgebnis.abgebrochen;
+        return AnmeldeAusgang.abgebrochen;
       }
-      return AnmeldeErgebnis.nichtEingerichtet;
+      // ══ HIER STEHT DIE ANTWORT AUF "APPLE IST NICHT EINGERICHTET" ═════════
+      //
+      // Alles ausser 'canceled' landete bisher wortlos auf "noch nicht
+      // eingerichtet". Der Code darunter trennt aber genau die Fälle, die
+      // sich vom Rechner aus nicht auseinanderhalten lassen:
+      //
+      //   notHandled  — iOS hat die Anfrage gar nicht erst angenommen. Das
+      //                 ist der Fingerabdruck eines Programms, dessen
+      //                 Provisioning-Profil das Sign-in-Recht nicht kennt:
+      //                 Die Datei Runner.entitlements im Projekt reicht
+      //                 nicht, das Recht muss auch in der App-ID im
+      //                 Developer-Portal stehen und das Profil danach neu
+      //                 erzeugt worden sein.
+      //   unknown /
+      //   failed      — der Dialog lief, Apple lehnte ab. Dann zeigt es eher
+      //                 auf die Service-ID oder den Schlüssel in Firebase.
+      //   invalidResponse — Apple antwortete, aber unbrauchbar.
+      //
+      // Erst mit diesem Code lässt sich sagen, wo gesucht werden muss.
+      return AnmeldeAusgang(AnmeldeErgebnis.nichtEingerichtet,
+          befund: befundVon(e));
     } catch (e) {
       return _deute(e);
     }
@@ -255,10 +397,10 @@ class AuthService {
   /// Namensreservierung, Spieler-Dokument, Rangliste, Cloud-Fortschritt. Die
   /// Firestore-Regeln fragen nur `request.auth != null`, nicht nach dem
   /// Anbieter.
-  static Future<AnmeldeErgebnis> testAnmeldung() async {
+  static Future<AnmeldeAusgang> testAnmeldung() async {
     try {
       await _auth.signInAnonymously();
-      return AnmeldeErgebnis.erfolgreich;
+      return AnmeldeAusgang.erfolgreich;
     } catch (e) {
       return _deute(e);
     }
@@ -292,13 +434,33 @@ class AuthService {
   /// Wer hier später "aufräumen" will: Das ist der Grund, warum es so
   /// aussieht.
   static Future<void> abmelden() async {
-    try {
-      await GoogleSignIn.instance.signOut();
-    } catch (_) {
-      // Nicht mit Google angemeldet gewesen — kein Grund, das Abmelden
-      // scheitern zu lassen.
-    }
+    await _googleSitzungBeenden();
     await _auth.signOut();
+  }
+
+  /// Beendet die Google-Sitzung am Gerät. Ein Fehlschlag ist folgenlos.
+  ///
+  /// ══ GEPRÜFT, WEIL ES ALS VERDÄCHTIGER GEHANDELT WURDE ═══════════════════
+  ///
+  /// Verdacht: Der Google-Abmelder könnte auf iOS werfen und die Löschkette
+  /// aufhalten, bevor sie überhaupt anfängt. Nachgesehen im Plugin: Auf iOS
+  /// tut `signOut` nichts weiter, als `[GIDSignIn signOut]` aufzurufen; die
+  /// native Seite meldet dabei überhaupt keinen Fehler zurück
+  /// (`signOutWithError:` setzt den Fehlerzeiger nie). Er kann also weder
+  /// werfen noch hängen — und in der Löschkette steht er ohnehin erst NACH
+  /// dem Konto.
+  ///
+  /// Das Zeitlimit bleibt trotzdem: Ein Aufruf, der nie zurückkehrt, würde
+  /// den Erfolgsfall verschlucken und den Spieler auf dem Einstellungs-Screen
+  /// stehen lassen — obwohl sein Konto längst gelöscht ist.
+  static Future<void> _googleSitzungBeenden() async {
+    try {
+      await GoogleSignIn.instance.signOut().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      // Nicht mit Google angemeldet gewesen — kein Grund, deshalb das
+      // Abmelden oder Löschen scheitern zu lassen.
+      debugPrint('Google-Sitzung blieb stehen: ${befundVon(e)}');
+    }
   }
 
   /// Löscht das Testkonto samt reserviertem Namen und Spieler-Dokument.
@@ -359,46 +521,129 @@ class AuthService {
   /// nicht am Konto (siehe [abmelden]). Wer die App danach neu einrichtet,
   /// findet seinen Fortschritt am Gerät wieder — in der Cloud liegt nichts
   /// mehr.
-  static Future<KontoLoeschErgebnis> kontoLoeschen() async {
-    final u = _auth.currentUser;
-    if (u == null) return KontoLoeschErgebnis.fehler;
+  /// Zeitlimit für jeden einzelnen Schritt.
+  ///
+  /// ══ OHNE DAS PASSIERT BEI EINEM FEHLSCHLAG BUCHSTÄBLICH NICHTS ══════════
+  ///
+  /// Firestore nimmt Schreibvorgänge zuerst lokal entgegen und löst das
+  /// Future erst auf, wenn der Server sie bestätigt hat. Ohne tragfähige
+  /// Verbindung wartet es unbegrenzt — kein Fehler, keine Ausnahme, einfach
+  /// nie eine Antwort. Der Spieler tippt "Endgültig löschen", und die App
+  /// steht still da: kein Anmelde-Screen, keine Meldung, nichts.
+  ///
+  /// Das Zeitlimit macht daraus einen sichtbaren Fehler mit Stufenangabe.
+  /// Fünfzehn Sekunden sind reichlich für einen Löschvorgang, der am Gerät
+  /// sonst in unter einer Sekunde durch ist, und kurz genug, dass niemand
+  /// glaubt, die App sei abgestürzt.
+  static const _kSchrittZeitlimit = Duration(seconds: 15);
+
+  /// Führt einen Schritt aus. Rückgabe null = geklappt.
+  static Future<KontoLoeschAusgang?> _loeschSchritt(
+      KontoLoeschSchritt schritt, Future<void> Function() tun) async {
     try {
-      final name = u.displayName;
-      if (name != null && _normalisiereName(name).isNotEmpty) {
-        await _db
-            .collection('anzeigenamen_reserviert')
-            .doc(_normalisiereName(name))
-            .delete();
-      }
-      // Der Spielstand liegt in einer UNTERkollektion. Ein Dokument zu
-      // löschen räumt seine Unterkollektionen NICHT mit weg — das ist eine
-      // der bekanntesten Fallen in Firestore. Deshalb ausdrücklich zuerst.
-      await _db
-          .collection('spieler')
-          .doc(u.uid)
-          .collection('stand')
-          .doc('aktuell')
-          .delete();
-      await _db.collection('spieler').doc(u.uid).delete();
-      await u.delete();
-      // Die Google-Sitzung bleibt sonst am Gerät stehen und der nächste
-      // Anmeldeversuch nimmt sie wortlos wieder — der Spieler landete dann
-      // in einem Konto, das er gerade gelöscht hat.
-      try {
-        await GoogleSignIn.instance.signOut();
-      } catch (_) {
-        // War kein Google-Konto.
-      }
-      return KontoLoeschErgebnis.erfolgreich;
+      await tun().timeout(_kSchrittZeitlimit);
+      return null;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'requires-recent-login') {
-        return KontoLoeschErgebnis.erneutAnmelden;
-      }
-      debugPrint('Kontolöschung fehlgeschlagen: ${e.code}');
-      return KontoLoeschErgebnis.fehler;
+      // 'requires-recent-login' ist der wahrscheinlichste Fall überhaupt:
+      // "recent" heisst bei Firebase wenige Minuten, nicht "seit dem letzten
+      // Start angemeldet". Wer die Einstellungen erst nach einer Weile
+      // öffnet, läuft hier zwangsläufig hinein.
+      return KontoLoeschAusgang(
+        e.code == 'requires-recent-login'
+            ? KontoLoeschErgebnis.erneutAnmelden
+            : KontoLoeschErgebnis.fehler,
+        schritt: schritt,
+        befund: befundVon(e),
+      );
     } catch (e) {
-      debugPrint('Kontolöschung fehlgeschlagen: $e');
-      return KontoLoeschErgebnis.fehler;
+      return KontoLoeschAusgang(KontoLoeschErgebnis.fehler,
+          schritt: schritt, befund: befundVon(e));
+    }
+  }
+
+  static Future<KontoLoeschAusgang> kontoLoeschen() async {
+    final u = _auth.currentUser;
+    if (u == null) {
+      return const KontoLoeschAusgang(KontoLoeschErgebnis.fehler,
+          befund: 'kein-konto-angemeldet');
+    }
+    final spieler = _db.collection('spieler').doc(u.uid);
+
+    // ── 1. Namens-Reservierung ────────────────────────────────────────────
+    //
+    // ALS EINZIGER SCHRITT NICHT ABBRECHEND. Das Konto MUSS löschbar sein —
+    // Apple 5.1.1(v) lässt keinen Fall zu, in dem der Spieler mit einem
+    // unlöschbaren Konto dasteht. Ein liegen gebliebener reservierter Name
+    // ist ärgerlich; ein Konto, das sich nicht löschen lässt, kostet die
+    // Freigabe. Wenn hier etwas schiefgeht, geht die Kette weiter und der
+    // Fall landet im Protokoll.
+    final reservierung = await _loeschSchritt(
+        KontoLoeschSchritt.reservierung, () => _reservierungFreigeben(u, spieler));
+
+    // ── 2. Cloud-Spielstand ───────────────────────────────────────────────
+    //
+    // Der Spielstand liegt in einer UNTERkollektion. Ein Dokument zu löschen
+    // räumt seine Unterkollektionen NICHT mit weg — das ist eine der
+    // bekanntesten Fallen in Firestore. Deshalb ausdrücklich vor dem
+    // Elterndokument.
+    final stand = await _loeschSchritt(KontoLoeschSchritt.spielstand,
+        () => spieler.collection('stand').doc('aktuell').delete());
+    if (stand != null) return stand;
+
+    // ── 3. Spieler-Dokument (Rangliste, Anzeigename) ──────────────────────
+    final dokument =
+        await _loeschSchritt(KontoLoeschSchritt.spielerDokument, spieler.delete);
+    if (dokument != null) return dokument;
+
+    // ── 4. Auth-Konto ─────────────────────────────────────────────────────
+    final konto = await _loeschSchritt(KontoLoeschSchritt.konto, u.delete);
+    if (konto != null) return konto;
+
+    // Die Google-Sitzung bleibt sonst am Gerät stehen und der nächste
+    // Anmeldeversuch nimmt sie wortlos wieder — der Spieler landete dann
+    // in einem Konto, das er gerade gelöscht hat.
+    await _googleSitzungBeenden();
+
+    if (reservierung != null) {
+      debugPrint('Konto gelöscht, aber der Name blieb belegt: '
+          '${reservierung.technischerText}');
+    }
+    return KontoLoeschAusgang.erfolgreich;
+  }
+
+  /// Gibt den reservierten Anzeigenamen wieder frei.
+  ///
+  /// ══ ERST LESEN, DANN LÖSCHEN — UND DAS IST KEIN UMWEG ═══════════════════
+  ///
+  /// firestore.rules erlauben das Löschen einer Reservierung nur mit
+  /// `resource.data.uid == request.auth.uid`. Auf ein Dokument, das es gar
+  /// nicht gibt, ist `resource` null — die Bedingung ist damit falsch, und
+  /// der Löschversuch scheitert mit permission-denied, obwohl schlicht
+  /// nichts aufzuräumen war. Genau diese Falle hat schon einmal die
+  /// Namensreservierung zerlegt (siehe [setzeAnzeigenameEindeutig]); vorher
+  /// stand sie hier ein zweites Mal.
+  ///
+  /// Der Schlüssel kommt aus BEIDEN Quellen: Das spieler-Dokument führt den
+  /// gewählten Namen, der Anzeigename des Kontos sollte derselbe sein — muss
+  /// es aber nicht. `updateDisplayName` darf fehlschlagen, ohne dass die
+  /// Reservierung ausbleibt, und dann steht im Konto noch der Klarname aus
+  /// dem Google-Profil.
+  static Future<void> _reservierungFreigeben(
+      User u, DocumentReference<Map<String, dynamic>> spieler) async {
+    final namen = <String>{_normalisiereName(u.displayName ?? '')};
+    try {
+      final daten = (await spieler.get()).data();
+      namen.add(_normalisiereName(daten?['anzeigename'] as String? ?? ''));
+    } catch (e) {
+      // Ohne das Dokument bleibt der Anzeigename des Kontos.
+      debugPrint('Spieler-Dokument nicht lesbar: ${befundVon(e)}');
+    }
+    for (final name in namen.where((n) => n.isNotEmpty)) {
+      final ref = _db.collection('anzeigenamen_reserviert').doc(name);
+      final vorhanden = await ref.get();
+      if (vorhanden.exists && vorhanden.data()?['uid'] == u.uid) {
+        await ref.delete();
+      }
     }
   }
 

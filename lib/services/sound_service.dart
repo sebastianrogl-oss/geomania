@@ -282,6 +282,54 @@ class SoundService {
   /// Die iOS-Audio-Sitzung wurde einmal scharf geschaltet.
   static bool _sitzungAngeschoben = false;
 
+  /// Die Audio-Sitzung, die die App über ihre ganze Laufzeit haben soll.
+  ///
+  /// `ambient` mischt sich unter fremde Musik UND schweigt, wenn der
+  /// Stummschalter umgelegt ist. Das ist eine Entscheidung, keine Voreinstellung:
+  /// Ein Spiel, das beim Stummschalter trotzdem tönt, ist im Zug oder im
+  /// Wartezimmer eine Zumutung. `playback` täte genau das.
+  ///
+  /// Öffentlich, damit ein Test die Kategorie prüfen kann, ohne die
+  /// Plattform-Kanäle nachzubauen.
+  static const iosSitzung = sitzung.AudioSessionConfiguration(
+    avAudioSessionCategory: sitzung.AVAudioSessionCategory.ambient,
+    avAudioSessionMode: sitzung.AVAudioSessionMode.defaultMode,
+  );
+
+  /// Setzt die Audio-Kategorie zurück auf [iosSitzung].
+  ///
+  /// ══ WER SIE VERSTELLT, UND WARUM DAS NIEMAND SIEHT ══════════════════════
+  ///
+  /// Die AVAudioSession ist EIN Zustand für die ganze App, und jedes Plugin
+  /// darf ihn anfassen. `video_player_avfoundation` tut das beim allerersten
+  /// Videoplayer: Sein `initialize()` ruft `upgradeAudioSessionCategory` mit
+  /// `requestedCategory: .playback` auf, ausdrücklich kommentiert mit "Allow
+  /// audio playback when the Ring/Silent switch is set to silent".
+  ///
+  /// Die Funktion heisst nicht umsonst "upgrade": Sie hebt die Kategorie nur
+  /// an und nimmt sie nie wieder zurück. Aus `ambient` wird `playback`, und
+  /// dabei bleibt es — für den Rest des Programmlaufs, auch lange nachdem das
+  /// Video vorbei ist.
+  ///
+  /// In GeoMania läuft ein solches Video im Halbzeit-Moment und beim
+  /// Stationsabschluss. Ab dem ersten überhörte die App den Stummschalter.
+  /// (Und dieselbe Umstellung war es auch, die den Ton überhaupt erst hörbar
+  /// machte — deshalb lag die Grenze immer genau bei der Halbzeit.)
+  ///
+  /// Über [VideoPlayerOptions] lässt sich das nicht abstellen: Die Klasse
+  /// kennt nur `mixWithOthers`, `allowBackgroundPlayback` und `webOptions`,
+  /// und keine davon berührt die Kategorie. Das Zurückstellen von Hand ist
+  /// deshalb der einzige Weg.
+  static Future<void> audioKategorieWiederherstellen() async {
+    if (kIsWeb || !Platform.isIOS) return;
+    try {
+      final s = await sitzung.AudioSession.instance;
+      await s.configure(iosSitzung);
+    } catch (e) {
+      debugPrint('[Sound] Audio-Kategorie nicht zurückgesetzt: $e');
+    }
+  }
+
   /// Auf Web spielt das Paket zwar, aber ohne Nutzergeste verweigern Browser
   /// die Wiedergabe und werfen dabei. Da die App im Browser ohnehin nur zum
   /// Prüfen läuft, bleibt der Ton dort ganz aus.
@@ -385,10 +433,7 @@ class SoundService {
     _sitzungAngeschoben = true;
     try {
       final s = await sitzung.AudioSession.instance;
-      await s.configure(const sitzung.AudioSessionConfiguration(
-        avAudioSessionCategory: sitzung.AVAudioSessionCategory.ambient,
-        avAudioSessionMode: sitzung.AVAudioSessionMode.defaultMode,
-      ));
+      await s.configure(iosSitzung);
       await s.setActive(true);
     } catch (e) {
       // Ohne aktive Sitzung bleibt es beim alten Verhalten — schlimmer wird

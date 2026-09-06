@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../services/sound_service.dart';
 import '../theme/app_theme.dart';
 
 // ── Ergebnis-Videos ──────────────────────────────────────────────────────────
@@ -148,14 +149,42 @@ class _ErgebnisVideoState extends State<ErgebnisVideo> {
     // nachlädt. debugPrint ist im Release-Build ohnehin still.
     final uhr = Stopwatch()..start();
     final ctrl = VideoPlayerController.asset(pfad);
+    var bereit = false;
     try {
       await ctrl.initialize();
+      bereit = true;
       debugPrint('[Ergebnis-Video] $pfad bereit nach '
           '${uhr.elapsedMilliseconds} ms');
     } catch (fehler) {
       // Nicht ladbar (fehlende Datei, Codec) — der Platzhalter bleibt stehen,
       // der Screen funktioniert unverändert weiter.
       debugPrint('[Ergebnis-Video] $pfad nicht ladbar: $fehler');
+    }
+
+    // ══ DIE AUDIO-KATEGORIE ZURÜCKHOLEN ═════════════════════════════════════
+    //
+    // video_player hebt beim ersten Player die AVAudioSession auf `playback`
+    // an und nimmt das nie wieder zurück — die ganze App überhört danach den
+    // Stummschalter. Die Begründung im Einzelnen steht bei
+    // [SoundService.audioKategorieWiederherstellen].
+    //
+    // HIER UND NICHT IN dispose(): Umgestellt wird beim Anlegen, also muss es
+    // beim Anlegen zurück. Ein Video läuft in dieser App eine Minute oder
+    // länger; bis dahin zu warten hiesse, genau so lange auf `playback` zu
+    // sitzen.
+    //
+    // AUF BEIDEN WEGEN, auch dem gescheiterten: Die Umstellung passiert im
+    // Plugin, sobald die Plattform überhaupt angesprochen wird — ob die Datei
+    // sich dann laden lässt, spielt dafür keine Rolle.
+    //
+    // Und nach JEDEM Player, nicht nur nach dem ersten: Videos laufen im
+    // Halbzeit-Moment und beim Stationsabschluss, und dieselbe Stelle bedient
+    // beide.
+    //
+    // Auf Android und im Test ein No-op.
+    await SoundService.audioKategorieWiederherstellen();
+
+    if (!bereit) {
       await ctrl.dispose();
       return;
     }

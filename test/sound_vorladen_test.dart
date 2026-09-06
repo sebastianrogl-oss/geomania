@@ -94,10 +94,12 @@ void main() {
           reason: 'Aktiviert wird eine Sitzung, deren Kategorie schon steht');
     });
 
-    test('Die Kategorie bleibt ambient', () {
-      // Sie mischt sich unter fremde Musik UND schweigt beim Stummschalter.
-      // playback täte beides nicht.
-      expect(rumpf.contains('AVAudioSessionCategory.ambient'), isTrue);
+    test('Mit derselben Vorgabe wie das Zurückstellen nach einem Video', () {
+      // Welche Kategorie das ist, prüft audio_kategorie_test.dart an
+      // SoundService.iosSitzung. Hier zählt nur, dass beide Stellen dieselbe
+      // Vorgabe nehmen — sonst stellte die eine wieder her, was die andere
+      // nicht gemeint hat.
+      expect(rumpf.contains('configure(iosSitzung)'), isTrue);
     });
 
     test('Genau einmal, und nur auf iOS', () {

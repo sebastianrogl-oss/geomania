@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
@@ -187,8 +189,58 @@ class _Klangspur {
 ///   Wiedergabe UND schweigt, wenn der Stummschalter umgelegt ist. Die Option
 ///   mixWithOthers darf dabei nicht gesetzt werden — das Paket verbietet sie
 ///   ausdrücklich für ambient, weil sie dort schon gilt.
+///
+/// ── Warum jeder Spieler auf iOS einmal lautlos anläuft ────────────────────
+///
+/// Gemeldet vom iPhone: Im ersten halben Level nach dem Start kommt kein Ton,
+/// danach schon. Nachgesehen in audioplayers_darwin 6.5.0, und dort steht es
+/// schwarz auf weiss:
+///
+///   * `WrappedMediaPlayer.resume()` startet den AVPlayer und ruft dabei
+///     NICHT `controlAudioSession()` auf. Diese Methode ist die einzige
+///     Stelle im ganzen Plugin, die `AVAudioSession.setActive` anfasst — und
+///     ihr einziger Aufrufer ist `onSoundComplete()`, also das ENDE eines
+///     Klangs, wo sie die Sitzung wieder abschaltet.
+///   * Es gibt also im Abspielweg kein `setActive(true)`. Jede Wiedergabe
+///     verlässt sich darauf, dass iOS die Sitzung von selbst aktiviert.
+///
+/// Diese stillschweigende Aktivierung passiert nicht sofort:
+/// `playImmediately(atRate:)` wartet nicht auf sie. Beim allerersten Start
+/// nach einem Kaltstart fällt genau in diese Lücke, was der Spieler hören
+/// sollte. Auf Android stellt sich die Frage nicht — dort läuft lowLatency
+/// über SoundPool, ganz ohne Sitzung.
+///
+/// Gegenmassnahme: Jeder Spieler wird beim Laden einmal mit Lautstärke 0
+/// angestossen und wieder gestoppt. Das ist unhörbar, kostet nichts auf dem
+/// heissen Pfad und bringt die Audio-Sitzung hoch, bevor der erste Tipp
+/// kommt.
 class SoundService {
   static final Map<Klang, _Klangspur> _spuren = {};
+
+  /// Diese drei Klänge werden zuerst geladen.
+  ///
+  /// Sie sind die einzigen, die im ersten halben Level überhaupt vorkommen:
+  /// der Knopfdruck beim Start der Station, danach richtig und falsch. Sieg,
+  /// Münze, Wisch und Blopp kommen frühestens am Ende einer Station oder in
+  /// einer Challenge — die haben Zeit.
+  static const List<Klang> zuerstGeladen = [
+    Klang.knopf,
+    Klang.richtig,
+    Klang.falsch,
+  ];
+
+  /// So lange wird ein Klang, der vor dem Laden ausgelöst wurde, noch
+  /// nachgereicht.
+  ///
+  /// Nicht länger, und das ist der Punkt: Ein Ton, der zwei Sekunden nach dem
+  /// Tipp kommt, gehört zu nichts mehr — er klingt dann nach einem Fehler,
+  /// nicht nach einer Rückmeldung. Und immer nur der zuletzt ausgelöste je
+  /// Klang: Fünf nachgeholte Knopfdrücke auf einmal wären schlimmer als
+  /// Stille.
+  static const nachreichFenster = Duration(seconds: 2);
+
+  /// Klänge, die ausgelöst wurden, bevor ihre Spieler bereit waren.
+  static final Map<Klang, DateTime> _verpasst = {};
 
   /// Zuschlag auf [Klang.laenge], bevor ein Spieler zurückgesetzt wird.
   /// Deckt die Verzögerung zwischen dem Auslösen und dem tatsächlichen
@@ -203,7 +255,11 @@ class SoundService {
   /// in abzeichen_popup.dart.
   static bool _tonAn = true;
 
-  static bool _bereit = false;
+  /// Das Laden wurde angestossen — verhindert einen zweiten Durchlauf.
+  static bool _gestartet = false;
+
+  /// Das Laden ist durch. Bis dahin werden Auslöser gemerkt statt verworfen.
+  static bool _geladen = false;
 
   /// Auf Web spielt das Paket zwar, aber ohne Nutzergeste verweigern Browser
   /// die Wiedergabe und werfen dabei. Da die App im Browser ohnehin nur zum
@@ -215,9 +271,23 @@ class SoundService {
   /// Ohne dieses Vorladen entsteht beim allerersten Abspielen eines Klangs
   /// eine deutliche Verzögerung, weil die Datei dann erst vom Speicher geholt
   /// und entschlüsselt wird.
+  ///
+  /// ══ NICHT MEHR VOR runApp() ═════════════════════════════════════════════
+  ///
+  /// Der Aufruf hing bis hierher mit await im Startablauf, also VOR dem
+  /// ersten Bild. Auf iOS ist das teuer: [PlayerMode.lowLatency] ist dort ein
+  /// No-op (das Plugin kennt nur einen Modus), jeder Spieler ist ein
+  /// vollwertiger AVPlayer, und `setSource` kehrt erst zurück, wenn das Stück
+  /// als abspielbereit gemeldet wurde. Sechzehn Spieler nacheinander, bevor
+  /// irgendetwas zu sehen ist.
+  ///
+  /// Jetzt läuft es nach dem ersten Bild im Hintergrund. Das öffnet ein
+  /// Fenster, in dem schon getippt werden kann — und genau dafür gibt es
+  /// [_verpasst]: Was in dieses Fenster fällt, wird nachgereicht statt still
+  /// verworfen.
   static Future<void> initialisieren() async {
-    if (!verfuegbar || _bereit) return;
-    _bereit = true;
+    if (!verfuegbar || _gestartet) return;
+    _gestartet = true;
 
     _tonAn = await EinstellungenService.soundAktiv;
 
@@ -230,24 +300,74 @@ class SoundService {
       iOS: AudioContextIOS(category: AVAudioSessionCategory.ambient),
     );
 
-    for (final klang in Klang.values) {
-      try {
-        final spieler = <AudioPlayer>[];
-        for (var i = 0; i < klang.spieler; i++) {
-          final p = AudioPlayer();
-          await p.setPlayerMode(PlayerMode.lowLatency);
-          await p.setAudioContext(kontext);
-          await p.setSource(AssetSource('sounds/${klang.datei}'));
-          await p.setReleaseMode(ReleaseMode.stop);
-          spieler.add(p);
-        }
-        _spuren[klang] = _Klangspur(spieler);
-      } catch (e) {
-        // Ein fehlender oder defekter Klang darf die App nicht aufhalten —
-        // er fällt dann einfach aus.
-        debugPrint('[Sound] ${klang.datei} nicht ladbar: $e');
+    // Erst die drei Klänge des ersten halben Levels, dann der Rest. Innerhalb
+    // einer Runde nebeneinander: Das sind verschiedene Dateien, sie können
+    // sich nicht in die Quere kommen, und nacheinander dauerte es auf iOS ein
+    // Vielfaches.
+    await Future.wait(zuerstGeladen.map((k) => _ladeKlang(k, kontext)));
+    await Future.wait(Klang.values
+        .where((k) => !zuerstGeladen.contains(k))
+        .map((k) => _ladeKlang(k, kontext)));
+
+    _geladen = true;
+    // Was jetzt noch offen steht, kam entweder zu früh und ist längst
+    // abgelaufen, oder sein Klang liess sich gar nicht laden.
+    _verpasst.clear();
+  }
+
+  static Future<void> _ladeKlang(Klang klang, AudioContext kontext) async {
+    try {
+      final spieler = <AudioPlayer>[];
+      // Die Spieler EINES Klangs nacheinander, nicht nebeneinander: Sie
+      // zeigen alle auf dieselbe Datei, und AudioCache legt sie beim ersten
+      // Zugriff im Zwischenspeicher des Geräts ab — ohne Sperre. Zwei
+      // gleichzeitige Zugriffe schrieben dieselbe Datei doppelt.
+      for (var i = 0; i < klang.spieler; i++) {
+        final p = AudioPlayer();
+        await p.setPlayerMode(PlayerMode.lowLatency);
+        await p.setAudioContext(kontext);
+        await p.setSource(AssetSource('sounds/${klang.datei}'));
+        await p.setReleaseMode(ReleaseMode.stop);
+        await _warmlaufen(p);
+        spieler.add(p);
       }
+      _spuren[klang] = _Klangspur(spieler);
+      _nachreichen(klang);
+    } catch (e) {
+      // Ein fehlender oder defekter Klang darf die App nicht aufhalten —
+      // er fällt dann einfach aus.
+      debugPrint('[Sound] ${klang.datei} nicht ladbar: $e');
     }
+  }
+
+  /// Stösst den Spieler einmal lautlos an — nur auf iOS.
+  ///
+  /// Der Grund steht ausführlich am Klassenkommentar: Im Abspielweg von
+  /// audioplayers_darwin gibt es kein `AVAudioSession.setActive(true)`. Jede
+  /// Wiedergabe verlässt sich darauf, dass iOS die Sitzung von selbst
+  /// hochbringt, und `playImmediately(atRate:)` wartet nicht darauf. Dieser
+  /// Anlauf legt die Wartezeit ins Laden statt in den ersten Tipp.
+  ///
+  /// Auf Android bewusst nicht: Dort läuft lowLatency über SoundPool, ganz
+  /// ohne Audio-Sitzung — und `stop()` ist der teuerste Aufruf im ganzen
+  /// Ablauf (am Gerät 137 bis 880 ms je Spieler).
+  static Future<void> _warmlaufen(AudioPlayer p) async {
+    if (kIsWeb || !Platform.isIOS) return;
+    await p.setVolume(0);
+    await p.resume();
+    await p.stop();
+    // Zurück auf volle Stärke, denn genau davon geht _Klangspur.lautstaerken
+    // aus — sonst bliebe der Klang für immer stumm, ohne dass es jemand
+    // sähe.
+    await p.setVolume(1);
+  }
+
+  /// Holt einen Klang nach, der ausgelöst wurde, bevor er bereit war.
+  static void _nachreichen(Klang klang) {
+    final ausgeloest = _verpasst.remove(klang);
+    if (ausgeloest == null) return;
+    if (DateTime.now().difference(ausgeloest) > nachreichFenster) return;
+    spiele(klang);
   }
 
   /// Übernimmt den Schalter aus den Einstellungen.
@@ -267,7 +387,19 @@ class SoundService {
   static void spiele(Klang klang, {double lautstaerke = 1.0}) {
     if (!verfuegbar || !_tonAn) return;
     final spur = _spuren[klang];
-    if (spur == null) return;
+    if (spur == null) {
+      // NICHT einfach verwerfen. Solange das Laden läuft, ist "noch nicht da"
+      // kein Dauerzustand, sondern ein Fenster von wenigen Sekunden nach dem
+      // Start — und wer da tippt, hörte bisher nichts, ohne dass die App das
+      // je bemerkt hätte. Gemerkt wird nur der ZULETZT ausgelöste Zeitpunkt
+      // je Klang; abgespielt wird er, sobald der Klang bereit ist, und nur
+      // innerhalb von [nachreichFenster].
+      //
+      // Nach dem Laden bleibt es beim Verwerfen: Dann fehlt der Klang
+      // wirklich, und ein Warten hätte kein Ende.
+      if (!_geladen) _verpasst[klang] = DateTime.now();
+      return;
+    }
     final spieler = spur.nimm();
     final index = spur.zuletztVergeben;
     final staerke = lautstaerke.clamp(0.0, 1.0);

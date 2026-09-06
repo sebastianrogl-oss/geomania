@@ -59,9 +59,6 @@ void main() async {
   // No-op, dort gibt es keine planbaren Benachrichtigungen.
   await BenachrichtigungsService.initialisieren();
 
-  // Lädt die Klangeffekte vor, damit der erste Ton nicht verzögert kommt.
-  // Auf Web ein No-op, siehe SoundService.verfuegbar.
-  await SoundService.initialisieren();
   await HaptikService.initialisieren();
 
   // Urgestein an alle, die schon vor diesem Update gespielt haben.
@@ -87,6 +84,25 @@ void main() async {
   // Systemerlaubnis kann zwischenzeitlich entzogen worden sein. Nicht
   // awaited — die App soll deswegen nicht später starten.
   unawaited(BenachrichtigungsService.neuPlanen());
+
+  // Die Klangeffekte laden — NACH dem ersten Bild und ohne await.
+  //
+  // Stand vorher mit await zwischen Firebase und runApp(). Auf iOS ist das
+  // teuer: PlayerMode.lowLatency ist dort ein No-op, jeder der sechzehn
+  // Spieler ist ein vollwertiger AVPlayer, und setSource kehrt erst zurück,
+  // wenn das Stück als abspielbereit gemeldet wurde — alles nacheinander,
+  // bevor überhaupt etwas zu sehen ist.
+  //
+  // Ein EIGENER Rückruf, nicht der für die Werbung weiter unten: Der wartet
+  // auf das UMP-Einwilligungsformular und damit unter Umständen auf eine
+  // Entscheidung des Nutzers. Der Ton hinge dann hinter einem Dialog.
+  //
+  // Was in das Ladefenster hineingetippt wird, geht nicht verloren — der
+  // Dienst reicht es nach, siehe SoundService.spiele. Auf Web ein No-op,
+  // siehe SoundService.verfuegbar.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(SoundService.initialisieren());
+  });
 
   // google_mobile_ads unterstützt Flutter Web nicht — jeder Plugin-Aufruf
   // würde dort mit MissingPluginException abstürzen. Betrifft nur Chrome-

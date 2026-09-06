@@ -53,7 +53,22 @@ class DailyChallenge {
     //
     // Die Serien-Zähler der einzelnen Challenges oben bleiben davon
     // unberührt — das sind eigene Werte mit eigener Bedeutung.
-    await FortschrittService.streakAktualisieren();
+    //
+    // IST ER GESTIEGEN, WIRD DAS VERMERKT. Gefeiert werden kann hier nicht:
+    // Das Overlay ist ein Vollbild-Moment und braucht einen BuildContext, den
+    // ein Dienst nicht hat — und mitten in der laufenden Challenge käme er
+    // ohnehin zur falschen Zeit. Der Vermerk wandert deshalb bis zum
+    // [ChallengeFertigButton], der einen Stelle, an der alle vier Challenges
+    // ihre Ergebnis-Ansicht verlassen. Vier Screens einzeln anzufassen wäre
+    // genau das Kopieren, das dieser Aufrufpunkt vermeiden soll.
+    final (alterStreak, neuerStreak) =
+        await FortschrittService.streakAktualisieren();
+    if (neuerStreak > alterStreak) {
+      // Mit dem Tag, für den er gilt. Wer die App zwischen Abschluss und
+      // "Fertig" schliesst, soll die Feier nicht irgendwann nächste Woche
+      // bekommen.
+      await prefs.setString(_kFeierOffen, '$key|$alterStreak|$neuerStreak');
+    }
 
     // Interstitial nach der zweiten und nach der letzten Tages-Challenge
     // des Tages (der AdService entscheidet selbst, ob die Schwelle heute
@@ -65,6 +80,45 @@ class DailyChallenge {
       done.length,
       anzahlChallenges,
     ));
+  }
+
+  /// Vermerk "eine Challenge hat heute den Streak erhöht, gefeiert wurde noch
+  /// nicht". Inhalt: `<Tagesschlüssel>|<alt>|<neu>`.
+  ///
+  /// Ein Schlüssel und keine Variable im Speicher: Zwischen dem Abschluss und
+  /// dem Tippen auf "Fertig" liegt eine Ergebnis-Ansicht, und die überlebt
+  /// nicht zwangsläufig jeden Wechsel in den Hintergrund.
+  ///
+  /// `dc_` ist als geräteeigen eingestuft (siehe spielstand.dart): Eine
+  /// ausstehende Feier gehört zu diesem Telefon, nicht in die Cloud.
+  static const _kFeierOffen = 'dc_streak_feier_offen';
+
+  /// Nimmt einen offenen Feier-Vermerk entgegen und streicht ihn.
+  ///
+  /// Liefert `(alt, neu)` oder null, wenn nichts aussteht — dann hat entweder
+  /// heute schon eine Lernpfad-Station gefeiert, oder der Tag zählte bereits.
+  /// EIN TAG, EINE FEIER: Der Vermerk entsteht nur, wenn
+  /// [FortschrittService.streakAktualisieren] den Streak wirklich erhöht hat,
+  /// und das tut sie am selben Kalendertag genau einmal.
+  ///
+  /// Gestrichen wird beim LESEN, nicht nach der Feier: Ein Vermerk, der eine
+  /// missglückte Anzeige überlebt, käme sonst bei jedem weiteren "Fertig"
+  /// wieder hoch.
+  static Future<(int, int)?> offeneStreakFeier() async {
+    final prefs = await SharedPreferences.getInstance();
+    final roh = prefs.getString(_kFeierOffen);
+    if (roh == null) return null;
+    await prefs.remove(_kFeierOffen);
+
+    final teile = roh.split('|');
+    if (teile.length != 3) return null;
+    // Von gestern oder älter: Der Moment ist vorbei, eine Feier dafür wäre
+    // nur noch verwirrend.
+    if (teile[0] != _key()) return null;
+    final alt = int.tryParse(teile[1]);
+    final neu = int.tryParse(teile[2]);
+    if (alt == null || neu == null || neu <= alt) return null;
+    return (alt, neu);
   }
 
   /// DEBUG: Streicht alle heutigen Erledigt-Marken.

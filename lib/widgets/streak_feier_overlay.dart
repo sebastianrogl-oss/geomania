@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:lottie/lottie.dart';
 import '../l10n/uebersetzungen.dart';
 import '../services/haptik_service.dart';
+import '../services/daily_challenge.dart';
 import '../services/fortschritt_service.dart';
 import '../services/streak_ziel_service.dart';
 
@@ -26,22 +27,54 @@ Future<(int, int)> streakErhoehenUndFeiern(BuildContext context) async {
   // beim ersten abgeschlossenen Level eines neuen Tages. Blockiert, bis der
   // Nutzer sie weggetippt hat.
   if (neuerStreak > alterStreak && context.mounted) {
-    // Ist mit diesem Tag zugleich das persönliche Ziel erreicht? Dann bekommt
-    // DIESELBE Feier einen zweiten Teil — bewusst kein eigenes Overlay
-    // hinterher, siehe StreakZielService.
-    final erreicht = await StreakZielService.zielGeradeErreicht(neuerStreak);
-    // VOR der Feier merken, nicht danach: Bricht dazwischen etwas ab, fällt
-    // eine Feier aus. Andersherum käme sie ab jetzt jeden Tag wieder.
-    if (erreicht != null) await StreakZielService.merkeZielGefeiert(erreicht);
-    if (!context.mounted) return (alterStreak, neuerStreak);
-    await StreakFeierOverlay.zeigen(
-      context,
-      alterStreak: alterStreak,
-      neuerStreak: neuerStreak,
-      erreichtesZiel: erreicht,
-    );
+    await streakFeiern(context, alterStreak, neuerStreak);
   }
   return (alterStreak, neuerStreak);
+}
+
+/// Zeigt die Feier für einen Streak, der ANDERSWO schon erhöht wurde.
+///
+/// Die Trennung gibt es wegen der Tages-Challenges: Dort erhöht
+/// [DailyChallenge.markDone] den Streak im Moment des Abschlusses — das ist
+/// die eine Stelle, die alle vier Challenges gemeinsam haben, aber sie ist ein
+/// Dienst und hat keinen BuildContext. Gefeiert wird deshalb erst beim
+/// Verlassen der Ergebnis-Ansicht, und dann ist der Streak längst gestiegen:
+/// Ein zweiter Aufruf von [streakErhoehenUndFeiern] fände `diff == 0` und
+/// zeigte gar nichts.
+///
+/// Beide Wege laufen trotzdem durch DIESE Funktion. Der Ziel-Teil, das Merken
+/// und das Overlay stehen damit weiterhin nur einmal im Code.
+Future<void> streakFeiern(
+    BuildContext context, int alterStreak, int neuerStreak) async {
+  // Ist mit diesem Tag zugleich das persönliche Ziel erreicht? Dann bekommt
+  // DIESELBE Feier einen zweiten Teil — bewusst kein eigenes Overlay
+  // hinterher, siehe StreakZielService.
+  final erreicht = await StreakZielService.zielGeradeErreicht(neuerStreak);
+  // VOR der Feier merken, nicht danach: Bricht dazwischen etwas ab, fällt
+  // eine Feier aus. Andersherum käme sie ab jetzt jeden Tag wieder.
+  if (erreicht != null) await StreakZielService.merkeZielGefeiert(erreicht);
+  if (!context.mounted) return;
+  await StreakFeierOverlay.zeigen(
+    context,
+    alterStreak: alterStreak,
+    neuerStreak: neuerStreak,
+    erreichtesZiel: erreicht,
+  );
+}
+
+/// Holt die Feier nach, wenn heute eine Tages-Challenge den Streak erhöht hat.
+///
+/// Aufgerufen vom [ChallengeFertigButton] — der einen Stelle, an der alle vier
+/// Challenges ihre Ergebnis-Ansicht verlassen. BEIM VERLASSEN und nicht
+/// davor: Ein Vollbild-Moment, der über dem gerade erspielten Ergebnis
+/// aufgeht, nimmt ihm das Gewicht.
+///
+/// Steht nichts offen, passiert nichts — dann hat entweder heute schon eine
+/// Station gefeiert oder der Tag zählte bereits.
+Future<void> streakFeierNachChallenge(BuildContext context) async {
+  final offen = await DailyChallenge.offeneStreakFeier();
+  if (offen == null || !context.mounted) return;
+  await streakFeiern(context, offen.$1, offen.$2);
 }
 
 // ── Streak-Feier ──────────────────────────────────────────────────────────────

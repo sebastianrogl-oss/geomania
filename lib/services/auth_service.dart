@@ -335,7 +335,7 @@ class AuthService {
       // zu sehen, Firebase den Klartext. Nur so lässt sich prüfen, dass das
       // vorgelegte Token wirklich zu DIESER Anfrage gehört und nicht
       // abgefangen und wiederverwendet wurde.
-      final roh = _zufallsNonce();
+      final roh = zufallsNonce();
       final apple = await SignInWithApple.getAppleIDCredential(
         scopes: const [
           AppleIDAuthorizationScopes.email,
@@ -348,8 +348,51 @@ class AuthService {
         return const AnmeldeAusgang(AnmeldeErgebnis.fehler,
             befund: 'apple/kein-identityToken');
       }
+      // ══ APPLE-EIGENER WEG, NICHT DER ALLGEMEINE OAUTH-WEG ════════════════
+      //
+      // Hier stand `OAuthProvider('apple.com').credential(...)`. Das sieht
+      // gleichwertig aus, ist es auf iOS aber nicht — und genau daran
+      // scheiterte die Anmeldung mit
+      // "firebase/invalid-credential — Invalid OAuth response from apple.com",
+      // obwohl der Apple-Dialog sauber durchlief.
+      //
+      // Der Grund steht im Plugin. Die native Seite verzweigt nicht nach der
+      // providerId, sondern nach dem signInMethod des Zugangsdatums
+      // (FLTFirebaseAuthPlugin.m):
+      //
+      //   OAuthProvider(...).credential()   -> signInMethod 'oauth'
+      //       -> [FIROAuthProvider credentialWithProviderID:IDToken:
+      //                                            rawNonce:accessToken:]
+      //   AppleAuthProvider.credentialWithIDToken(...) -> 'apple.com'
+      //       -> [FIROAuthProvider appleCredentialWithIDToken:rawNonce:
+      //                                              fullName:]
+      //
+      // Zwei verschiedene Aufrufe des Firebase-SDK. Der zweite ist der für
+      // Sign in with Apple vorgesehene; der erste ist der allgemeine Weg für
+      // beliebige OAuth-Anbieter, und der Dienst bei Apple beantwortet ihn
+      // nicht so, wie Firebase es dann erwartet.
+      //
+      // Der Nonce ist dabei unverändert richtig: Apple bekommt den
+      // SHA-256-Abdruck zu sehen, Firebase den Klartext — einmal gehasht,
+      // nicht vertauscht. Das Plugin reicht den Nonce unverändert an
+      // ASAuthorizationAppleIDRequest weiter (nachgesehen in
+      // SignInWithAppleAvailablePlugin.swift), hasht also nichts ein zweites
+      // Mal.
+      //
+      // NEBENBEI GERETTET: der Name. Apple liefert Vor- und Nachnamen
+      // ausschliesslich bei der ALLERERSTEN Anmeldung mit — danach nie
+      // wieder, auch nicht nach einer Neuinstallation. Der allgemeine Weg
+      // kennt kein Namensfeld, der Wert fiel also bisher weg, obwohl er
+      // angefordert wurde.
       return await _anmeldenOderVerknuepfen(
-        OAuthProvider('apple.com').credential(idToken: token, rawNonce: roh),
+        AppleAuthProvider.credentialWithIDToken(
+          token,
+          roh,
+          AppleFullPersonName(
+            givenName: apple.givenName,
+            familyName: apple.familyName,
+          ),
+        ),
       );
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
@@ -406,7 +449,17 @@ class AuthService {
     }
   }
 
-  static String _zufallsNonce([int laenge = 32]) {
+  /// Erzeugt den Klartext-Nonce für die Apple-Anmeldung.
+  ///
+  /// [Random.secure] und nicht [Random]: Der Nonce ist das Einzige, was ein
+  /// abgefangenes und erneut vorgelegtes Apple-Token auffliegen lässt. Wäre
+  /// er vorhersagbar, wäre er wertlos.
+  ///
+  /// Der Zeichenvorrat ist der aus Apples eigenem Beispiel — alles darin ist
+  /// URL-sicher und übersteht den Weg durch Apple und Firebase unverändert.
+  ///
+  /// Öffentlich, damit ein Test ihn prüfen kann.
+  static String zufallsNonce([int laenge = 32]) {
     const zeichen =
         '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
     final zufall = Random.secure();

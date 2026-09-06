@@ -80,45 +80,38 @@ void main() {
         ? ''
         : dienst.substring(ab, dienst.indexOf('\n  static ', ab + 40));
 
-    test('Es gibt einen Anstoss beim Laden', () {
-      expect(ab, greaterThan(0),
-          reason: 'Ohne ihn fällt alles bis zum ersten durchgelaufenen Klang '
-              'in die stumme Phase');
+    test('Die Sitzung wird beim Laden eingerichtet und aktiviert', () {
+      expect(ab, greaterThan(0));
       expect(dienst.contains('await _sitzungAnschieben();'), isTrue);
+      // AUSDRÜCKLICH, nicht als Nebenwirkung. Der Versuch aus Build 22 ging
+      // über onSoundComplete() im Plugin und half am Gerät nicht.
+      expect(rumpf.contains('s.configure('), isTrue,
+          reason: 'Die Sitzung wird nicht eingerichtet');
+      expect(rumpf.contains('s.setActive(true)'), isTrue,
+          reason: 'Ohne setActive bleibt es beim alten Verhalten');
+      final einrichten = rumpf.indexOf('s.configure(');
+      expect(einrichten, lessThan(rumpf.indexOf('s.setActive(true)')),
+          reason: 'Aktiviert wird eine Sitzung, deren Kategorie schon steht');
     });
 
-    test('Der Klang läuft zu ENDE, statt sofort gestoppt zu werden', () {
-      // Genau daran scheiterte der erste Anlauf: Ein gestoppter Klang meldet
-      // kein Ende (AVPlayerItemDidPlayToEndTime bleibt aus), und ohne Ende
-      // wird die Sitzung nie aktiviert. Derselbe Kreis wie im Spiel.
-      expect(rumpf.contains('onPlayerComplete.first'), isTrue,
-          reason: 'Der Anstoss wartet nicht auf das Ende — dann aktiviert er '
-              'die Sitzung auch nicht');
-      final abo = rumpf.indexOf('onPlayerComplete.first');
-      final start = rumpf.indexOf('p.resume()');
-      expect(abo, lessThan(start),
-          reason: 'Bei 157 ms wäre das Ende durch, bevor jemand hinhört');
-    });
-
-    test('Er ist unhörbar und lässt die Lautstärke stehen', () {
-      // _Klangspur.lautstaerken geht von 1.0 aus. Bliebe der Spieler nach
-      // dem Anstoss auf 0, wäre er für immer stumm — und nichts würde es
-      // melden, weil der Aufruf auf dem heissen Pfad ja gerade entfällt.
-      expect(rumpf.indexOf('setVolume(0)'), greaterThan(0));
-      expect(rumpf.indexOf('setVolume(1)'),
-          greaterThan(rumpf.indexOf('setVolume(0)')));
-    });
-
-    test('Er hängt nicht, wenn das Ende ausbleibt', () {
-      expect(rumpf.contains('onTimeout'), isTrue,
-          reason: 'Ohne Notausgang bliebe das Laden daran stehen');
+    test('Die Kategorie bleibt ambient', () {
+      // Sie mischt sich unter fremde Musik UND schweigt beim Stummschalter.
+      // playback täte beides nicht.
+      expect(rumpf.contains('AVAudioSessionCategory.ambient'), isTrue);
     });
 
     test('Genau einmal, und nur auf iOS', () {
-      // Die Sitzung gilt für die ganze App — einer genügt. Auf Android läuft
-      // lowLatency über SoundPool, ganz ohne Sitzung.
+      // Auf Android wäre setActive(true) eine Anforderung des Audio-Fokus —
+      // genau das, was hier nicht passieren soll (audioFocus none, damit
+      // fremde Musik unverändert weiterläuft).
       expect(rumpf.contains('!Platform.isIOS || _sitzungAngeschoben'), isTrue);
       expect(rumpf.contains('_sitzungAngeschoben = true;'), isTrue);
+    });
+
+    test('Ein Fehlschlag hält das Laden nicht auf', () {
+      expect(rumpf.contains('catch (e)'), isTrue,
+          reason: 'Ohne aktive Sitzung soll es beim alten Verhalten bleiben, '
+              'nicht beim gar keinen Ton');
     });
 
     test('Erst die Sitzung, dann das Nachreichen', () {

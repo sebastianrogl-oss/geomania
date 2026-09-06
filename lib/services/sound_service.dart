@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+// Mit Präfix, weil beide Pakete eine Klasse AVAudioSessionCategory mitbringen.
+import 'package:audio_session/audio_session.dart' as sitzung;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
@@ -191,39 +193,45 @@ class _Klangspur {
 ///   mixWithOthers darf dabei nicht gesetzt werden — das Paket verbietet sie
 ///   ausdrücklich für ambient, weil sie dort schon gilt.
 ///
-/// ── Warum auf iOS ein Klang lautlos ZU ENDE gespielt wird ─────────────────
+/// ── Warum die iOS-Audio-Sitzung selbst aktiviert wird ─────────────────────
 ///
-/// Gemeldet vom iPhone: Im ersten Level bleibt es stumm, bis der
-/// Halbzeit-Moment kommt — ab da klingt alles. Der Vergleich sagt, warum, und
-/// er steht in audioplayers_darwin 6.5.0 schwarz auf weiss:
+/// Gemeldet vom iPhone, über drei Builds hinweg unverändert: Im ersten Level
+/// bleibt es stumm, bis der Halbzeit-Moment kommt — ab da klingt alles.
+///
+/// Der Halbzeit-Moment spielt gar keinen Ton. Er zeigt ein VIDEO
+/// (widgets/ergebnis_video.dart, `VideoPlayerController.asset` aus
+/// video_player, sogar mit `setVolume(0)`). Und genau darin liegt der
+/// Unterschied: `video_player_avfoundation` fasst beim Anlegen eines Spielers
+/// die Audio-Sitzung an (`updateAudioSession` → `setCategory`), audioplayers
+/// tut das im Abspielweg nicht.
+///
+/// In audioplayers_darwin 6.5.0 nachgelesen:
 ///
 ///   * `controlAudioSession()` ist die EINZIGE Stelle im ganzen Plugin, die
 ///     `AVAudioSession.setActive` anfasst.
 ///   * Sie hat genau EINEN Aufrufer: `WrappedMediaPlayer.onSoundComplete()`,
-///     also das natürliche ENDE eines Klangs. Dort steht `isPlaying` noch auf
-///     true — zurückgesetzt wird es erst danach —, `anyIsPlaying` ist damit
-///     wahr, und die Sitzung wird AKTIVIERT.
-///   * `resume()` ruft sie nicht auf. Im Startweg gibt es kein
-///     `setActive(true)`.
+///     also das ENDE eines Klangs.
+///   * `resume()` ruft sie nicht auf. Im Startweg steht kein
+///     `setActive(true)`; jede Wiedergabe verlässt sich darauf, dass iOS die
+///     Sitzung von selbst hochfährt, und `playImmediately(atRate:)` wartet
+///     nicht darauf.
 ///
-/// Daraus folgt genau das gemeldete Bild: Jede Wiedergabe verlässt sich
-/// darauf, dass iOS die Sitzung von selbst hochfährt, und
-/// `playImmediately(atRate:)` wartet nicht darauf. Erst der erste Klang, der
-/// WIRKLICH bis zum Ende durchläuft, schaltet die Sitzung scharf — ab da
-/// klingt alles. Auf Android stellt sich die Frage nicht: dort läuft
-/// lowLatency über SoundPool, ganz ohne Sitzung.
+/// Der Versuch aus Build 22 setzte genau dort an — einen Klang lautlos zu
+/// Ende spielen, damit `onSoundComplete()` die Sitzung aktiviert. Am Gerät
+/// half auch das nicht. Damit ist der Weg über die Nebenwirkung erschöpft:
+/// Ob und wann das Plugin die Sitzung scharf schaltet, lässt sich von aussen
+/// weder erzwingen noch nachsehen.
 ///
-/// Hier stand deshalb zuerst ein Anstoss, der jeden Spieler kurz startete und
-/// sofort wieder stoppte. Er konnte nicht helfen, und aus demselben Grund:
-/// Ein gestoppter Klang meldet kein Ende (AVPlayerItemDidPlayToEndTime bleibt
-/// aus), also lief er in denselben Kreis wie das Spiel — kein Ende, keine
-/// Sitzung, kein Ton.
+/// Deshalb jetzt ausdrücklich, über audio_session:
+/// `configure(ambient)` + `setActive(true)`, direkt beim Laden. Das ist der
+/// dokumentierte Weg, er hängt an keiner fremden Nebenwirkung, und die
+/// Kategorie bleibt genau die bisherige — ambient mischt sich unter fremde
+/// Musik und schweigt beim Stummschalter.
 ///
-/// Jetzt wird EIN Klang mit Lautstärke 0 abgespielt und auf sein Ende
-/// gewartet. Unhörbar, dauert so lange wie der kürzeste Klang (157 ms), läuft
-/// im Hintergrund — und geht genau den einen Weg, der die Sitzung aktiviert.
-/// Ein zusätzliches Paket nur fürs Aktivieren (audio_session) braucht es
-/// dafür nicht.
+/// NUR AUF iOS. Auf Android bedeutet `setActive(true)` eine Anforderung des
+/// Audio-Fokus, und die ist hier ausdrücklich nicht gewollt (siehe unten:
+/// audioFocus `none`, damit fremde Musik unverändert weiterläuft). Dort
+/// läuft lowLatency ohnehin über SoundPool, ganz ohne Sitzung.
 class SoundService {
   static final Map<Klang, _Klangspur> _spuren = {};
 
@@ -361,45 +369,31 @@ class SoundService {
 
   /// Schaltet die iOS-Audio-Sitzung scharf — einmal je Programmlauf.
   ///
-  /// Der Grund steht ausführlich am Klassenkommentar: Im Plugin aktiviert
-  /// ausschliesslich `onSoundComplete()` die Sitzung, also das natürliche
-  /// ENDE eines Klangs. Deshalb wird hier einer WIRKLICH zu Ende gespielt und
-  /// nicht bloss angetippt — ein gestoppter Klang meldet kein Ende, und genau
-  /// daran scheiterte der erste Anlauf.
+  /// Der Grund steht ausführlich am Klassenkommentar: Der Abspielweg von
+  /// audioplayers aktiviert die Sitzung nicht, und der Halbzeit-Moment tat es
+  /// nur nebenbei, weil dort ein Video anläuft. Hier wird sie ausdrücklich
+  /// eingerichtet und aktiviert.
   ///
-  /// Auf Android bewusst nicht: Dort läuft lowLatency über SoundPool, ganz
-  /// ohne Audio-Sitzung.
+  /// Kategorie `ambient` wie bisher — sie mischt sich unter fremde Musik und
+  /// schweigt beim Stummschalter. Ohne `mixWithOthers`: Das Paket verbietet
+  /// die Option für ambient ausdrücklich, weil sie dort schon gilt.
+  ///
+  /// NUR auf iOS. Auf Android wäre `setActive(true)` eine Anforderung des
+  /// Audio-Fokus — genau das, was hier nicht passieren soll.
   static Future<void> _sitzungAnschieben() async {
     if (kIsWeb || !Platform.isIOS || _sitzungAngeschoben) return;
-    if (_spuren.isEmpty) return;
     _sitzungAngeschoben = true;
-
-    // Der kürzeste geladene Klang. Die Sitzung gilt für die ganze App, einer
-    // genügt — und der kürzeste hält das Laden am wenigsten auf (knopf,
-    // 157 ms).
-    final klang = _spuren.keys.reduce((a, b) => a.laenge <= b.laenge ? a : b);
-    final p = _spuren[klang]!.spieler.first;
     try {
-      // Das Abonnement MUSS vor resume() stehen: Bei 32 bis 157 ms wäre das
-      // Ende sonst womöglich schon durch, bevor jemand hinhört.
-      final ende = p.onPlayerComplete.first;
-      await p.setVolume(0);
-      await p.resume();
-      // Notausgang. Kommt das Ende nicht, darf das Laden nicht daran hängen
-      // bleiben — dann ist die Sitzung eben nicht angeschoben, und schlimmer
-      // als vorher wird es dadurch nicht.
-      await ende.timeout(klang.laenge * 3 + const Duration(seconds: 2),
-          onTimeout: () {});
-      await p.stop();
+      final s = await sitzung.AudioSession.instance;
+      await s.configure(const sitzung.AudioSessionConfiguration(
+        avAudioSessionCategory: sitzung.AVAudioSessionCategory.ambient,
+        avAudioSessionMode: sitzung.AVAudioSessionMode.defaultMode,
+      ));
+      await s.setActive(true);
     } catch (e) {
-      debugPrint('[Sound] Audio-Sitzung nicht angeschoben: $e');
-    } finally {
-      // Zurück auf volle Stärke, denn genau davon geht
-      // _Klangspur.lautstaerken aus — sonst bliebe dieser eine Spieler für
-      // immer stumm, ohne dass es jemand sähe.
-      try {
-        await p.setVolume(1);
-      } catch (_) {}
+      // Ohne aktive Sitzung bleibt es beim alten Verhalten — schlimmer wird
+      // es dadurch nicht.
+      debugPrint('[Sound] Audio-Sitzung nicht aktiviert: $e');
     }
   }
 

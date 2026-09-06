@@ -314,7 +314,7 @@ class _RanglisteScreenState extends State<RanglisteScreen> {
                             gesamt: _eigenerPlatzPortfolio!.gesamt,
                           );
                         }
-                        return _RangZeile(
+                        return RangZeile(
                           eintrag: liste[i],
                           istGeld: _istGeld,
                           mitVorzeichen: _istPortfolioHeute,
@@ -466,13 +466,19 @@ class _EigenerPlatzZeile extends StatelessWidget {
 /// finden, und immer noch so blass, dass die Liste nicht zerreißt.
 const Color _kEigeneZeile = Color(0xFFE8F5E9);
 
-class _RangZeile extends StatelessWidget {
+/// Eine Zeile der Rangliste.
+///
+/// Öffentlich, damit ein Test sie in den engen Fällen bauen kann — 320 px
+/// Breite bei Schriftskala 1,5, deutsch und englisch. Der ganze Screen liesse
+/// sich dafür nicht heranziehen: Er hängt an Firestore.
+class RangZeile extends StatelessWidget {
   final RanglistenEintrag eintrag;
   final bool istGeld;
   final bool mitVorzeichen;
   final String? eigenesProfilbild;
 
-  const _RangZeile({
+  const RangZeile({
+    super.key,
     required this.eintrag,
     required this.istGeld,
     this.mitVorzeichen = false,
@@ -513,7 +519,23 @@ class _RangZeile extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      // ══ WARUM HIER EIN LayoutBuilder STEHT ════════════════════════════════
+      //
+      // Bei 320 px Breite und Schriftskala 1,5 lief die Zeile über: Der Wert
+      // rechts ist ein gewöhnliches, nicht schrumpfbares Kind der Row und
+      // wächst mit der Schrift mit — "1.337 $" misst dann 148,8 px. Zusammen
+      // mit Rangnummer und Profilbild bleibt für den Namen nichts mehr, und
+      // die letzten 1,9 px landeten im gelb-schwarzen Balken.
+      //
+      // Der Name allein kann das nicht auffangen: Er ist schon auf 0 px
+      // geschrumpft, bevor es überläuft. Also bekommt der Wert eine Obergrenze
+      // — und die hängt an der tatsächlichen Zeilenbreite, nicht an einer
+      // festen Zahl. Auf einem normalen Telefon liegt sie weit über dem, was
+      // der Wert braucht; dort ändert sich nichts.
+      child: LayoutBuilder(builder: (context, mass) {
+        final wertMax =
+            (mass.maxWidth - _kZeileFest - _kNameMin).clamp(60.0, 1000.0);
+        return Row(
         children: [
           SizedBox(
             width: 36,
@@ -539,49 +561,68 @@ class _RangZeile extends StatelessWidget {
               ),
             ),
           ),
-          if (mitVorzeichen && eintrag.zusatzWert != null)
-            // Tägliche Portfolio-Rangliste: sortiert nach eintrag.wert
-            // (Prozent-Rendite) — die Prozentzahl ist daher prominent,
-            // der Dollar-Betrag (zusatzWert) nur informativ darunter.
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  fmtProzent(eintrag.wert.toDouble()),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                ),
-                Text(
-                  fmtKapital(eintrag.zusatzWert!.toDouble(),
-                      mitVorzeichen: true),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF888888),
-                  ),
-                ),
-              ],
-            )
-          else
-            Text(
-              istGeld
-                  ? fmtKapital(eintrag.wert.toDouble(),
-                      mitVorzeichen: mitVorzeichen)
-                  : '${eintrag.wert}',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF1A1A1A),
-              ),
+          // Verkleinert sich nur, wenn die Zeile es verlangt — siehe den
+          // LayoutBuilder oben. Rechtsbündig, damit die Zahlen aller Zeilen
+          // untereinander stehen bleiben.
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: wertMax),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: mitVorzeichen && eintrag.zusatzWert != null
+                  // Tägliche Portfolio-Rangliste: sortiert nach eintrag.wert
+                  // (Prozent-Rendite) — die Prozentzahl ist daher prominent,
+                  // der Dollar-Betrag (zusatzWert) nur informativ darunter.
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          fmtProzent(eintrag.wert.toDouble()),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        Text(
+                          fmtKapital(eintrag.zusatzWert!.toDouble(),
+                              mitVorzeichen: true),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF888888),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      istGeld
+                          ? fmtKapital(eintrag.wert.toDouble(),
+                              mitVorzeichen: mitVorzeichen)
+                          : '${eintrag.wert}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
             ),
+          ),
         ],
-      ),
+        );
+      }),
     );
   }
 }
+
+/// Was in einer Ranglisten-Zeile links vom Namen fest steht: Rangnummer,
+/// Profilbild und der Abstand dazwischen.
+const double _kZeileFest = 36 + _kProfilbildGroesse + 8;
+
+/// Was dem Namen mindestens bleiben soll. Weniger, und die Zeile zeigt nur
+/// noch drei Punkte statt eines Namens — dann ist der Wert daneben zwar
+/// vollständig, aber niemand weiss mehr, zu wem er gehört.
+const double _kNameMin = 40;
 
 // ── Profilbild-Icon ────────────────────────────────────────────────────────────
 

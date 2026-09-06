@@ -26,11 +26,12 @@ void main() {
     const texte = [
       'Konto löschen',
       'Konto löschen?',
-      'Dein Konto wird endgültig gelöscht: dein Name, dein Platz in den '
-          'Ranglisten und dein in der Cloud gesicherter Spielstand. Das lässt '
-          'sich nicht rückgängig machen.',
-      'Dein Fortschritt auf diesem Gerät bleibt erhalten. Alles in der Cloud — '
-          'Konto, Name und Rangliste — ist danach unwiderruflich weg.',
+      'Dein Konto und dein gesamter Fortschritt werden endgültig gelöscht: '
+          'dein Name, dein Platz in den Ranglisten und dein Spielstand — in '
+          'der Cloud und auf diesem Gerät. Das lässt sich nicht rückgängig '
+          'machen.',
+      'Dein gesamter Fortschritt wird gelöscht. Nur die Einstellungen dieses '
+          'Geräts — Ton, Vibration und Sprache — bleiben.',
       'Endgültig löschen',
       'Bitte neu anmelden',
       'Aus Sicherheitsgründen ist das Löschen nur kurz nach einer Anmeldung '
@@ -140,6 +141,57 @@ void main() {
     // Zwischen Schritt 1 und dem ersten Abbruch steht KEIN return.
     expect(rumpf.substring(reservierung, abbruch).contains('return '), isFalse,
         reason: 'Ein Fehlschlag bei der Reservierung bricht die Löschung ab');
+  });
+
+  // ── Der Stand auf dem Gerät ───────────────────────────────────────────────
+  //
+  // Aus dem TestFlight-Test (Build 20): Die Kette lief fehlerfrei durch, aber
+  // der lokale Fortschritt blieb liegen — und wanderte beim nächsten Anmelden
+  // ins neue Konto. Für den Spieler sah es aus, als sei nie etwas gelöscht
+  // worden.
+
+  test('Der lokale Stand wird mitgelöscht', () {
+    final rumpf = _rumpf('static Future<KontoLoeschAusgang> kontoLoeschen');
+    expect(rumpf.contains('SpielstandSpeicher.loescheSyncSchluessel'), isTrue,
+        reason: 'Der Fortschritt auf dem Gerät bleibt liegen und kommt beim '
+            'nächsten Anmelden zurück');
+  });
+
+  test('Erst wenn das Konto wirklich weg ist', () {
+    // Bricht die Kette vorher ab, steht der Spieler mit einem noch
+    // bestehenden Konto UND einem leeren Gerät da — der schlechtestmögliche
+    // Zwischenstand.
+    final rumpf = _rumpf('static Future<KontoLoeschAusgang> kontoLoeschen');
+    final konto = rumpf.indexOf('if (konto != null) return konto;');
+    final lokal = rumpf.indexOf('SpielstandSpeicher.loescheSyncSchluessel');
+    expect(konto, greaterThan(0));
+    expect(konto, lessThan(lokal),
+        reason: 'Der lokale Stand fällt, bevor das Konto sicher weg ist');
+  });
+
+  test('Die Geräte-Einstellungen bleiben', () {
+    // loescheSyncSchluessel räumt nur weg, was in die Cloud gehört. Ton,
+    // Vibration und Sprache hängen am Telefon, nicht am Konto — und der
+    // Dialog verspricht genau das.
+    final speicher =
+        File('lib/services/spielstand_speicher.dart').readAsStringSync();
+    final ab = speicher.indexOf('static Future<void> loescheSyncSchluessel');
+    expect(ab, greaterThan(0));
+    final bis = (ab + 400).clamp(0, speicher.length);
+    expect(speicher.substring(ab, bis).contains('gehoertInDieCloud'), isTrue,
+        reason: 'Es wird mehr gelöscht als der Fortschritt');
+  });
+
+  test('Am Ende wird ausdrücklich abgemeldet', () {
+    // Gemeldet: Nach dem Löschen musste man sich "noch einmal extra
+    // abmelden", bevor der Anmelde-Screen kam. Der StartWrapper tauscht den
+    // Bildschirm NUR auf ein authStateChanges-Ereignis hin. Kommt nach dem
+    // Löschen keins an, bleibt der Lernpfad stehen, obwohl niemand mehr
+    // angemeldet ist. signOut() stösst es verlässlich an.
+    final rumpf = _rumpf('static Future<KontoLoeschAusgang> kontoLoeschen');
+    expect(rumpf.contains('_auth.signOut()'), isTrue,
+        reason: 'Ohne das hängt der Bildschirmwechsel daran, ob das Löschen '
+            'selbst ein Ereignis ausgelöst hat');
   });
 
   test('Die Reservierung wird erst gelesen, dann gelöscht', () {

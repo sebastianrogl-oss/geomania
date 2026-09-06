@@ -725,9 +725,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (kontext) => AlertDialog(
         title: Text(t('Konto löschen?')),
         content: Text(t(
-            'Dein Konto wird endgültig gelöscht: dein Name, dein Platz in den '
-            'Ranglisten und dein in der Cloud gesicherter Spielstand. Das '
-            'lässt sich nicht rückgängig machen.')),
+            'Dein Konto und dein gesamter Fortschritt werden endgültig '
+            'gelöscht: dein Name, dein Platz in den Ranglisten und dein '
+            'Spielstand — in der Cloud und auf diesem Gerät. Das lässt sich '
+            'nicht rückgängig machen.')),
         actionsAlignment: MainAxisAlignment.start,
         actions: [
           TextButton(
@@ -748,13 +749,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (kontext) => AlertDialog(
         title: Text(t('Bist du sicher?')),
-        // Der zweite Dialog nennt ausdrücklich, was BLEIBT. Sonst glaubt
-        // jemand, mit dem Konto sei auch das Spiel auf diesem Gerät weg —
-        // und bricht aus Angst ab, obwohl er löschen wollte.
+        // Der zweite Dialog sagt geradeheraus, dass ALLES geht, und nennt
+        // dann, was bleibt. Vorher stand hier "Dein Fortschritt auf diesem
+        // Gerät bleibt erhalten" — das stimmte, führte aber in die Irre: Der
+        // liegen gebliebene Stand wanderte beim nächsten Anmelden ins neue
+        // Konto, und für den Spieler sah es aus, als sei nie etwas gelöscht
+        // worden. Jetzt geht er wirklich mit.
         content: Text(t(
-            'Dein Fortschritt auf diesem Gerät bleibt erhalten. Alles in der '
-            'Cloud — Konto, Name und Rangliste — ist danach unwiderruflich '
-            'weg.')),
+            'Dein gesamter Fortschritt wird gelöscht. Nur die Einstellungen '
+            'dieses Geräts — Ton, Vibration und Sprache — bleiben.')),
         actionsAlignment: MainAxisAlignment.start,
         actions: [
           TextButton(

@@ -10,6 +10,8 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import 'spielstand_speicher.dart';
+
 enum AnzeigenameErgebnis { erfolgreich, bereitsVergeben, fehler }
 
 /// Ausgang eines Anmeldeversuchs.
@@ -72,7 +74,8 @@ enum KontoLoeschSchritt {
   reservierung('1 Namens-Reservierung'),
   spielstand('2 Cloud-Spielstand'),
   spielerDokument('3 Spieler-Dokument'),
-  konto('4 Auth-Konto');
+  konto('4 Auth-Konto'),
+  geraet('5 Lokaler Stand');
 
   const KontoLoeschSchritt(this.bezeichnung);
 
@@ -652,11 +655,64 @@ class AuthService {
     final konto = await _loeschSchritt(KontoLoeschSchritt.konto, u.delete);
     if (konto != null) return konto;
 
+    // ── 5. Der Spielstand auf DIESEM Gerät ────────────────────────────────
+    //
+    // ══ WARUM DAS DAZUGEHÖRT ════════════════════════════════════════════════
+    //
+    // Hier blieb der lokale Stand bisher absichtlich liegen — dieselbe
+    // Überlegung wie beim Abmelden. Für die Kontolöschung ist sie falsch:
+    // Beim nächsten Anmeldung wandert der liegen gebliebene Fortschritt in
+    // das NEUE Konto und von dort in die Cloud. Für den Spieler sieht es
+    // aus, als sei nie etwas gelöscht worden — er hat ausdrücklich das
+    // Gegenteil verlangt.
+    //
+    // NACH dem Auth-Konto und keinen Schritt früher: Bricht die Kette vorher
+    // ab, steht der Spieler mit einem noch bestehenden Konto da, und dann
+    // wäre ein geleertes Gerät der schlechtestmögliche Zwischenstand.
+    //
+    // Derselbe Weg wie beim Neustart ([UpdateNeustartService]): Es
+    // verschwindet, was in die Cloud gehört. Die Einstellungen des Geräts —
+    // Ton, Vibration, Sprache, geplante Erinnerungen — bleiben stehen; sie
+    // gehören zum Telefon, nicht zum Konto.
+    //
+    // NICHT abbrechend: Das Konto ist an dieser Stelle schon weg. Einen
+    // Fehler zu melden, hiesse den Spieler ein zweites Mal löschen zu
+    // lassen — und beim zweiten Versuch gäbe es kein Konto mehr.
+    final geraet = await _loeschSchritt(
+        KontoLoeschSchritt.geraet, SpielstandSpeicher.loescheSyncSchluessel);
+
     // Die Google-Sitzung bleibt sonst am Gerät stehen und der nächste
     // Anmeldeversuch nimmt sie wortlos wieder — der Spieler landete dann
     // in einem Konto, das er gerade gelöscht hat.
     await _googleSitzungBeenden();
 
+    // ══ DER AUSDRÜCKLICHE ABMELDESCHLUSS ════════════════════════════════════
+    //
+    // Sieht überflüssig aus: `u.delete()` räumt den angemeldeten Nutzer
+    // bereits weg, `currentUser` ist danach null. Gemeldet wurde aber, dass
+    // man sich nach dem Löschen "noch einmal extra abmelden" musste, bevor
+    // der Anmelde-Screen kam.
+    //
+    // Das passt genau zu dem einen Weg, auf dem der StartWrapper den
+    // Bildschirm tauscht: Er hört auf authStateChanges und baut sich NUR
+    // dann neu auf. Kommt nach dem Löschen kein Ereignis an, bleibt der
+    // Lernpfad stehen, obwohl niemand mehr angemeldet ist — bis ein
+    // Abmelden von Hand das fehlende Ereignis nachliefert. Genau das
+    // beschriebene Bild.
+    //
+    // signOut() ist auf einem bereits leeren Konto folgenlos und stösst das
+    // Ereignis verlässlich an. Damit hängt der Wechsel nicht mehr daran, ob
+    // das Löschen selbst eines ausgelöst hat.
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      debugPrint('Abmelden nach der Löschung: ${befundVon(e)}');
+    }
+
+    if (geraet != null) {
+      debugPrint('Konto gelöscht, aber der Stand blieb auf dem Gerät: '
+          '${geraet.technischerText}');
+    }
     if (reservierung != null) {
       debugPrint('Konto gelöscht, aber der Name blieb belegt: '
           '${reservierung.technischerText}');

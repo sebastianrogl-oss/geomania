@@ -50,6 +50,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "514970095088-c5pai0jvqdnv4j9f6k6imce6pvph9f8k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.northlight.geomania",
+            "certificate_hash": "8c5d56bba39babd882c5661faa3157d1bc759a7b"
+          }
+        },
+        {
           "client_id": "514970095088-deooi55knipsho64o472julu4n4kms8f.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

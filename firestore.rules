@@ -22,16 +22,36 @@ service cloud.firestore {
       allow write: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.uid == uid;
-      // 14-Tage-Rollfenster: jeder angemeldete Nutzer darf einen (auch
-      // fremden) Eintrag löschen, aber NUR wenn er bereits älter als 14
-      // Tage ist — ermöglicht clientseitige Bereinigung alter Tage ohne
-      // eine Cloud Function einzurichten, ohne generelles Lösch-Recht auf
-      // aktuelle Einträge anderer Spieler zu öffnen. (Kein "eigener Eintrag
-      // jederzeit löschbar"-Fall mehr: der einzige Aufrufer dafür — ein
-      // Ranglisten-Reset über "Fortschritt zurücksetzen" — wurde bewusst
-      // wieder entfernt, siehe RanglisteService.)
+      // Zwei Fälle dürfen löschen:
+      //
+      // 1. DER EIGENE EINTRAG, jederzeit. Gebraucht von der Kontolöschung
+      //    (AuthService.kontoLoeschen, Schritt 4): Die Einträge liegen
+      //    ausserhalb von spieler/{uid} und überlebten das Löschen des
+      //    Kontos sonst bis zum Rollfenster — mit Anzeigename, öffentlich
+      //    lesbar. Ein früherer "eigener Eintrag jederzeit löschbar"-Fall
+      //    war einmal drin und wurde entfernt, als sein damaliger Aufrufer
+      //    (Ranglisten-Reset über "Fortschritt zurücksetzen") wegfiel; die
+      //    Kontolöschung braucht ihn zwingend wieder.
+      //
+      //    Bewusst über den PFAD-Platzhalter {uid} statt über
+      //    resource.data.uid: Auf ein Dokument, das es nicht gibt, ist
+      //    `resource` null, und eine Bedingung darauf schlägt fehl. Die
+      //    Löschung rechnet ihre Tages-Keys aus, statt sie zu listen
+      //    (Client-SDKs können keine Subcollections auflisten), trifft
+      //    dabei zwangsläufig auf Tage ohne Eintrag — und ein Batch, in dem
+      //    ein einziges Löschen abgelehnt wird, scheitert vollständig.
+      //
+      // 2. JEDER Eintrag, der älter als 14 Tage ist — auch ein fremder.
+      //    Das ist das Rollfenster: Es erlaubt die clientseitige
+      //    Bereinigung alter Tage ohne Cloud Function, ohne ein generelles
+      //    Lösch-Recht auf aktuelle Einträge anderer Spieler zu öffnen.
+      //
+      // Die Reihenfolge ist nicht beliebig: || wertet von links aus und
+      // bricht bei true ab. Stünde die erstelltAm-Bedingung vorn, liefe die
+      // Kontolöschung bei jedem leeren Tag zuerst in den null-resource-Fall.
       allow delete: if request.auth != null
-        && resource.data.erstelltAm < request.time - duration.value(14, 'd');
+        && (request.auth.uid == uid
+            || resource.data.erstelltAm < request.time - duration.value(14, 'd'));
     }
 
     // Portfolio Alltime-Rangliste: jeder angemeldete Nutzer darf lesen,
@@ -41,6 +61,15 @@ service cloud.firestore {
       allow write: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.uid == uid;
+
+      // Löschen braucht eine EIGENE Regel, auch wenn `write` in Firestore
+      // create, update UND delete umfasst: Bei einem delete gibt es kein
+      // eingehendes Dokument, `request.resource` ist null — die Bedingung
+      // request.resource.data.uid == uid oben ist damit nie erfüllbar. Der
+      // Alltime-Eintrag war deshalb faktisch unlöschbar und überlebte die
+      // Kontolöschung; anders als die Tages-Ranglisten hat er nicht einmal
+      // ein Rollfenster, das ihn irgendwann abgeräumt hätte.
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // Anzeigename-Reservierungen: Dokument-ID = normalisierter (kleinge-

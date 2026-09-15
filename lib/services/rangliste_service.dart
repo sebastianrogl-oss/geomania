@@ -342,6 +342,60 @@ class RanglisteService {
     final ich = AuthService.uid;
     return ich != null && uidImEintrag == ich;
   }
+
+  // ── Kontolöschung ────────────────────────────────────────────────────────
+
+  /// Die vier Challenges, unter denen Ranglisten-Einträge abgelegt werden —
+  /// die Dokument-IDs unter `ranglisten/`, nicht die lokalen Rekord-Schlüssel
+  /// aus dem Profil-Screen (die heissen anders: 'preis', 'higher_lower', …).
+  ///
+  /// Die Liste stand bisher nur als privates enum im Rangliste-Screen. Sie
+  /// gehört hierher: Wer Einträge schreibt, muss sie auch wieder löschen
+  /// können, und beides ohne Oberfläche.
+  static const alleChallengeIds = ['schaetzen', 'higherlower', 'ranking', 'portfolio'];
+
+  /// Wie weit die Löschung zurückgreift. Das sichtbare Fenster ist 14 Tage,
+  /// bereinigt wird ab Tag 15 — hier bewusst das Doppelte, damit auch Tage
+  /// mitgehen, die das Rollfenster übersprungen hat (es räumt pro Aufruf
+  /// GENAU den Tag 15 ab; wird eine Challenge einen Tag lang von niemandem
+  /// gespielt, bleibt dieser Tag ungeräumt liegen).
+  static const _kLoeschFensterTage = 30;
+
+  /// Löscht alle Ranglisten-Einträge von [uid] sowie seinen Alltime-Eintrag.
+  ///
+  /// ══ WARUM TAGE GERECHNET STATT GELISTET WERDEN ═════════════════════════
+  ///
+  /// Die Einträge liegen unter `ranglisten/{challengeId}/{tag}/{uid}`. Der
+  /// Tag ist eine SUBCOLLECTION, und Firestore-Client-SDKs können
+  /// Subcollections nicht auflisten — es gibt also keinen Weg, "alle Tage
+  /// dieses Spielers" abzufragen. Derselbe Trick wie beim Rollfenster: Die
+  /// Tages-Keys sind aus dem Datum berechenbar ('JJJJMMTT'), also werden sie
+  /// berechnet statt gelistet, und ein Löschen ins Leere ist kostenlos
+  /// erlaubt (Firestore meldet keinen Fehler für ein Dokument, das es nicht
+  /// gibt).
+  ///
+  /// Ein einziger Batch statt 120 Einzelaufrufen: eine Runde zum Server,
+  /// und entweder geht alles durch oder nichts — ein halb gelöschter
+  /// Spieler, der in einer Rangliste weiterlebt, wäre der schlechtere
+  /// Zwischenstand.
+  ///
+  /// Wirft bei Misserfolg: Der Aufrufer (die Löschkette in [AuthService])
+  /// entscheidet, ob das den Abbruch wert ist — hier ist es das nicht.
+  static Future<void> loescheEintraegeVon(String uid) async {
+    final batch = _db.batch();
+    final heute = DateTime.now();
+
+    for (final challengeId in alleChallengeIds) {
+      for (var zurueck = 0; zurueck <= _kLoeschFensterTage; zurueck++) {
+        final tag = tagString(heute.subtract(Duration(days: zurueck)));
+        batch.delete(
+            _db.collection('ranglisten').doc(challengeId).collection(tag).doc(uid));
+      }
+    }
+    batch.delete(_db.collection('portfolio_alltime').doc(uid));
+
+    await batch.commit();
+  }
 }
 
 class RanglistenEintrag {

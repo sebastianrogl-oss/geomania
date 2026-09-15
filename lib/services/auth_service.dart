@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import 'rangliste_service.dart';
 import 'spielstand_speicher.dart';
 
 enum AnzeigenameErgebnis { erfolgreich, bereitsVergeben, fehler }
@@ -74,8 +75,9 @@ enum KontoLoeschSchritt {
   reservierung('1 Namens-Reservierung'),
   spielstand('2 Cloud-Spielstand'),
   spielerDokument('3 Spieler-Dokument'),
-  konto('4 Auth-Konto'),
-  geraet('5 Lokaler Stand');
+  ranglisten('4 Ranglisten-Eintraege'),
+  konto('5 Auth-Konto'),
+  geraet('6 Lokaler Stand');
 
   const KontoLoeschSchritt(this.bezeichnung);
 
@@ -651,11 +653,34 @@ class AuthService {
         await _loeschSchritt(KontoLoeschSchritt.spielerDokument, spieler.delete);
     if (dokument != null) return dokument;
 
-    // ── 4. Auth-Konto ─────────────────────────────────────────────────────
+    // ── 4. Ranglisten-Einträge und Alltime-Eintrag ────────────────────────
+    //
+    // ══ WARUM HIER UND WARUM NICHT ABBRECHEND ══════════════════════════════
+    //
+    // Die Einträge liegen NICHT unter spieler/{uid}, sondern in eigenen
+    // Kollektionen (ranglisten/…, portfolio_alltime/{uid}). Schritt 3 räumt
+    // sie deshalb nicht mit weg — sie überlebten die Kontolöschung bisher
+    // und verschwanden erst über das 14-Tage-Rollfenster. Bis dahin stand
+    // der Anzeigename eines gelöschten Kontos weiter öffentlich in der
+    // Rangliste.
+    //
+    // VOR dem Auth-Konto, weil die Regeln am eingeloggten Nutzer hängen:
+    // Nach u.delete() ist request.auth weg und jedes Löschen scheitert an
+    // permission-denied.
+    //
+    // NICHT abbrechend, aus demselben Grund wie bei Schritt 1: Das Konto
+    // muss löschbar bleiben. Ein liegen gebliebener Ranglisten-Eintrag ist
+    // ärgerlich und verschwindet spätestens mit dem Rollfenster von selbst;
+    // ein Konto, das sich nicht löschen lässt, kostet die Freigabe bei
+    // Apple und Google.
+    final ranglisten = await _loeschSchritt(KontoLoeschSchritt.ranglisten,
+        () => RanglisteService.loescheEintraegeVon(u.uid));
+
+    // ── 5. Auth-Konto ─────────────────────────────────────────────────────
     final konto = await _loeschSchritt(KontoLoeschSchritt.konto, u.delete);
     if (konto != null) return konto;
 
-    // ── 5. Der Spielstand auf DIESEM Gerät ────────────────────────────────
+    // ── 6. Der Spielstand auf DIESEM Gerät ────────────────────────────────
     //
     // ══ WARUM DAS DAZUGEHÖRT ════════════════════════════════════════════════
     //
@@ -716,6 +741,10 @@ class AuthService {
     if (reservierung != null) {
       debugPrint('Konto gelöscht, aber der Name blieb belegt: '
           '${reservierung.technischerText}');
+    }
+    if (ranglisten != null) {
+      debugPrint('Konto gelöscht, aber Ranglisten-Einträge blieben stehen: '
+          '${ranglisten.technischerText}');
     }
     return KontoLoeschAusgang.erfolgreich;
   }
